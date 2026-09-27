@@ -16,7 +16,7 @@ const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
   { titre: "Statistiques", directeur: true },
   { titre: "Notifications" },
   { titre: "Abonnement", directeur: true },
-  { titre: "Paramètres", directeur: true },
+  { titre: "Paramètres", href: "/parametres", directeur: true },
 ];
 
 export default async function EspaceLayout({ children }: LayoutProps<"/">) {

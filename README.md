@@ -14,7 +14,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 1-2 | Analyse du classeur, correspondance feuilles → modules, architecture | Fait (`docs/dossier-conception.html`) |
 | 3 | Squelette, schéma de base de données, moteur de calcul testé | Fait |
 | 4 | Comptes : inscription directeur + SMS, comptes enseignants, accès parents | Fait |
-| 5 | Établissement et paramètres | À faire |
+| 5 | Établissement et paramètres | Fait |
 | 6 | Registre des élèves, personnel | À faire |
 | 7 | Classes et notes (validation, verrouillage) | À faire |
 | 8 | Résultats, tableau de bord, statistiques | À faire |
