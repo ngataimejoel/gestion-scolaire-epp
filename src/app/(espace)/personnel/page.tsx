@@ -1,74 +1,80 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { dateFr } from "@/lib/dates";
 import { db } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth/next";
 import { formaterTelephone } from "@/lib/auth/telephone";
-import { FONCTIONS } from "@/lib/personnel";
-import { estEnseignant } from "@/lib/regles";
-import { actionNouveauMotDePasse } from "@/app/actions/personnel";
-import { BoutonNouveauMotDePasse, FormPersonnel } from "@/components/formulaires/personnel";
+import { listerPersonnel } from "@/lib/personnel";
+import { compterParSexe, estEnseignant } from "@/lib/regles";
 
 export const metadata: Metadata = { title: "Personnel" };
 
+
 export default async function Personnel() {
   const u = await exigerUtilisateur(["DIRECTOR"]);
-  const liste = await db().staff.findMany({
-    where: { schoolId: u.schoolId! },
-    include: { user: { select: { mustChangePassword: true, lastLoginAt: true } } },
-    orderBy: [{ lastName: "asc" }, { firstNames: "asc" }],
-  });
+  const liste = await listerPersonnel(db(), u.schoolId!);
+  const enseignants = compterParSexe(liste.filter((s) => estEnseignant(s.function)).map((s) => ({ sexe: s.sex })));
   return (
-    <div className="max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Personnel</h1>
-        <p className="text-attenue">
-          Chaque enseignant enregistré reçoit un compte : identifiant = son numéro, mot de passe provisoire = 4 derniers chiffres + 4
-          caractères, envoyé par SMS et à changer à la première connexion.
-        </p>
+    <div className="max-w-6xl space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Personnel</h1>
+          <p className="text-attenue">
+            Chaque enseignant enregistré reçoit un compte : identifiant = son numéro, mot de passe provisoire envoyé par SMS et à changer à la
+            première connexion.
+          </p>
+        </div>
+        <Link href="/personnel/nouveau" className="btn-principal">Ajouter un membre</Link>
       </div>
-      <section className="carte">
-        <h2 className="mb-4 font-semibold">Enregistrer un membre du personnel</h2>
-        <FormPersonnel fonctions={[...FONCTIONS]} />
-      </section>
-      <section className="carte overflow-x-auto p-0 sm:p-0">
-        <table className="w-full min-w-[640px] text-sm">
+      <p className="text-sm" role="status">
+        {liste.length} membre(s) · enseignants : <b>{enseignants.M}</b> hommes, <b>{enseignants.F}</b> femmes
+      </p>
+      <div className="carte overflow-x-auto p-0 sm:p-0">
+        <table className="w-full min-w-[900px] text-sm">
           <thead className="border-b border-bordure text-left text-attenue">
             <tr>
-              <th className="px-4 py-3 font-medium">Nom et prénoms</th>
-              <th className="px-4 py-3 font-medium">Matricule</th>
-              <th className="px-4 py-3 font-medium">Fonction</th>
-              <th className="px-4 py-3 font-medium">Téléphone</th>
-              <th className="px-4 py-3 font-medium">Compte</th>
+              <th className="px-3 py-3 font-medium">Matricule</th>
+              <th className="px-3 py-3 font-medium">Nom et prénoms</th>
+              <th className="px-3 py-3 font-medium">Sexe</th>
+              <th className="px-3 py-3 font-medium">Âge</th>
+              <th className="px-3 py-3 font-medium">Fonction</th>
+              <th className="px-3 py-3 font-medium">Grade</th>
+              <th className="px-3 py-3 font-medium">Prise de service</th>
+              <th className="px-3 py-3 font-medium">Ancienneté</th>
+              <th className="px-3 py-3 font-medium">Classe tenue</th>
+              <th className="px-3 py-3 font-medium">Contact</th>
+              <th className="px-3 py-3 font-medium">Compte</th>
             </tr>
           </thead>
           <tbody>
             {liste.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-attenue">Aucun membre du personnel pour l&apos;instant.</td>
+                <td colSpan={11} className="px-3 py-6 text-center text-attenue">Aucun membre du personnel pour l&apos;instant.</td>
               </tr>
             )}
             {liste.map((s) => (
               <tr key={s.id} className="border-b border-bordure last:border-0">
-                <td className="px-4 py-3 font-medium">{s.lastName} {s.firstNames}</td>
-                <td className="px-4 py-3 tabular-nums">{s.matricule}</td>
-                <td className="px-4 py-3">{s.function}</td>
-                <td className="px-4 py-3 whitespace-nowrap tabular-nums">{s.phone ? formaterTelephone(s.phone) : "—"}</td>
-                <td className="px-4 py-3">
-                  {s.user ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>{s.user.mustChangePassword ? "En attente de 1re connexion" : "Actif"}</span>
-                      <BoutonNouveauMotDePasse action={actionNouveauMotDePasse.bind(null, s.id)} libelle="Nouveau mot de passe" />
-                    </div>
-                  ) : estEnseignant(s.function) && s.function !== "DIRECTEUR" && s.phone ? (
-                    <BoutonNouveauMotDePasse action={actionNouveauMotDePasse.bind(null, s.id)} libelle="Créer le compte" />
-                  ) : (
-                    <span className="text-attenue">—</span>
-                  )}
+                <td className="px-3 py-2.5 tabular-nums">
+                  <Link href={`/personnel/${s.id}`} className="lien">{s.matricule}</Link>
+                </td>
+                <td className="px-3 py-2.5 font-medium">{s.lastName} {s.firstNames}</td>
+                <td className="px-3 py-2.5">{s.sex}</td>
+                <td className="px-3 py-2.5 tabular-nums">{s.age ?? "—"}</td>
+                <td className="px-3 py-2.5">{s.function}</td>
+                <td className="px-3 py-2.5">{s.grade ?? "—"}</td>
+                <td className="px-3 py-2.5 tabular-nums">{dateFr(s.serviceStartDate)}</td>
+                <td className="px-3 py-2.5 tabular-nums">{s.anciennete != null ? `${s.anciennete} an(s)` : "—"}</td>
+                <td className="px-3 py-2.5">{s.classeTenue ?? "—"}</td>
+                <td className="px-3 py-2.5 whitespace-nowrap tabular-nums">{s.phone ? formaterTelephone(s.phone) : "—"}</td>
+                <td className="px-3 py-2.5">
+                  {!s.user ? "—" : !s.user.isActive ? "Désactivé" : s.user.mustChangePassword ? "En attente de 1re connexion" : "Actif"}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </section>
+      </div>
+      <p className="text-xs text-attenue">Âge à la date de référence des âges ; ancienneté à la date d&apos;édition des états (Paramètres).</p>
     </div>
   );
 }

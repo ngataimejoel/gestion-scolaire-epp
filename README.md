@@ -15,7 +15,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 3 | Squelette, schéma de base de données, moteur de calcul testé | Fait |
 | 4 | Comptes : inscription directeur + SMS, comptes enseignants, accès parents | Fait |
 | 5 | Établissement et paramètres | Fait |
-| 6 | Registre des élèves, personnel | À faire |
+| 6 | Registre des élèves, personnel | Fait |
 | 7 | Classes et notes (validation, verrouillage) | À faire |
 | 8 | Résultats, tableau de bord, statistiques | À faire |
 | 9 | Absences, rapports (PDF, Excel, impression) | À faire |
