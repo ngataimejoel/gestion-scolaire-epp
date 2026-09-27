@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
+/* Couleurs de l'application : vert (principal), orange (accent), neutres chauds. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --fond: #f6f5f1;
+  --surface: #ffffff;
+  --texte: #1c1b18;
+  --attenue: #5f5d57;
+  --bordure: #dedbd2;
+  --principal: #0e6b4f;
+  --principal-fonce: #0a5540;
+  --accent: #e07b24;
+  --erreur: #b3261e;
+  --erreur-fond: #fbeae8;
+  --succes-fond: #e6f3ee;
+  --info-fond: #fdf1e5;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --fond: #141412;
+    --surface: #1d1d1a;
+    --texte: #ecebe6;
+    --attenue: #a8a69e;
+    --bordure: #3a3934;
+    --principal: #3fb58a;
+    --principal-fonce: #5cc9a0;
+    --accent: #f0a05a;
+    --erreur: #ff8a80;
+    --erreur-fond: #3a1d1b;
+    --succes-fond: #173328;
+    --info-fond: #3a2a1a;
   }
 }
 
+@theme inline {
+  --color-fond: var(--fond);
+  --color-surface: var(--surface);
+  --color-texte: var(--texte);
+  --color-attenue: var(--attenue);
+  --color-bordure: var(--bordure);
+  --color-principal: var(--principal);
+  --color-principal-fonce: var(--principal-fonce);
+  --color-accent: var(--accent);
+  --color-erreur: var(--erreur);
+  --color-erreur-fond: var(--erreur-fond);
+  --color-succes-fond: var(--succes-fond);
+  --color-info-fond: var(--info-fond);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--font-sans);
+}
+
+@layer components {
+  .carte {
+    @apply rounded-xl border border-bordure bg-surface p-5 sm:p-7;
+  }
+  .champ {
+    @apply mt-1 block w-full rounded-lg border border-bordure bg-surface px-3 py-2.5 text-base text-texte outline-none focus:border-principal focus:ring-2 focus:ring-principal/25;
+  }
+  .champ[aria-invalid="true"] {
+    @apply border-erreur;
+  }
+  .btn-principal {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-base font-semibold transition disabled:opacity-60 bg-principal text-white hover:bg-principal-fonce dark:text-black;
+  }
+  .btn-secondaire {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-base font-semibold transition disabled:opacity-60 border border-bordure bg-surface text-texte hover:border-principal;
+  }
+  .lien {
+    @apply font-medium text-principal underline-offset-2 hover:underline;
+  }
 }

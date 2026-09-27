@@ -57,6 +57,8 @@ model SchoolSettings {
   expectedNewCp1    Int      @default(0) @map("expected_new_cp1") // Nouveaux inscrits CP1 attendus
   // Réglage ajouté (ambiguïté n°6) : désactivé = règle du classeur (absent = 0).
   neutralizeJustifiedAbsence Boolean @default(false) @map("neutralize_justified_absence")
+  // Code SMS aussi à la connexion des enseignants (désactivé par défaut ; toujours exigé pour le directeur)
+  teacherLoginOtp   Boolean  @default(false) @map("teacher_login_otp")
   setupCompletedAt  DateTime? @map("setup_completed_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
