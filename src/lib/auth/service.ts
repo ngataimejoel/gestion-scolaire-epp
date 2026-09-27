@@ -10,6 +10,8 @@ import { z } from "zod";
 import type { Db } from "../db";
 import type { Prisma, User } from "@/generated/prisma/client";
 import { journaliser } from "../audit";
+import { anneeDebutCourante } from "../parametres/defauts";
+import { preparerEcole } from "../parametres/service";
 import { envoyerSms } from "../sms";
 import { compterTentative, effacerTentatives, LIMITES, messageBlocage, tempsDeBlocage } from "./limites";
 import { caracteresAleatoires, erreurMotDePasse, hacherMotDePasse, motDePasseProvisoire, verifierMotDePasse } from "./mot-de-passe";
@@ -107,6 +109,8 @@ export async function confirmerInscription(
     const school = await tx.school.create({
       data: { name: a.schoolName, code: schoolCode, settings: { create: { directorName: a.fullName } } },
     });
+    // Paramètres du classeur par défaut : niveaux, seuils, matières, calendrier, jours de classe, listes, une classe par niveau.
+    await preparerEcole(tx, school.id, anneeDebutCourante());
     const u = await tx.user.create({
       data: {
         schoolId: school.id,
