@@ -1,0 +1,279 @@
+<title>Dossier GESTION SCOLAIRE EPP</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Source+Sans+3:wght@400;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root{--bg:#F2F5F1;--surface:#FFFFFF;--surface-2:#F7F9F6;--ink:#15231C;--muted:#58695F;--line:#D8E0D9;--accent:#1E5A44;--accent-ink:#fff;--accent-soft:#E0ECE5;--khaki:#A9823E;--khaki-soft:#F4ECDC;--ok:#2C7A4C;--ok-soft:#E1F1E7;--warn:#9A6212;--warn-soft:#FBEFD9;--bad:#AE2A21;--bad-soft:#FBE5E2;
+--display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;--body:"Source Sans 3",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0F1713;--surface:#16211B;--surface-2:#1B2821;--ink:#E4ECE7;--muted:#9BAAA1;--line:#2A3830;--accent:#6CC39A;--accent-ink:#0F1713;--accent-soft:#1C3328;--khaki:#D7B26B;--khaki-soft:#2E2819;--ok:#72CF98;--ok-soft:#18301F;--warn:#E6AE55;--warn-soft:#33270F;--bad:#F08A80;--bad-soft:#3A1B18}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0F1713;--surface:#16211B;--surface-2:#1B2821;--ink:#E4ECE7;--muted:#9BAAA1;--line:#2A3830;--accent:#6CC39A;--accent-ink:#0F1713;--accent-soft:#1C3328;--khaki:#D7B26B;--khaki-soft:#2E2819;--ok:#72CF98;--ok-soft:#18301F;--warn:#E6AE55;--warn-soft:#33270F;--bad:#F08A80;--bad-soft:#3A1B18}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);margin:0}
+.page{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:28px 64px;display:flex;flex-direction:column;gap:28px}
+h1,h2,h3{font-family:var(--display);line-height:1.2;text-wrap:balance;margin:0}
+h1{font-size:2rem}h2{font-size:1.4rem}h3{font-size:1.05rem}
+p{margin:0;max-width:72ch}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+header{display:flex;flex-direction:column;gap:10px;padding-bottom:18px;border-bottom:2px solid var(--accent)}
+.lead{font-size:1.1rem;color:var(--muted)}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px}
+nav.toc a{font-size:.85rem;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ink);text-decoration:none;background:var(--surface)}
+nav.toc a:hover{border-color:var(--accent)}
+section{display:flex;flex-direction:column;gap:14px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.ask{background:var(--khaki-soft);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+th{font-size:.72rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--surface-2);vertical-align:bottom}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+td:first-child{font-weight:700;white-space:nowrap}
+code,.mono{font-family:var(--mono);font-size:.85em}
+code{background:var(--surface-2);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.chip{display:inline-block;font-size:.75rem;font-weight:700;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.saisie{background:var(--khaki-soft);color:var(--khaki)}.calc{background:var(--accent-soft);color:var(--accent)}
+.ok{background:var(--ok-soft);color:var(--ok)}.warn{background:var(--warn-soft);color:var(--warn)}.bad{background:var(--bad-soft);color:var(--bad)}
+ul,ol{margin:0;padding-left:1.2rem;display:flex;flex-direction:column;gap:4px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.formula{font-family:var(--mono);font-size:.85rem;background:var(--surface-2);border-left:3px solid var(--accent);padding:6px 10px;border-radius:0 6px 6px 0}
+.num{font-family:var(--mono)}
+.chain{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-weight:600}
+.chain span{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 10px}
+.chain i{color:var(--muted);font-style:normal}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}h1{font-size:1.6rem}}
+</style>
+
+<div class="page">
+<header>
+  <span class="eyebrow">Étapes 1 et 2 · pour validation avant développement</span>
+  <h1>GESTION SCOLAIRE EPP : analyse du classeur et conception de la plateforme</h1>
+  <p class="lead">Source fonctionnelle : GESTION_SCOLAIRE_EPP_MODELE_EXPERT_10.xlsm (19 feuilles, 64 élèves et 8 agents fictifs, macros VBA). Rédigé le 27/09/2026.</p>
+  <nav class="toc">
+    <a href="#decisions">Vos décisions</a><a href="#feuilles">Feuilles → modules</a><a href="#regles">Règles de calcul</a><a href="#macros">Macros</a><a href="#ambiguites">Ambiguïtés</a><a href="#architecture">Architecture</a><a href="#bdd">Base de données</a><a href="#roles">Rôles</a><a href="#abonnement">Abonnement</a><a href="#securite">Sécurité</a><a href="#plan">Plan</a>
+  </nav>
+</header>
+
+<section id="decisions">
+  <h2>Ce dont j'ai besoin de vous avant de coder</h2>
+  <div class="ask">
+    <ol>
+      <li><b>Un dépôt GitHub</b> pour le code source. Aucun compte GitHub n'est relié à ce projet pour l'instant. Reliez-le depuis claude.ai, puis dites-moi le nom du dépôt (ou autorisez-moi à en créer un).</li>
+      <li><b>Valider les décisions de la section « Ambiguïtés »</b>. Pour chacune, j'indique ce que je ferai par défaut si vous ne dites rien.</li>
+      <li><b>Les fournisseurs SMS et paiement</b> ne sont pas nécessaires pour commencer : le code passera par des connecteurs interchangeables et un mode « simulation » pour les tests. Il faudra des comptes chez eux avant la mise en service.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="feuilles">
+  <h2>1. Analyse feuille par feuille et module web correspondant</h2>
+  <p>Principe du classeur, à conserver : <b>une seule base d'élèves (REGISTRE ELEVES) et une seule base de personnel (PERSONNEL)</b>. Toutes les autres feuilles sont des vues calculées. Aucun total n'est saisi à la main. Dans la plateforme, ces vues deviennent des calculs côté serveur, jamais des données recopiées.</p>
+  <div class="tw"><table>
+    <thead><tr><th>Feuille</th><th>Type</th><th>Objectif et contenu</th><th>Listes, contrôles, dépendances</th><th>Module web</th></tr></thead>
+    <tbody>
+    <tr><td>PARAMETRES</td><td><span class="chip saisie">Saisie</span></td><td>Identité (ministère, DREN, IEPP, école, code, année, localité, directeur, secteur), date d'édition des états, date de référence des âges, nouveaux CP1 attendus. Seuils et barème par classe. Calendrier des 4 évaluations (dates CP1–CM1 et CM2). Jours de classe par mois (sept.–juillet).</td><td>Listes : classes CP1–CM2, sexe M/F, 9 nationalités, OUI/NON, orphelin de (-, PERE, MERE, PERE ET MERE), statut (PRESENT, ABANDON, TRANSFERE), 7 fonctions. Alimente toutes les feuilles.</td><td><b>Paramètres</b> + assistant de configuration au premier accès</td></tr>
+    <tr><td>REGISTRE ELEVES</td><td><span class="chip saisie">Saisie</span></td><td>35 colonnes : N°, matricule école, matricule DESPS, nom et prénoms, sexe, classe, date de naissance, âge, nationalité, localité, sous-préfecture, extrait (OUI/NON), acte n°, du, centre d'état civil, orphelin, orphelin de, père / mère / tuteur (nom, profession, résidence, tél.), redoublant, statut, observations, 3 clés techniques.</td><td>Matricule école <code>CLASSE-NNN-AA</code> calculé. DESPS : 9 caractères, majuscule en 1re ou dernière position. Date de naissance ≥ 01/01/2005. Couleurs : sans extrait (jaune), abandon (rose), transféré (gris). Capacité 241 élèves.</td><td><b>Élèves</b> (registre, fiche, import/export)</td></tr>
+    <tr><td>PERSONNEL</td><td><span class="chip saisie">Saisie</span></td><td>Matricule, nom, sexe, naissance, âge, fonction, grade/emploi, classe tenue, diplôme, prise de service, ancienneté, arrivée dans l'école, tél., situation matrimoniale, observations. Récapitulatif H/F par fonction. Contrôle « classes sans enseignant ».</td><td>Âge au 31/12, ancienneté à la date d'édition. Capacité 60 agents.</td><td><b>Personnel</b> + création automatique des comptes enseignants</td></tr>
+    <tr><td>NOTES CP</td><td><span class="chip saisie">Saisie</span></td><td>CP1 et CP2. 4 évaluations × 8 matières notées sur 10 : écriture, EDHC, expression écrite, mathématique, orthographe, dessin, chant et poésie, lecture. Colonne « Présent ? » par évaluation.</td><td>Coefficient par matière (1 par défaut, 0 = ignorée). Moyenne pondérée arrondie à 2 décimales. Absent (NON) = moyenne 0, saisie bloquée.</td><td><b>Notes</b> (grille « CP »)</td></tr>
+    <tr><td>NOTES CE1</td><td><span class="chip saisie">Saisie</span></td><td>4 évaluations × 4 matières : exploitation de texte /50, éveil au milieu /40, mathématiques /40, dictée /10. Total /140.</td><td>Moyenne /10 = total ÷ barème des matières notées × 10.</td><td><b>Notes</b> (grille « CE1 »)</td></tr>
+    <tr><td>NOTES CE2-CM1</td><td><span class="chip saisie">Saisie</span></td><td>CE2 et CM1 ensemble. Exploitation de texte /50, éveil /50, mathématiques /50, dictée /20. Total /170.</td><td>Moyenne /10, même règle.</td><td><b>Notes</b> (grille « CE2-CM1 »)</td></tr>
+    <tr><td>NOTES CM2</td><td><span class="chip saisie">Saisie</span></td><td>1re compo, 2e compo (total /170), 1er et 2e examens blancs avec épreuves physiques /20 en plus (total /190).</td><td>Moyenne /20 = total ÷ barème des matières notées × 20.</td><td><b>Notes</b> (grille « CM2 »)</td></tr>
+    <tr><td>RESULTATS</td><td><span class="chip calc">Calcul</span></td><td>CP1–CM1 : moyennes des 3 compos, moyenne des 3, compo de passage, MGA, barème, seuil, décision, rang, observation.</td><td>Lit les 3 feuilles de notes par matricule, et les seuils des paramètres.</td><td><b>Résultats</b></td></tr>
+    <tr><td>RESULTATS CM2</td><td><span class="chip calc">Calcul</span></td><td>CM2 : 2 compos + 2 examens blancs, MGA /20, décision (entrée en 6e), rang, observation.</td><td>Lit NOTES CM2.</td><td><b>Résultats</b> (onglet CM2)</td></tr>
+    <tr><td>TABLEAU DE BORD</td><td><span class="chip calc">Calcul</span></td><td>Effectif inscrit, % filles, présents fin d'année, taux d'abandon, taux d'admission, sans extrait, enseignants, ratio élèves/enseignant. Tableau G/F/total/admis/taux/abandons par classe. 7 alertes. Liens et boutons vers les états.</td><td>Lit registre, résultats, personnel.</td><td><b>Tableau de bord</b> + <b>Statistiques</b></td></tr>
+    <tr><td>ETAT PAR CLASSE</td><td><span class="chip calc">Calcul</span></td><td>Liste d'une classe choisie (matricule, nom, sexe, âge, nationalité, extrait, orphelin, père/mère et tél., redoublant, statut) et 12 lignes de statistiques G/F/T.</td><td>Liste déroulante de classe.</td><td><b>Rapports</b> › État par classe (PDF d'une classe ou de toutes)</td></tr>
+    <tr><td>EFFECTIFS</td><td><span class="chip calc">Calcul</span></td><td>Par classe et sexe : inscrits, ivoiriens, étrangers, orphelins, avec/sans extrait, redoublants, abandons.</td><td>Contrôle total = nombre d'élèves du registre.</td><td><b>Rapports</b> › Tableau des effectifs</td></tr>
+    <tr><td>SYNTHESE FIN D'ANNEE</td><td><span class="chip calc">Calcul</span></td><td>Inscrits, présents, abandons, seuil, admis, taux d'admission, redoublants, effectif probable de l'année suivante.</td><td>Utilise « nouveaux CP1 attendus ».</td><td><b>Rapports</b> › Synthèse de fin d'année, puis passage à l'année suivante</td></tr>
+    <tr><td>RAPPORT DE COMPOSITION</td><td><span class="chip calc">Calcul</span> + observations</td><td>Choix de la composition (1 à 4) et de la date. Inscrits, présents, absents, admis, taux par classe et sexe. Les 3 meilleurs par niveau. Observations du directeur.</td><td>Liste 1–4. Pour le CM2, 3 et 4 = examens blancs.</td><td><b>Rapports</b> › Rapport de composition</td></tr>
+    <tr><td>RAPPORT DE RENTREE</td><td><span class="chip calc">Calcul</span> + observations</td><td>Liste du personnel (nom, matricule, fonction, genre, grade, cours tenu, contact). Effectifs non redoublants / redoublants par classe et sexe.</td><td>Contrôle total = registre.</td><td><b>Rapports</b> › Rapport de rentrée</td></tr>
+    <tr><td>ABSENCES ELEVES</td><td><span class="chip saisie">Saisie</span></td><td>Journal : date, matricule (nom, classe, sexe remplis seuls), nature RETARD/ABSENCE, jours, minutes, motif, justifié, observations.</td><td>Date ≥ 01/09/2026. Jours décimal ≥ 0, minutes entier ≥ 0. Total : événements, jours, retards.</td><td><b>Absences</b> › Élèves</td></tr>
+    <tr><td>ABSENCES PERSONNEL</td><td><span class="chip saisie">Saisie</span></td><td>Même journal pour le personnel (cours tenu au lieu de classe).</td><td>Idem.</td><td><b>Absences</b> › Personnel</td></tr>
+    <tr><td>RAPPORT MENSUEL</td><td><span class="chip calc">Calcul</span> + rédaction</td><td>Mois choisi. 1) Effectifs, abandons, taux de fréquentation par classe et sexe. 2) Assiduité du personnel (retards, absences, durées, motifs, émargement). 3) Animations pédagogiques et résultats de l'évaluation du mois, activités extra-scolaires (coopérative, bibliothèque, cantine). 4) Relations humaines. 5) Événements. 6) Difficultés (filles en grossesse, élèves décédés). 7) Satisfactions. 8) Conclusion.</td><td>Jours de classe du mois et calendrier des évaluations.</td><td><b>Rapports</b> › Rapport mensuel (brouillon enregistré, puis validé)</td></tr>
+    <tr><td>NOTICE</td><td>Texte</td><td>Mode d'emploi : principe, deux matricules, étapes, impression, contrôles, capacité, compatibilité.</td><td>—</td><td><b>Aide</b> intégrée à chaque page + guide de démarrage</td></tr>
+    </tbody>
+  </table></div>
+  <div class="panel"><h3>Relations entre les feuilles</h3>
+    <div class="chain"><span>PARAMETRES</span><i>→</i><span>REGISTRE ELEVES</span><i>→</i><span>NOTES (4 grilles)</span><i>→</i><span>RESULTATS / RESULTATS CM2</span><i>→</i><span>TABLEAU DE BORD, SYNTHESE, RAPPORT DE COMPOSITION, RAPPORT MENSUEL</span></div>
+    <div class="chain"><span>PERSONNEL</span><i>→</i><span>RAPPORT DE RENTREE, alertes « classes sans enseignant »</span><i>·</i><span>ABSENCES ELEVES / PERSONNEL</span><i>→</i><span>RAPPORT MENSUEL</span></div>
+    <p>La clé commune est le <b>matricule école</b>. Les feuilles de notes et les états retrouvent les élèves par ce matricule et par des clés techniques de rang (<code>CP1-1</code>, <code>P-1</code>, <code>CEM-1</code>). En base de données, ces clés sont remplacées par des identifiants stables.</p>
+  </div>
+</section>
+
+<section id="regles">
+  <h2>2. Règles de calcul reprises à l'identique</h2>
+  <p>Je les ai déjà reprogrammées dans le prototype. Pour les 64 élèves d'exemple, les résultats obtenus sont identiques à ceux du classeur : moyennes, MGA, décision, rang et observation. Ces 64 cas deviendront des tests automatiques de la plateforme.</p>
+  <div class="grid2">
+    <div class="panel"><h3>Moyenne d'une évaluation</h3>
+      <div class="formula">CP : Σ(note × coef) ÷ Σ(coef des matières notées), arrondi 2 déc.</div>
+      <div class="formula">CE1, CE2-CM1 : total ÷ Σ(barèmes notés) × 10</div>
+      <div class="formula">CM2 : total ÷ Σ(barèmes notés) × 20</div>
+      <p>« Présent ? » = NON : moyenne 0 et saisie refusée. Aucune note saisie : moyenne vide.</p></div>
+    <div class="panel"><h3>MGA et décision</h3>
+      <div class="formula">CP1–CM1 : MGA = (moyenne des compos 1–3 + 2 × passage) ÷ 3</div>
+      <div class="formula">CM2 : MGA = (C1 + C2 + EB1 + EB2) ÷ 4, seulement si les 4 existent</div>
+      <p>Statut ABANDON ou TRANSFERE : la décision reprend le statut. Sinon ADMIS si MGA ≥ seuil de la classe (5/10, CM2 10/20), sinon REDOUBLE.</p></div>
+    <div class="panel"><h3>Rang et observation</h3>
+      <p>Rang = 1 + nombre d'élèves présents de la même classe ayant une MGA strictement supérieure (les ex æquo partagent le rang).</p>
+      <p>Observation des admis, sur MGA ramenée sur 10 : ≥ 8 Très bien, ≥ 7 Bien, ≥ 6 Assez bien, sinon Passable. Redoublant : Insuffisant.</p></div>
+    <div class="panel"><h3>Indicateurs</h3>
+      <p>Taux de fréquentation = max(0 ; 1 − jours d'absence du mois ÷ (effectif × jours de classe)), par classe et sexe.</p>
+      <p>Taux d'admission = admis ÷ élèves au statut PRESENT. Ratio = élèves ÷ (instituteurs + directeurs).</p>
+      <p>Effectif probable = redoublants + admis de la classe précédente. CP1 = redoublants + nouveaux attendus ÷ 2 par sexe.</p></div>
+    <div class="panel"><h3>Identifiants et âges</h3>
+      <p>Matricule école = classe + n° d'ordre dans la classe sur 3 chiffres + 2 chiffres de l'année (<code>CE1-004-26</code>).</p>
+      <p>Âge = années révolues au 31/12 de l'année de rentrée. Ancienneté = années révolues à la date d'édition.</p></div>
+    <div class="panel"><h3>Rapports</h3>
+      <p>Rapport de composition : présent = moyenne numérique et « Présent ? » ≠ NON. Admis = moyenne de l'évaluation ≥ seuil. 3 meilleurs par niveau.</p>
+      <p>Rapport mensuel : l'évaluation affichée est celle dont la date (calendrier) tombe dans le mois.</p></div>
+  </div>
+</section>
+
+<section id="macros">
+  <h2>3. Macros VBA trouvées dans le fichier</h2>
+  <p>La NOTICE dit « Aucune macro », mais le fichier .xlsm en contient (module de 28 Ko). Elles ne calculent rien : elles servent à imprimer et à exporter. Voici leur équivalent web.</p>
+  <div class="tw"><table><thead><tr><th>Macro</th><th>Ce qu'elle fait</th><th>Équivalent web</th></tr></thead><tbody>
+    <tr><td>Imp… / Imprimer… / Apercu…</td><td>Aperçu et impression de chaque état en A4 (portrait ou paysage)</td><td>Bouton Imprimer et PDF sur chaque rapport</td></tr>
+    <tr><td>ExporterEtatsPDF</td><td>6 PDF (résultats, résultats CM2, effectifs, synthèse, composition, rentrée) dans un dossier <code>ETATS_2026-2027</code></td><td>« Tout exporter en PDF » (archive ZIP)</td></tr>
+    <tr><td>ImprimerToutesLesClasses, ExporterToutesLesClassesPDF</td><td>État de chaque classe, un par un</td><td>PDF groupé de toutes les classes</td></tr>
+    <tr><td>ImprimerDossierFinAnnee</td><td>Tableau de bord, effectifs, synthèse, rentrée, personnel</td><td>« Dossier de fin d'année » en un PDF</td></tr>
+    <tr><td>MettreAJourDossier, OuvrirLie…</td><td>6 fichiers Excel « figés » (registre, notes, résultats, rapports, personnel, notice)</td><td>Export Excel par module, et export complet</td></tr>
+    <tr><td>AfficherMasquerFeuillesCalculees, zones d'impression A4</td><td>Confort d'affichage et mise en page</td><td>Inutile : navigation et mise en page PDF automatiques</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="ambiguites">
+  <h2>4. Ambiguïtés et incohérences détectées</h2>
+  <p>Pour chaque point, ma décision par défaut. Dites-moi si vous voulez autre chose.</p>
+  <div class="tw"><table><thead><tr><th>#</th><th>Constat dans le fichier</th><th>Décision proposée</th></tr></thead><tbody>
+    <tr><td>1 <span class="chip bad">Erreur</span></td><td>L'alerte « élèves en sur-âge » compare la <b>date de naissance</b> (colonne G) au lieu de l'<b>âge</b> (colonne H). Elle compte donc tous les élèves (64).</td><td>Utiliser l'âge : sur-âge si âge ≥ âge normal + 3 (CP1 : 6 → 9 ans, …, CM2 : 11 → 14 ans).</td></tr>
+    <tr><td>2 <span class="chip bad">Erreur</span></td><td>La NOTICE annonce « Aucune macro » alors que le fichier en contient.</td><td>Sans effet sur les calculs. Les macros sont remplacées (section 3).</td></tr>
+    <tr><td>3 <span class="chip warn">Risque</span></td><td>Le matricule école est <b>recalculé</b> selon l'ordre des lignes. Si un élève change de classe ou si une ligne est insérée, les matricules des autres changent, et les notes rattachées aussi.</td><td>Matricule attribué une fois à l'inscription, puis <b>figé</b>. Même format <code>CLASSE-NNN-AA</code>.</td></tr>
+    <tr><td>4 <span class="chip warn">À confirmer</span></td><td>Le paramètre s'appelle « Moy. compo de passage (seuil) », mais RESULTATS l'applique à la <b>MGA</b>. Le rapport de composition l'applique à la moyenne de chaque composition.</td><td>Garder les deux usages, comme dans le fichier. Renommer le libellé « Moyenne d'admission ».</td></tr>
+    <tr><td>5 <span class="chip warn">À confirmer</span></td><td>CP1–CM1 : si une compo 1–3 manque, la moyenne se fait sur celles qui existent. Au CM2, la MGA exige les 4 évaluations.</td><td>Conserver ces règles et afficher une alerte « compositions manquantes ».</td></tr>
+    <tr><td>6 <span class="chip warn">À confirmer</span></td><td>Élève absent à une évaluation = 0, compté dans la MGA (règle voulue par la NOTICE, mais sévère).</td><td>Conserver. Ajouter un réglage « absence justifiée : évaluation neutralisée », désactivé par défaut.</td></tr>
+    <tr><td>7 <span class="chip warn">À confirmer</span></td><td>Le RAPPORT MENSUEL prévoit les lignes <b>PS, MS, GS</b> (préscolaire), mais la liste des classes n'a que CP1–CM2.</td><td>Classes configurables par école, préscolaire possible. Par défaut CP1–CM2.</td></tr>
+    <tr><td>8 <span class="chip warn">Limite</span></td><td>Une seule classe par niveau. « Classes sans enseignant » suppose 6 classes. Un enseignant tient une seule classe.</td><td>Permettre plusieurs divisions (CM1 A, CM1 B) et plusieurs classes par enseignant. Défaut identique au fichier.</td></tr>
+    <tr><td>9 <span class="chip warn">Limite</span></td><td>Les abandons n'ont pas de date : le rapport mensuel compte tous les abandons de l'année, quel que soit le mois.</td><td>Ajouter la date de changement de statut. Rapport mensuel : abandons du mois, et cumul affiché à part.</td></tr>
+    <tr><td>10 <span class="chip warn">Limite</span></td><td>« Abandons » dans la synthèse = inscrits − présents, donc transférés compris (la note du fichier le dit).</td><td>Conserver, et afficher les transférés dans une colonne séparée.</td></tr>
+    <tr><td>11 <span class="chip warn">Limite</span></td><td>Dates de saisie codées en dur : naissance ≥ 01/01/2005, absences ≥ 01/09/2026.</td><td>Dériver ces bornes de l'année scolaire active.</td></tr>
+    <tr><td>12 <span class="chip warn">À confirmer</span></td><td>Le ratio élèves/enseignant compte le directeur parmi les enseignants (INSTITUTEUR* + DIRECTEUR*).</td><td>Conserver le calcul du fichier. Ajouter un ratio « enseignants tenant une classe ».</td></tr>
+    <tr><td>13 <span class="chip ok">Info</span></td><td>Aucune donnée de paiement de scolarité ni de communiqués dans le fichier.</td><td>Abonnement de la plateforme ajouté comme demandé. Frais de scolarité non prévus, sauf demande de votre part.</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="architecture">
+  <h2>5. Architecture proposée</h2>
+  <div class="grid3">
+    <div class="panel"><span class="eyebrow">Application</span><h3>Next.js + TypeScript</h3><p>Une seule base de code pour l'interface et l'API, typée de bout en bout, ce qui protège les calculs de notes des erreurs. Interface responsive, installable sur téléphone (PWA), rendu serveur rapide sur les connexions lentes.</p></div>
+    <div class="panel"><span class="eyebrow">Données</span><h3>PostgreSQL + Prisma</h3><p>Base relationnelle robuste. Les requêtes paramétrées empêchent l'injection SQL. Chaque table porte l'identifiant de l'école, et une sécurité au niveau des lignes (RLS) de PostgreSQL bloque tout accès d'une école à une autre.</p></div>
+    <div class="panel"><span class="eyebrow">Interface</span><h3>Tailwind + composants accessibles</h3><p>Formulaires clairs, grands boutons, français partout, tableaux lisibles sur mobile. Graphiques interactifs avec une bibliothèque standard (Recharts).</p></div>
+    <div class="panel"><span class="eyebrow">Sécurité</span><h3>Authentification maison</h3><p>Mots de passe hachés en Argon2id. Sessions en cookies httpOnly et SameSite, protection CSRF, OTP haché avec expiration et nombre d'essais limité, journal d'audit.</p></div>
+    <div class="panel"><span class="eyebrow">Services</span><h3>SMS, paiement, e-mail interchangeables</h3><p>Un connecteur par fournisseur (Orange SMS API, CinetPay, Wave, PayDunya…), avec un mode simulation pour les tests. Clés uniquement en variables d'environnement.</p></div>
+    <div class="panel"><span class="eyebrow">Documents</span><h3>PDF et Excel côté serveur</h3><p>PDF au format A4 officiel (en-tête du ministère, République de Côte d'Ivoire, signature). Import et export Excel avec ExcelJS. Tâches planifiées pour les rappels, expirations et sauvegardes.</p></div>
+  </div>
+  <p><b>Pourquoi ce choix :</b> un seul langage et une seule application, donc moins de maintenance pour une petite équipe. C'est un écosystème très répandu (facile de trouver un développeur en Afrique de l'Ouest). PostgreSQL garantit l'intégrité des relations entre élèves, notes et résultats. L'hébergement se fait sur un simple serveur avec Docker, ou sur un service géré, pour un coût mensuel modeste. Tests : Vitest pour les règles de calcul, Playwright pour les parcours complets.</p>
+</section>
+
+<section id="bdd">
+  <h2>6. Base de données</h2>
+  <div class="chain"><span>Établissement</span><i>→</i><span>Année scolaire</span><i>→</i><span>Classes</span><i>→</i><span>Inscriptions d'élèves</span><i>→</i><span>Notes</span><i>→</i><span>Résultats (calculés)</span><i>·</i><span>Absences</span><i>·</i><span>Rapports</span></div>
+  <div class="tw"><table><thead><tr><th>Table</th><th>Rôle et colonnes principales</th></tr></thead><tbody>
+    <tr><td>schools</td><td>Établissement : nom, code, ministère, DREN, IEPP, secteur, localité</td></tr>
+    <tr><td>school_settings</td><td>Paramètres par établissement : date de référence des âges, date d'édition, nouveaux CP1 attendus, options</td></tr>
+    <tr><td>academic_years</td><td>Année scolaire (2026-2027), active ou clôturée, calendrier des jours de classe par mois</td></tr>
+    <tr><td>choice_lists / choice_items</td><td>Listes configurables : nationalités, statuts, fonctions, orphelin de, motifs d'absence</td></tr>
+    <tr><td>levels</td><td>Niveaux CP1…CM2 (préscolaire possible) : groupe de grille de notes, seuil, barème, âge normal</td></tr>
+    <tr><td>classes</td><td>Division d'un niveau pour une année (CM1, CM1 A…)</td></tr>
+    <tr><td>users</td><td>Comptes : téléphone (identifiant), e-mail, hash du mot de passe, rôle, doit changer le mot de passe, numéro vérifié</td></tr>
+    <tr><td>staff</td><td>Personnel : matricule, nom, prénoms, sexe, naissance, fonction, grade, diplôme, prise de service, arrivée, tél., situation, lien vers users</td></tr>
+    <tr><td>class_teachers</td><td>Affectation enseignant ↔ classe (et matières si besoin)</td></tr>
+    <tr><td>students</td><td>Élève : matricule école (figé), DESPS, identité, naissance, nationalité, localité, sous-préfecture, état civil, orphelin</td></tr>
+    <tr><td>guardians</td><td>Père, mère, tuteur : nom, profession, résidence, téléphone (plusieurs par élève)</td></tr>
+    <tr><td>enrollments</td><td>Inscription d'un élève dans une classe pour une année : redoublant, statut, date de statut, observations</td></tr>
+    <tr><td>subjects</td><td>Matières par groupe de grille et par évaluation : barème, coefficient, ordre</td></tr>
+    <tr><td>assessments</td><td>Évaluation : numéro 1–4, libellé (compo, examen blanc, passage), date, niveau(x), état ouverte / validée / verrouillée</td></tr>
+    <tr><td>assessment_attendance</td><td>« Présent ? » d'un élève à une évaluation</td></tr>
+    <tr><td>grades</td><td>Note d'un élève pour une matière d'une évaluation, saisie par, date</td></tr>
+    <tr><td>results (vue)</td><td>Moyennes, MGA, décision, rang, observation, recalculés automatiquement, figés à la clôture de l'année</td></tr>
+    <tr><td>attendance_events</td><td>Retards et absences : personne (élève ou agent), date, nature, jours, minutes, motif, justifié, observations</td></tr>
+    <tr><td>report_drafts</td><td>Parties rédigées des rapports (observations, rapport mensuel), brouillon ou validé</td></tr>
+    <tr><td>plans / subscriptions / payments</td><td>Offres configurables, abonnement de chaque école, transactions de paiement</td></tr>
+    <tr><td>otp_codes / sessions</td><td>Codes SMS hachés avec expiration et essais, sessions actives</td></tr>
+    <tr><td>notifications</td><td>Messages dans l'application, SMS et e-mail, avec état d'envoi</td></tr>
+    <tr><td>audit_logs</td><td>Qui, quoi, quand, ancienne et nouvelle valeur</td></tr>
+    <tr><td>imports</td><td>Fichiers Excel importés : analyse, anomalies, confirmation, rapport</td></tr>
+  </tbody></table></div>
+</section>
+
+<section id="roles">
+  <h2>7. Rôles et permissions</h2>
+  <div class="tw"><table><thead><tr><th>Fonction</th><th>Directeur</th><th>Enseignant</th><th>Parent</th><th>Admin plateforme</th></tr></thead><tbody>
+    <tr><td>Paramètres, abonnement, historique</td><td>Oui</td><td>Non</td><td>Non</td><td>Offres et prix</td></tr>
+    <tr><td>Élèves (registre)</td><td>Tout</td><td>Lecture de ses classes</td><td>Fiche de son enfant</td><td>Non</td></tr>
+    <tr><td>Personnel et comptes</td><td>Tout</td><td>Son profil</td><td>Non</td><td>Non</td></tr>
+    <tr><td>Notes</td><td>Tout, valide et verrouille</td><td>Saisie dans ses classes tant que l'évaluation est ouverte</td><td>Non</td><td>Non</td></tr>
+    <tr><td>Résultats et statistiques</td><td>Tout</td><td>Ses classes</td><td>Bulletin de son enfant</td><td>Indicateurs globaux anonymes</td></tr>
+    <tr><td>Absences</td><td>Élèves et personnel</td><td>Élèves de ses classes</td><td>Celles de son enfant</td><td>Non</td></tr>
+    <tr><td>Rapports, PDF, Excel</td><td>Tout</td><td>Listes et résultats de ses classes</td><td>Bulletin PDF</td><td>Non</td></tr>
+  </tbody></table></div>
+  <p>Le rôle Parent reprend ce que vous avez demandé : accès sans mot de passe, avec le matricule (école ou DESPS) et la date de naissance, limité en nombre d'essais. Chaque requête est filtrée par établissement côté serveur. Un directeur ne voit jamais les données d'une autre école.</p>
+</section>
+
+<section id="abonnement">
+  <h2>8. Abonnement et paiement</h2>
+  <div class="grid3">
+    <div class="panel"><span class="eyebrow">Essai</span><h3>Gratuit</h3><p>Durée limitée (par exemple 30 jours), nombre d'élèves limité, fonctions essentielles.</p></div>
+    <div class="panel"><span class="eyebrow">Standard</span><h3>École</h3><p>Plus d'élèves, enseignants, notes, absences, rapports, statistiques.</p></div>
+    <div class="panel"><span class="eyebrow">Premium</span><h3>Complet</h3><p>Grand nombre d'élèves, notifications SMS, assistant, sauvegardes avancées, support prioritaire.</p></div>
+  </div>
+  <p>Prix, durée, nombre maximum d'élèves et d'enseignants, et fonctions incluses sont stockés dans la table <code>plans</code>, modifiables par l'administrateur de la plateforme. Aucun prix n'est écrit dans le code. Chaque fonction vérifie les droits de l'abonnement en un seul point central.</p>
+  <div class="chain"><span>Choix de l'offre</span><i>→</i><span>Paiement (en attente)</span><i>→</i><span>Confirmation du fournisseur par webhook vérifié</span><i>→</i><span>Activation</span><i>→</i><span>Rappels à J-15, J-7, J-1</span><i>→</i><span>Expiration (lecture seule, données conservées)</span></div>
+  <p>Statuts : actif, en attente, expiré, annulé, paiement échoué. Les fournisseurs sont interchangeables (Mobile Money Orange, MTN, Moov, Wave, via un agrégateur comme CinetPay ou PayDunya). Les montants sont toujours vérifiés côté serveur, jamais par le navigateur.</p>
+</section>
+
+<section id="securite">
+  <h2>9. Sécurité, sauvegarde, innovations</h2>
+  <div class="grid2">
+    <div class="panel"><h3>Sécurité</h3><ul>
+      <li>Argon2id pour les mots de passe, jamais de mot de passe en clair</li>
+      <li>OTP 6 chiffres haché, 5 min, 3 essais, renvoi limité</li>
+      <li>Limitation des tentatives de connexion par numéro et par adresse IP</li>
+      <li>Validation de toutes les saisies côté serveur</li>
+      <li>Protection XSS (échappement), CSRF (jetons), en-têtes de sécurité</li>
+      <li>Isolation des écoles dans le code et par RLS dans PostgreSQL</li>
+      <li>Journal d'audit de toute modification</li></ul></div>
+    <div class="panel"><h3>Sauvegarde</h3><ul>
+      <li>Sauvegarde automatique quotidienne de la base, conservée 30 jours</li>
+      <li>Copie hors serveur (stockage compatible S3)</li>
+      <li>Export complet d'une école en Excel à tout moment</li>
+      <li>Procédure de restauration documentée et testée</li></ul></div>
+    <div class="panel"><h3>Import du fichier Excel</h3><ul>
+      <li>Reconnaissance des feuilles PARAMETRES, REGISTRE ELEVES, NOTES…, PERSONNEL, ABSENCES…</li>
+      <li>Aperçu, doublons, erreurs (DESPS, dates, classes inconnues)</li>
+      <li>Comparaison des résultats recalculés avec ceux du fichier</li>
+      <li>Confirmation, import, puis rapport. Aucune donnée écrasée sans accord.</li></ul></div>
+    <div class="panel"><h3>Innovations</h3><ul>
+      <li>Assistant du directeur : réponses calculées sur les vraies données (effectifs, abandons, taux, extraits manquants…)</li>
+      <li>Alertes : absences répétées, notes manquantes, enseignants en retard de saisie, composition proche, abonnement bientôt expiré</li>
+      <li>Notifications dans l'application, par SMS et par e-mail</li>
+      <li>Passage à l'année suivante en un clic, à partir des décisions</li></ul></div>
+  </div>
+</section>
+
+<section id="plan">
+  <h2>10. Plan de développement</h2>
+  <div class="tw"><table><thead><tr><th>Étape</th><th>Contenu</th></tr></thead><tbody>
+    <tr><td>3</td><td>Squelette du projet, base de données, moteur de règles avec les 64 cas de test du classeur</td></tr>
+    <tr><td>4</td><td>Authentification : inscription du directeur avec OTP, connexion, récupération, changement de mot de passe</td></tr>
+    <tr><td>5</td><td>Établissement : assistant de configuration, paramètres, listes, niveaux, calendrier</td></tr>
+    <tr><td>6</td><td>Élèves et personnel, comptes enseignants automatiques</td></tr>
+    <tr><td>7</td><td>Classes et notes (4 grilles), validation et verrouillage</td></tr>
+    <tr><td>8</td><td>Résultats, tableau de bord et statistiques</td></tr>
+    <tr><td>9</td><td>Absences et les 7 rapports (PDF, Excel, impression)</td></tr>
+    <tr><td>10</td><td>Abonnement et paiement</td></tr>
+    <tr><td>11</td><td>Notifications, historique, import et export Excel, assistant</td></tr>
+    <tr><td>12</td><td>Tests complets, documentation d'installation, de déploiement, de sauvegarde et de restauration, comptes de test</td></tr>
+  </tbody></table></div>
+  <p>À chaque étape, je vous livre ce qui fonctionne. Le prototype actuel reste votre maquette de référence pour l'interface.</p>
+</section>
+</div>

@@ -1,0 +1,691 @@
+// Schéma de la plateforme GESTION SCOLAIRE EPP.
+// Source fonctionnelle : classeur GESTION_SCOLAIRE_EPP_MODELE_EXPERT_10.xlsm.
+// Chaque donnée d'une école porte school_id : aucune requête ne doit lire
+// une ligne sans filtrer sur l'établissement de l'utilisateur connecté.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Établissement et paramètres (feuille PARAMETRES)
+// ---------------------------------------------------------------------------
+
+model School {
+  id          String   @id @default(cuid())
+  name        String // Nom de l'établissement
+  code        String // Code établissement (ex. EPP-GAG-0123)
+  ministry    String   @default("MINISTERE DE L'EDUCATION NATIONALE ET DE L'ALPHABETISATION")
+  regionalDirectorate String? @map("regional_directorate") // DREN
+  inspectorate String? // IEPP
+  sector      String? // Secteur pédagogique
+  locality    String? // Localité
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  settings      SchoolSettings?
+  academicYears AcademicYear[]
+  choiceItems   ChoiceItem[]
+  levels        Level[]
+  classrooms    Classroom[]
+  users         User[]
+  staff         Staff[]
+  students      Student[]
+  subjects      Subject[]
+  assessments   Assessment[]
+  attendance    AttendanceEvent[]
+  reportDrafts  ReportDraft[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+  imports       ImportJob[]
+
+  @@unique([code])
+  @@map("schools")
+}
+
+model SchoolSettings {
+  schoolId          String   @id @map("school_id")
+  school            School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  directorName      String?  @map("director_name") // tel qu'imprimé sur les états
+  reportDate        DateTime? @map("report_date") @db.Date // Date d'édition des états (ancienneté)
+  expectedNewCp1    Int      @default(0) @map("expected_new_cp1") // Nouveaux inscrits CP1 attendus
+  // Réglage ajouté (ambiguïté n°6) : désactivé = règle du classeur (absent = 0).
+  neutralizeJustifiedAbsence Boolean @default(false) @map("neutralize_justified_absence")
+  setupCompletedAt  DateTime? @map("setup_completed_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("school_settings")
+}
+
+model AcademicYear {
+  id         String   @id @default(cuid())
+  schoolId   String   @map("school_id")
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  label      String // "2026-2027"
+  startYear  Int      @map("start_year") // 2026
+  ageReferenceDate DateTime @map("age_reference_date") @db.Date // 31/12/2026 par défaut
+  isActive   Boolean  @default(false) @map("is_active")
+  closedAt   DateTime? @map("closed_at")
+
+  months      SchoolMonth[]
+  classrooms  Classroom[]
+  enrollments Enrollment[]
+  assessments Assessment[]
+  attendance  AttendanceEvent[]
+  reportDrafts ReportDraft[]
+
+  @@unique([schoolId, label])
+  @@map("academic_years")
+}
+
+// Jours de classe par mois (taux de fréquentation)
+model SchoolMonth {
+  id             String       @id @default(cuid())
+  academicYearId String       @map("academic_year_id")
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  month          Int // 1..12
+  year           Int
+  schoolDays     Decimal      @map("school_days") @db.Decimal(4, 1)
+
+  @@unique([academicYearId, month])
+  @@map("school_months")
+}
+
+enum ChoiceList {
+  NATIONALITY
+  STAFF_FUNCTION
+  ORPHAN_OF
+  ABSENCE_REASON
+  MARITAL_STATUS
+}
+
+// Listes de choix de PARAMETRES (validation des données)
+model ChoiceItem {
+  id       String     @id @default(cuid())
+  schoolId String     @map("school_id")
+  school   School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  list     ChoiceList
+  value    String
+  position Int        @default(0)
+
+  @@unique([schoolId, list, value])
+  @@map("choice_items")
+}
+
+// Grille de notes utilisée par un niveau (une feuille NOTES du classeur)
+enum GradeSheet {
+  CP // NOTES CP : CP1, CP2
+  CE1 // NOTES CE1
+  CE2_CM1 // NOTES CE2-CM1 : CE2, CM1
+  CM2 // NOTES CM2
+  PRESCHOOL // PS, MS, GS (lignes présentes dans le rapport mensuel)
+}
+
+// Niveau : CP1…CM2 avec seuil et barème (PARAMETRES, seuils d'admission)
+model Level {
+  id         String     @id @default(cuid())
+  schoolId   String     @map("school_id")
+  school     School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  code       String // CP1, CP2, CE1, CE2, CM1, CM2
+  gradeSheet GradeSheet @map("grade_sheet")
+  passMark   Decimal    @map("pass_mark") @db.Decimal(5, 2) // Moyenne d'admission (5 ou 10)
+  scale      Int // Barème de la moyenne : 10 ou 20
+  normalAge  Int        @map("normal_age") // Âge normal (sur-âge = normal + 3)
+  position   Int
+
+  classrooms Classroom[]
+
+  @@unique([schoolId, code])
+  @@map("levels")
+}
+
+model Classroom {
+  id             String       @id @default(cuid())
+  schoolId       String       @map("school_id")
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYearId String       @map("academic_year_id")
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  levelId        String       @map("level_id")
+  level          Level        @relation(fields: [levelId], references: [id])
+  name           String // "CM1" ou "CM1 A" (ambiguïté n°8)
+
+  teachers         ClassTeacher[]
+  enrollments      Enrollment[]
+  assessmentStates ClassAssessment[]
+
+  @@unique([academicYearId, name])
+  @@index([schoolId])
+  @@map("classrooms")
+}
+
+// ---------------------------------------------------------------------------
+// Comptes, sessions, OTP
+// ---------------------------------------------------------------------------
+
+enum Role {
+  PLATFORM_ADMIN
+  DIRECTOR
+  TEACHER
+}
+
+model User {
+  id                 String    @id @default(cuid())
+  schoolId           String?   @map("school_id") // null pour l'administrateur de la plateforme
+  school             School?   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  phone              String    @unique // identifiant de connexion, 10 chiffres
+  email              String?
+  fullName           String    @map("full_name")
+  role               Role
+  passwordHash       String    @map("password_hash") // Argon2id, jamais de mot de passe en clair
+  mustChangePassword Boolean   @default(false) @map("must_change_password")
+  phoneVerifiedAt    DateTime? @map("phone_verified_at")
+  failedLogins       Int       @default(0) @map("failed_logins")
+  lockedUntil        DateTime? @map("locked_until")
+  isActive           Boolean   @default(true) @map("is_active")
+  lastLoginAt        DateTime? @map("last_login_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+
+  sessions      Session[]
+  staff         Staff?
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@index([schoolId])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id // empreinte SHA-256 du jeton du cookie
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  ip        String?
+  userAgent String?  @map("user_agent")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+enum OtpPurpose {
+  SIGNUP
+  LOGIN
+  PASSWORD_RESET
+  VERIFY_PHONE
+}
+
+model OtpCode {
+  id         String     @id @default(cuid())
+  phone      String
+  purpose    OtpPurpose
+  codeHash   String     @map("code_hash")
+  expiresAt  DateTime   @map("expires_at")
+  attempts   Int        @default(0)
+  consumedAt DateTime?  @map("consumed_at")
+  payload    Json? // données d'inscription en attente (sans mot de passe en clair)
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  @@index([phone, purpose])
+  @@map("otp_codes")
+}
+
+// Compteur générique de tentatives (connexion, OTP, accès parent)
+model RateLimit {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime @map("window_start")
+  blockedUntil DateTime? @map("blocked_until")
+
+  @@map("rate_limits")
+}
+
+// ---------------------------------------------------------------------------
+// Personnel (feuille PERSONNEL)
+// ---------------------------------------------------------------------------
+
+enum Sex {
+  M
+  F
+}
+
+model Staff {
+  id               String    @id @default(cuid())
+  schoolId         String    @map("school_id")
+  school           School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  matricule        String
+  lastName         String    @map("last_name")
+  firstNames       String    @map("first_names")
+  sex              Sex
+  birthDate        DateTime? @map("birth_date") @db.Date
+  function         String // DIRECTEUR, INSTITUTEUR ADJOINT… (liste STAFF_FUNCTION)
+  grade            String? // Grade / Emploi
+  diploma          String?
+  serviceStartDate DateTime? @map("service_start_date") @db.Date
+  arrivalDate      DateTime? @map("arrival_date") @db.Date
+  phone            String?
+  maritalStatus    String?   @map("marital_status")
+  notes            String?
+  userId           String?   @unique @map("user_id")
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  classes    ClassTeacher[]
+  attendance AttendanceEvent[]
+
+  @@unique([schoolId, matricule])
+  @@map("staff")
+}
+
+model ClassTeacher {
+  classroomId String    @map("classroom_id")
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  staffId     String    @map("staff_id")
+  staff       Staff     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@id([classroomId, staffId])
+  @@map("class_teachers")
+}
+
+// ---------------------------------------------------------------------------
+// Élèves (feuille REGISTRE ELEVES)
+// ---------------------------------------------------------------------------
+
+enum EnrollmentStatus {
+  PRESENT
+  ABANDON
+  TRANSFERE
+}
+
+model Student {
+  id                  String    @id @default(cuid())
+  schoolId            String    @map("school_id")
+  school              School    @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  schoolMatricule     String    @map("school_matricule") // CLASSE-NNN-AA, attribué une fois puis figé
+  despsId             String?   @map("desps_id") // 9 caractères, majuscule en tête ou en fin
+  fullName            String    @map("full_name") // "Nom et Prénoms" comme dans le registre
+  sex                 Sex
+  birthDate           DateTime? @map("birth_date") @db.Date
+  nationality         String?
+  locality            String?
+  subPrefecture       String?   @map("sub_prefecture")
+  hasBirthCertificate Boolean   @default(true) @map("has_birth_certificate") // Extrait ?
+  certificateNumber   String?   @map("certificate_number") // Acte N°
+  certificateDate     DateTime? @map("certificate_date") @db.Date // Du
+  civilRegistryCenter String?   @map("civil_registry_center")
+  isOrphan            Boolean   @default(false) @map("is_orphan")
+  orphanOf            String?   @map("orphan_of") // PERE, MERE, PERE ET MERE
+  createdAt           DateTime  @default(now()) @map("created_at")
+
+  guardians   Guardian[]
+  enrollments Enrollment[]
+
+  @@unique([schoolId, schoolMatricule])
+  @@unique([schoolId, despsId])
+  @@index([schoolId, fullName])
+  @@map("students")
+}
+
+enum GuardianRelation {
+  PERE
+  MERE
+  TUTEUR
+}
+
+model Guardian {
+  id         String           @id @default(cuid())
+  studentId  String           @map("student_id")
+  student    Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  relation   GuardianRelation
+  fullName   String           @map("full_name")
+  profession String?
+  residence  String?
+  phone      String?
+
+  @@unique([studentId, relation])
+  @@map("guardians")
+}
+
+// Inscription d'un élève dans une classe pour une année
+model Enrollment {
+  id             String           @id @default(cuid())
+  studentId      String           @map("student_id")
+  student        Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  academicYearId String           @map("academic_year_id")
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  classroomId    String           @map("classroom_id")
+  classroom      Classroom        @relation(fields: [classroomId], references: [id])
+  isRepeating    Boolean          @default(false) @map("is_repeating") // Redoublant
+  status         EnrollmentStatus @default(PRESENT)
+  statusDate     DateTime?        @map("status_date") @db.Date // ajouté (ambiguïté n°9)
+  notes          String? // Observations
+
+  attendance       AttendanceEvent[]
+  assessmentPresence AssessmentPresence[]
+  grades           Grade[]
+  yearResult       YearResult?
+
+  @@unique([studentId, academicYearId])
+  @@index([classroomId])
+  @@map("enrollments")
+}
+
+// ---------------------------------------------------------------------------
+// Notes (feuilles NOTES CP, CE1, CE2-CM1, CM2)
+// ---------------------------------------------------------------------------
+
+// Matière d'une grille pour une évaluation donnée (au CM2, les examens blancs
+// ajoutent les épreuves physiques). CP : maxScore = 10 et coefficient.
+// Autres grilles : maxScore = barème, coefficient inutilisé.
+model Subject {
+  id               String     @id @default(cuid())
+  schoolId         String     @map("school_id")
+  school           School     @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  gradeSheet       GradeSheet @map("grade_sheet")
+  assessmentNumber Int        @map("assessment_number") // 1..4
+  name             String
+  maxScore         Decimal    @map("max_score") @db.Decimal(6, 2)
+  coefficient      Decimal    @default(1) @db.Decimal(4, 2)
+  position         Int
+
+  grades Grade[]
+
+  @@unique([schoolId, gradeSheet, assessmentNumber, name])
+  @@map("subjects")
+}
+
+enum AssessmentTrack {
+  STANDARD // CP1 à CM1
+  CM2 // CM2 : compositions et examens blancs
+}
+
+// Évaluation du calendrier (PARAMETRES, calendrier des évaluations)
+model Assessment {
+  id             String          @id @default(cuid())
+  schoolId       String          @map("school_id")
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYearId String          @map("academic_year_id")
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  number         Int // 1..4 (4 = composition de passage, ou 2e examen blanc au CM2)
+  track          AssessmentTrack
+  label          String
+  date           DateTime?       @db.Date
+
+  classStates ClassAssessment[]
+  presence    AssessmentPresence[]
+  grades      Grade[]
+
+  @@unique([academicYearId, number, track])
+  @@map("assessments")
+}
+
+enum AssessmentState {
+  OPEN
+  VALIDATED
+  LOCKED
+}
+
+// État de la saisie d'une évaluation dans une classe (validation, verrouillage)
+model ClassAssessment {
+  assessmentId  String          @map("assessment_id")
+  assessment    Assessment      @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  classroomId   String          @map("classroom_id")
+  classroom     Classroom       @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  state         AssessmentState @default(OPEN)
+  validatedById String?         @map("validated_by_id")
+  validatedAt   DateTime?       @map("validated_at")
+
+  @@id([assessmentId, classroomId])
+  @@map("class_assessments")
+}
+
+// Colonne « Présent ? » : absent = moyenne 0 pour l'évaluation
+model AssessmentPresence {
+  assessmentId String     @map("assessment_id")
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  enrollmentId String     @map("enrollment_id")
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  present      Boolean
+  justified    Boolean    @default(false)
+
+  @@id([assessmentId, enrollmentId])
+  @@map("assessment_presence")
+}
+
+model Grade {
+  id           String     @id @default(cuid())
+  assessmentId String     @map("assessment_id")
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  enrollmentId String     @map("enrollment_id")
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  subjectId    String     @map("subject_id")
+  subject      Subject    @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  score        Decimal    @db.Decimal(6, 2)
+  enteredById  String?    @map("entered_by_id")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  @@unique([assessmentId, enrollmentId, subjectId])
+  @@map("grades")
+}
+
+// Résultats figés à la clôture de l'année (en cours d'année, ils sont calculés)
+model YearResult {
+  enrollmentId String     @id @map("enrollment_id")
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  averages     Json // moyennes des 4 évaluations
+  mga          Decimal?   @db.Decimal(5, 2)
+  decision     String? // ADMIS, REDOUBLE, ABANDON, TRANSFERE
+  rank         Int?
+  observation  String?
+  frozenAt     DateTime   @default(now()) @map("frozen_at")
+
+  @@map("year_results")
+}
+
+// ---------------------------------------------------------------------------
+// Retards et absences (ABSENCES ELEVES, ABSENCES PERSONNEL)
+// ---------------------------------------------------------------------------
+
+enum AttendanceNature {
+  RETARD
+  ABSENCE
+}
+
+model AttendanceEvent {
+  id             String           @id @default(cuid())
+  schoolId       String           @map("school_id")
+  school         School           @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYearId String           @map("academic_year_id")
+  academicYear   AcademicYear     @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  date           DateTime         @db.Date
+  enrollmentId   String?          @map("enrollment_id") // élève…
+  enrollment     Enrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  staffId        String?          @map("staff_id") // …ou agent
+  staff          Staff?           @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  nature         AttendanceNature
+  days           Decimal?         @db.Decimal(4, 1) // Jours d'absence
+  minutes        Int? // Retard (minutes)
+  reason         String? // Motif
+  justified      Boolean          @default(false)
+  notes          String?
+  createdById    String?          @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  @@index([schoolId, date])
+  @@map("attendance_events")
+}
+
+// ---------------------------------------------------------------------------
+// Rapports rédigés (observations, rapport mensuel)
+// ---------------------------------------------------------------------------
+
+enum ReportType {
+  RENTREE
+  MENSUEL
+  COMPOSITION
+  SYNTHESE
+}
+
+model ReportDraft {
+  id             String       @id @default(cuid())
+  schoolId       String       @map("school_id")
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  academicYearId String       @map("academic_year_id")
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
+  type           ReportType
+  period         String // "2026-10", "compo-1", "annee"
+  content        Json // textes rédigés par le directeur
+  validatedAt    DateTime?    @map("validated_at")
+  updatedById    String?      @map("updated_by_id")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([academicYearId, type, period])
+  @@map("report_drafts")
+}
+
+// ---------------------------------------------------------------------------
+// Abonnement et paiement
+// ---------------------------------------------------------------------------
+
+// Offres modifiables par l'administrateur : aucun prix n'est écrit dans le code
+model Plan {
+  id           String   @id @default(cuid())
+  code         String   @unique // TRIAL, STANDARD, PREMIUM
+  name         String
+  priceXof     Int      @map("price_xof")
+  durationDays Int      @map("duration_days")
+  maxStudents  Int?     @map("max_students") // null = illimité
+  maxTeachers  Int?     @map("max_teachers")
+  features     String[] // clés de fonctionnalités incluses
+  isTrial      Boolean  @default(false) @map("is_trial")
+  isActive     Boolean  @default(true) @map("is_active")
+  position     Int      @default(0)
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PENDING
+  EXPIRED
+  CANCELLED
+  PAYMENT_FAILED
+}
+
+model Subscription {
+  id        String             @id @default(cuid())
+  schoolId  String             @map("school_id")
+  school    School             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  planId    String             @map("plan_id")
+  plan      Plan               @relation(fields: [planId], references: [id])
+  status    SubscriptionStatus
+  startsAt  DateTime?          @map("starts_at")
+  endsAt    DateTime?          @map("ends_at")
+  createdAt DateTime           @default(now()) @map("created_at")
+
+  payments Payment[]
+
+  @@index([schoolId, status])
+  @@map("subscriptions")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  schoolId       String        @map("school_id")
+  school         School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  subscriptionId String        @map("subscription_id")
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id])
+  provider       String // simulation, cinetpay, wave…
+  providerRef    String?       @unique @map("provider_ref")
+  amountXof      Int           @map("amount_xof")
+  status         PaymentStatus @default(PENDING)
+  rawPayload     Json?         @map("raw_payload")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  confirmedAt    DateTime?     @map("confirmed_at")
+
+  @@map("payments")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications, historique, imports
+// ---------------------------------------------------------------------------
+
+enum NotificationChannel {
+  IN_APP
+  SMS
+  EMAIL
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  schoolId  String?             @map("school_id")
+  school    School?             @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId    String?             @map("user_id")
+  user      User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   NotificationChannel
+  title     String
+  body      String
+  readAt    DateTime?           @map("read_at")
+  sentAt    DateTime?           @map("sent_at")
+  error     String?
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  schoolId  String?  @map("school_id")
+  school    School?  @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String // create, update, delete, login…
+  entity    String // Student, Grade…
+  entityId  String?  @map("entity_id")
+  before    Json?
+  after     Json?
+  ip        String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([schoolId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}
+
+enum ImportStatus {
+  ANALYZED
+  CONFIRMED
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model ImportJob {
+  id          String       @id @default(cuid())
+  schoolId    String       @map("school_id")
+  school      School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  filename    String
+  status      ImportStatus
+  analysis    Json // aperçu, doublons, erreurs
+  report      Json? // rapport d'importation
+  createdById String?      @map("created_by_id")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  completedAt DateTime?    @map("completed_at")
+
+  @@map("import_jobs")
+}

@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# GESTION SCOLAIRE EPP
 
-## Getting Started
+Plateforme web de gestion des écoles primaires (EPP) de Côte d'Ivoire, qui remplace le classeur
+`GESTION_SCOLAIRE_EPP_MODELE_EXPERT_10.xlsm`. Le classeur reste la source fonctionnelle : chaque règle
+de calcul du site reproduit une formule du fichier, et les tests le vérifient sur ses 64 élèves.
 
-First, run the development server:
+Utilisateurs : directeur, enseignants, parents (consultation sans mot de passe). Plusieurs écoles
+peuvent utiliser la même installation ; leurs données sont strictement isolées.
+
+## État d'avancement
+
+| Étape | Contenu | État |
+|---|---|---|
+| 1-2 | Analyse du classeur, correspondance feuilles → modules, architecture | Fait (`docs/dossier-conception.html`) |
+| 3 | Squelette, schéma de base de données, moteur de calcul testé | Fait |
+| 4 | Comptes : inscription directeur + SMS, comptes enseignants, accès parents | À faire |
+| 5 | Établissement et paramètres | À faire |
+| 6 | Registre des élèves, personnel | À faire |
+| 7 | Classes et notes (validation, verrouillage) | À faire |
+| 8 | Résultats, tableau de bord, statistiques | À faire |
+| 9 | Absences, rapports (PDF, Excel, impression) | À faire |
+| 10 | Abonnement et paiement | À faire |
+| 11 | Notifications, historique, import/export Excel, assistant | À faire |
+| 12 | Tests complets, documentation de déploiement | À faire |
+
+## Pile technique
+
+- Next.js 16 (App Router) + TypeScript, Tailwind CSS
+- PostgreSQL 16 + Prisma 7 (adaptateur `@prisma/adapter-pg`)
+- Mots de passe hachés en Argon2id, validation serveur avec zod
+- Exports Excel avec exceljs ; tests avec vitest
+- SMS et paiement via des connecteurs interchangeables, avec un mode « simulation » pour le développement
+
+## Installation (développement)
+
+Prérequis : Node.js 20 ou plus, Docker (ou un PostgreSQL 16 local).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env          # puis remplir SESSION_SECRET
+docker compose up -d          # base PostgreSQL locale
+npm install                   # génère aussi le client Prisma
+npx prisma migrate dev        # crée les tables
+npm run dev                   # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Tests
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm test            # moteur de calcul comparé aux valeurs du classeur
+npm run typecheck
+npm run lint
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`tests/fixtures/` contient les données extraites du classeur (`donnees-classeur.json`) et les valeurs
+qu'il calcule (`attendu-classeur.json` : résultats des 64 élèves, fréquentation d'octobre, synthèse de fin
+d'année, tableau de bord).
 
-## Learn More
+## Organisation du code
 
-To learn more about Next.js, take a look at the following resources:
+```
+prisma/schema.prisma      schéma de la base (écoles, années, classes, élèves, notes, abonnements, audit…)
+prisma/migrations/        migrations SQL
+src/lib/regles/           moteur de calcul (moyennes, MGA, décisions, rangs, fréquentation, effectifs)
+src/app/                  pages et routes de l'application
+docs/                     dossier de conception (correspondance classeur → modules, ambiguïtés)
+tests/                    tests automatisés
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Règles métier reprises du classeur
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- Moyennes par évaluation : CP (8 matières /10, coefficients), CE1 (/140), CE2-CM1 (/170), CM2 (/170, /190 aux examens blancs).
+- Élève absent à une évaluation : 0 pour celle-ci. Aucune note : moyenne vide.
+- MGA CP1 à CM1 = (moyenne des compositions 1 à 3 + 2 × passage) ÷ 3 ; admis si MGA ≥ 5/10.
+- MGA CM2 = (C1 + C2 + EB1 + EB2) ÷ 4, seulement si les quatre existent ; admis si MGA ≥ 10/20.
+- Rang = 1 + nombre d'élèves présents de la classe ayant une MGA strictement supérieure.
+- Fréquentation = 1 − jours d'absence ÷ (effectif × jours de classe du mois).
+- Effectif probable = redoublants + admis de la classe précédente ; CP1 = redoublants + moitié des nouveaux attendus.
 
-## Deploy on Vercel
+Écarts volontaires, signalés dans le dossier de conception : l'alerte « sur-âge » utilise l'âge (le classeur
+compare par erreur la date de naissance) ; le matricule école est figé à l'inscription.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Sécurité
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Aucun secret dans le code ni dans le navigateur : tout passe par les variables d'environnement (voir `.env.example`).
+- Mots de passe et codes SMS stockés uniquement sous forme hachée.
+- Chaque requête est filtrée par école ; journal d'audit des modifications.
