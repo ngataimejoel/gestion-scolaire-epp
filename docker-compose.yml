@@ -11,5 +11,6 @@ services:
       - "5432:5432"
     volumes:
       - epp-db:/var/lib/postgresql/data
+      - ./docker/init-bases.sql:/docker-entrypoint-initdb.d/init-bases.sql:ro
 volumes:
   epp-db:
