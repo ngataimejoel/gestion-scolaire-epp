@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/src/generated/prisma
+!.env.example
+
+# compétences d'agents générées par prisma init
+/.agents
+/.claude
+/.windsurf
