@@ -6,7 +6,7 @@ import { formaterTelephone } from "@/lib/auth/telephone";
 // Menu du cahier des charges. Les modules des étapes suivantes apparaissent grisés tant qu'ils ne sont pas livrés.
 const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
   { titre: "Tableau de bord", href: "/tableau-de-bord" },
-  { titre: "Élèves" },
+  { titre: "Élèves", href: "/eleves" },
   { titre: "Personnel", href: "/personnel", directeur: true },
   { titre: "Classes" },
   { titre: "Notes" },
