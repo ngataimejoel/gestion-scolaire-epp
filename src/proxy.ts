@@ -10,5 +10,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/tableau-de-bord/:path*", "/eleves/:path*", "/classes/:path*", "/notes/:path*", "/resultats/:path*", "/statistiques/:path*", "/rapports/:path*", "/absences/:path*", "/export/:path*", "/personnel/:path*", "/changer-mot-de-passe", "/parametres/:path*", "/abonnement/:path*", "/admin/:path*"],
+  matcher: ["/tableau-de-bord/:path*", "/eleves/:path*", "/classes/:path*", "/notes/:path*", "/resultats/:path*", "/statistiques/:path*", "/rapports/:path*", "/absences/:path*", "/export/:path*", "/personnel/:path*", "/changer-mot-de-passe", "/parametres/:path*", "/abonnement/:path*", "/admin/:path*", "/notifications/:path*", "/historique/:path*", "/assistant/:path*"],
 };

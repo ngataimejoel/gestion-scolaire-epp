@@ -20,7 +20,8 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 8 | Résultats, tableau de bord, statistiques, bulletins | Fait |
 | 9 | Absences, rapports (PDF, Excel, impression) | Fait |
 | 10 | Abonnement et paiement | Fait |
-| 11 | Notifications, historique, import/export Excel, assistant | À faire |
+| 11 | Notifications, historique, assistant | Fait |
+| 11 bis | Import et export du classeur Excel, sauvegarde et restauration | À faire |
 | 12 | Tests complets, documentation de déploiement | À faire |
 
 ## Pile technique
@@ -80,6 +81,19 @@ développement et dans les journaux du serveur. En production, il n'est affiché
 - L'administrateur peut activer un abonnement payé hors ligne (espèces, virement) avec la référence du reçu ; c'est tracé.
 - Rappels J-15, J-7 et J-1 (dans l'application et par SMS) : appeler chaque jour
   `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<votre-domaine>/api/taches`.
+
+## Notifications, historique, assistant
+
+- **Notifications** (menu Notifications, pastille du nombre non lu) : feuille validée par l'enseignant (directeur),
+  feuille rouverte par le directeur (enseignant), évaluation dans 3 jours (directeur et enseignants concernés), notes non
+  validées 7 jours après l'évaluation (enseignants de la classe), paiement reçu, rappels d'abonnement. Par SMS en plus
+  quand l'offre inclut « Notifications par SMS ». E-mail : `EMAIL_PROVIDER` (`simulation` ou `resend`).
+  Les alertes datées partent avec la tâche quotidienne `POST /api/taches` ; chaque message n'est envoyé qu'une fois.
+- **Historique** (directeur) : journal d'audit de l'école, filtrable par données, auteur et période, avec les valeurs avant/après.
+- **Assistant du directeur** (offres qui l'incluent) : 13 questions fréquentes, reconnues aussi en texte libre, dont les
+  réponses sont calculées sur les données de l'école (effectifs, réussite, classes, premiers, élèves en difficulté,
+  absences du mois, feuilles à valider, prochaine évaluation, abandons, extraits, sur-âge, orphelins, abonnement).
+  Aucun service d'IA externe : aucune donnée ne quitte la plateforme.
 
 ## Tests
 

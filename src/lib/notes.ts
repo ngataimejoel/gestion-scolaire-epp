@@ -13,6 +13,7 @@
 import type { Db } from "./db";
 import type { AssessmentState, User } from "@/generated/prisma/client";
 import { journaliser } from "./audit";
+import { notifier } from "./notifications";
 import type { Resultat } from "./auth/service";
 import { sha256 } from "./auth/jetons";
 import { classesVisibles } from "./eleves";
@@ -255,6 +256,13 @@ export async function changerEtatFeuille(db: Db, u: Utilisateur, classroomId: st
         title: `Notes validées : ${f.classe.name}`,
         body: `La feuille « ${f.evaluation.label} » de ${f.classe.name} a été validée par l'enseignant. Vous pouvez la verrouiller.`,
       })),
+    });
+  }
+  if (directeur && action === "rouvrir") {
+    const enseignants = await db.user.findMany({ where: { isActive: true, staff: { classes: { some: { classroomId } } } } });
+    await notifier(db, enseignants, {
+      titre: `Feuille rouverte : ${f.classe.name}`,
+      corps: `Le directeur a rouvert la feuille « ${f.evaluation.label} » de ${f.classe.name}. Vous pouvez corriger les notes puis la valider à nouveau.`,
     });
   }
   return { ok: true, etat };
