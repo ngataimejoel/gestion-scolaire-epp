@@ -77,6 +77,7 @@ export default async function Notes({ searchParams }: PageProps<"/notes">) {
           ? "Notes sur 10 par matière ; moyenne pondérée par les coefficients."
           : `Chaque matière a son barème ; moyenne = total ÷ barème des matières notées × ${f.echelle}.`}{" "}
         « Présent ? » à NON : l&apos;élève compte 0 pour cette évaluation (règle du classeur).
+        {f.neutraliser && " « NON justifiée » : l'évaluation ne compte pas pour cet élève (réglage de l'école)."}
         {!f.modifiable && (f.etat === "LOCKED" ? " Feuille verrouillée par le directeur." : " Feuille validée : seul le directeur peut encore la corriger.")}
       </p>
 
@@ -86,6 +87,7 @@ export default async function Notes({ searchParams }: PageProps<"/notes">) {
         matieres={f.matieres}
         feuille={f.feuille}
         echelle={f.echelle}
+        neutraliser={f.neutraliser}
         modifiable={f.modifiable}
         empreinte={f.empreinte}
       />

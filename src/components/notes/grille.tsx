@@ -12,6 +12,7 @@ export interface LigneGrille {
   sexe: string;
   statut: string;
   present: boolean | null;
+  justifie: boolean;
   notes: (number | null)[];
 }
 export interface MatiereGrille {
@@ -40,6 +41,7 @@ export function GrilleNotes({
   matieres,
   feuille,
   echelle,
+  neutraliser,
   modifiable,
   empreinte,
 }: {
@@ -48,6 +50,7 @@ export function GrilleNotes({
   matieres: MatiereGrille[];
   feuille: FeuilleNotes;
   echelle: number;
+  neutraliser: boolean;
   modifiable: boolean;
   empreinte: string;
 }) {
@@ -55,9 +58,12 @@ export function GrilleNotes({
     () => Object.fromEntries(lignes.flatMap((l) => matieres.map((m, i) => [`${l.enrollmentId}:${m.id}`, texte(l.notes[i])]))),
     [lignes, matieres],
   );
-  const presenceInitiale = useMemo(() => Object.fromEntries(lignes.map((l) => [l.enrollmentId, l.present !== false])), [lignes]);
+  const presenceInitiale = useMemo(
+    () => Object.fromEntries(lignes.map((l) => [l.enrollmentId, l.present !== false ? "OUI" : l.justifie && neutraliser ? "NONJ" : "NON"])),
+    [lignes, neutraliser],
+  );
   const [valeurs, setValeurs] = useState<Record<string, string>>(initial);
-  const [presence, setPresence] = useState<Record<string, boolean>>(presenceInitiale);
+  const [presence, setPresence] = useState<Record<string, string>>(presenceInitiale);
   const [etat, envoyer] = useActionState(action, {} as EtatFormulaire);
   const [enCours, demarrer] = useTransition();
 
@@ -82,7 +88,7 @@ export function GrilleNotes({
     const n = lire(v);
     return n != null && (Number.isNaN(n) || n < 0 || n > m.max);
   };
-  const erreurs = lignes.flatMap((l) => (presence[l.enrollmentId] ? matieres.filter((m) => invalide(m, valeurs[`${l.enrollmentId}:${m.id}`] ?? "")).map((m) => `${l.nom} (${m.nom})`) : []));
+  const erreurs = lignes.flatMap((l) => (presence[l.enrollmentId] === "OUI" ? matieres.filter((m) => invalide(m, valeurs[`${l.enrollmentId}:${m.id}`] ?? "")).map((m) => `${l.nom} (${m.nom})`) : []));
 
   function soumettre(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -90,8 +96,8 @@ export function GrilleNotes({
     const fd = new FormData();
     fd.set("empreinte", empreinte);
     for (const l of lignes) {
-      fd.set(`p:${l.enrollmentId}`, presence[l.enrollmentId] ? "OUI" : "NON");
-      if (presence[l.enrollmentId]) for (const m of matieres) fd.set(`n:${l.enrollmentId}:${m.id}`, valeurs[`${l.enrollmentId}:${m.id}`] ?? "");
+      fd.set(`p:${l.enrollmentId}`, presence[l.enrollmentId]);
+      if (presence[l.enrollmentId] === "OUI") for (const m of matieres) fd.set(`n:${l.enrollmentId}:${m.id}`, valeurs[`${l.enrollmentId}:${m.id}`] ?? "");
     }
     demarrer(() => envoyer(fd));
   }
@@ -132,12 +138,12 @@ export function GrilleNotes({
           </thead>
           <tbody>
             {lignes.map((l, i) => {
-              const present = presence[l.enrollmentId];
+              const present = presence[l.enrollmentId] === "OUI";
               const notes = matieres.map((m) => {
                 const n = lire(valeurs[`${l.enrollmentId}:${m.id}`] ?? "");
                 return n == null || Number.isNaN(n) ? null : n;
               });
-              const rien = presence[l.enrollmentId] && l.present === null && notes.every((n) => n == null);
+              const rien = (present && l.present === null && notes.every((n) => n == null)) || presence[l.enrollmentId] === "NONJ";
               const s = rien ? null : { present, notes };
               const moyenne = moyenneEvaluation(feuille, cfg, s, feuille === "CP" ? 10 : echelle);
               const horsEffectif = l.statut !== "PRESENT";
@@ -153,12 +159,13 @@ export function GrilleNotes({
                     <select
                       aria-label={`Présent ? ${l.nom}`}
                       disabled={!modifiable}
-                      value={present ? "OUI" : "NON"}
-                      onChange={(e) => setPresence({ ...presence, [l.enrollmentId]: e.target.value === "OUI" })}
+                      value={presence[l.enrollmentId]}
+                      onChange={(e) => setPresence({ ...presence, [l.enrollmentId]: e.target.value })}
                       className="rounded border border-bordure bg-surface px-1 py-1"
                     >
-                      <option>OUI</option>
-                      <option>NON</option>
+                      <option value="OUI">OUI</option>
+                      <option value="NON">NON</option>
+                      {neutraliser && <option value="NONJ">NON justifiée</option>}
                     </select>
                   </td>
                   {matieres.map((m, j) => {

@@ -6,14 +6,17 @@ import { exigerUtilisateur } from "@/lib/auth/next";
 import { changerEtatFeuille, enregistrerNotes, type ActionFeuille, type SaisieLigne } from "@/lib/notes";
 import type { EtatFormulaire } from "./auth";
 
-/** Formulaire de la feuille : p:<inscription> = OUI/NON, n:<inscription>:<matière> = note. */
+/** Formulaire de la feuille : p:<inscription> = OUI/NON/NONJ (absence justifiée), n:<inscription>:<matière> = note. */
 function lireFeuille(fd: FormData): SaisieLigne[] {
   const lignes = new Map<string, SaisieLigne>();
   for (const [k, v] of fd.entries()) {
     const [type, enrollmentId, subjectId] = k.split(":");
     if (type !== "p" && type !== "n") continue;
     const l = lignes.get(enrollmentId) ?? { enrollmentId, present: true, notes: {} };
-    if (type === "p") l.present = v !== "NON";
+    if (type === "p") {
+      l.present = v === "OUI";
+      l.justifie = v === "NONJ";
+    }
     else l.notes[subjectId] = String(v);
     lignes.set(enrollmentId, l);
   }

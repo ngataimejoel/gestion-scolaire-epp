@@ -34,6 +34,7 @@ export default async function FicheEleve({ params, searchParams }: PageProps<"/e
         {c && <> · {c.classroom.name} · {STATUTS[c.status]}</>}
         {e.age != null && <> · {e.age} ans{e.surAge && " (sur-âge)"}</>}
       </p>
+      {c && <Link href={`/eleves/${e.id}/bulletin`} className="lien text-sm">Voir le bulletin de notes</Link>}
     </div>
   );
 
