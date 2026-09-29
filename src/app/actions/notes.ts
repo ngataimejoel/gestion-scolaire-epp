@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth/next";
+import { ecritureBloquee } from "@/lib/abonnement";
 import { changerEtatFeuille, enregistrerNotes, type ActionFeuille, type SaisieLigne } from "@/lib/notes";
 import type { EtatFormulaire } from "./auth";
 
@@ -25,6 +26,8 @@ function lireFeuille(fd: FormData): SaisieLigne[] {
 
 export async function actionEnregistrerNotes(classroomId: string, numero: number, _: EtatFormulaire, fd: FormData): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR", "TEACHER"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await enregistrerNotes(db(), u, classroomId, numero, lireFeuille(fd), String(fd.get("empreinte") ?? ""));
   if (!r.ok) return { erreur: r.erreur, champ: r.champ };
   revalidatePath("/notes");
@@ -34,6 +37,8 @@ export async function actionEnregistrerNotes(classroomId: string, numero: number
 
 export async function actionEtatFeuille(classroomId: string, numero: number, action: ActionFeuille, _: EtatFormulaire): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR", "TEACHER"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await changerEtatFeuille(db(), u, classroomId, numero, action);
   if (!r.ok) return { erreur: r.erreur };
   revalidatePath("/notes");

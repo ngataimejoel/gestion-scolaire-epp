@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Db } from "./db";
 import type { User } from "@/generated/prisma/client";
 import { journaliser } from "./audit";
+import { limiteAtteinte } from "./abonnement";
 import { creerCompteEnseignant, type Resultat } from "./auth/service";
 import { supprimerAutresSessions } from "./auth/sessions";
 import { normaliserTelephone } from "./auth/telephone";
@@ -115,6 +116,10 @@ export async function enregistrerPersonnel(
   const v = r.v;
   if (v.phone && aUnCompteEnseignant(v.function) && (await db.user.findUnique({ where: { phone: v.phone } })))
     return { ok: false, champ: "phone", erreur: "Ce numéro est déjà utilisé par un autre compte." };
+  if (aUnCompteEnseignant(v.function)) {
+    const limite = await limiteAtteinte(db, directeur.schoolId, "enseignants");
+    if (limite) return { ok: false, erreur: limite };
+  }
 
   const staff = await db.staff.create({ data: { ...champs(v), schoolId: directeur.schoolId } });
   if (v.classroomId) await affecterClasse(db, directeur.schoolId, staff.id, v.classroomId);
@@ -167,6 +172,10 @@ export async function changerActivationCompte(db: Db, directeur: Directeur, staf
   const s = await db.staff.findFirst({ where: { id: staffId, schoolId: directeur.schoolId }, include: { user: true } });
   if (!s?.user) return { ok: false, erreur: "Ce membre n'a pas de compte." };
   if (s.user.role !== "TEACHER") return { ok: false, erreur: "Seul un compte enseignant peut être désactivé ici." };
+  if (actif && !s.user.isActive) {
+    const limite = await limiteAtteinte(db, directeur.schoolId, "enseignants");
+    if (limite) return { ok: false, erreur: limite };
+  }
   await db.user.update({ where: { id: s.user.id }, data: { isActive: actif } });
   if (!actif) await supprimerAutresSessions(db, s.user.id);
   await journaliser(db, { schoolId: directeur.schoolId, userId: directeur.id, action: actif ? "activation_compte" : "desactivation_compte", entity: "User", entityId: s.user.id });

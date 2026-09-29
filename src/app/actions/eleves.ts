@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth/next";
+import { ecritureBloquee } from "@/lib/abonnement";
 import { inscrireEleve, modifierEleve, supprimerEleve, type DonneesEleve } from "@/lib/eleves";
 import type { EtatFormulaire } from "./auth";
 
@@ -27,6 +28,8 @@ function lire(fd: FormData): DonneesEleve {
 
 export async function actionEnregistrerEleve(studentId: string | null, _: EtatFormulaire, fd: FormData): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const d = lire(fd);
   if (!studentId) {
     const r = await inscrireEleve(db(), u, d);
@@ -42,6 +45,8 @@ export async function actionEnregistrerEleve(studentId: string | null, _: EtatFo
 
 export async function actionSupprimerEleve(studentId: string, _: EtatFormulaire): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await supprimerEleve(db(), u, studentId);
   if (!r.ok) return { erreur: r.erreur };
   revalidatePath("/eleves");

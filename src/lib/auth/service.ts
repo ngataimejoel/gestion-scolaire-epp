@@ -12,6 +12,7 @@ import type { Prisma, User } from "@/generated/prisma/client";
 import { journaliser } from "../audit";
 import { anneeDebutCourante } from "../parametres/defauts";
 import { preparerEcole } from "../parametres/service";
+import { ouvrirEssai } from "../abonnement";
 import { envoyerSms } from "../sms";
 import { compterTentative, effacerTentatives, LIMITES, messageBlocage, tempsDeBlocage } from "./limites";
 import { caracteresAleatoires, erreurMotDePasse, hacherMotDePasse, motDePasseProvisoire, verifierMotDePasse } from "./mot-de-passe";
@@ -126,6 +127,8 @@ export async function confirmerInscription(
     });
     return u;
   });
+  // Période d'essai ouverte dès l'inscription (offre d'essai définie par l'administrateur).
+  await ouvrirEssai(db, user.schoolId!);
   const s = await creerSession(db, user.id, meta);
   return { ok: true, user, jeton: s.jeton, expiresAt: s.expiresAt };
 }
