@@ -36,9 +36,12 @@ export function lireNote(v: string): number | null | "invalide" {
   return Number.isFinite(n) ? n : "invalide";
 }
 
-/** Saisie d'une ligne au sens du moteur de calcul : null si rien n'est renseigné. */
-export function saisieDe(present: boolean | null, notes: (number | null)[]): SaisieEvaluation | null {
-  if (present === false) return { present: false, notes };
+/**
+ * Saisie d'une ligne au sens du moteur de calcul : null si rien n'est renseigné.
+ * Absence justifiée neutralisée (réglage de l'école, ambiguïté n° 6) : l'évaluation ne compte pas au lieu de valoir 0.
+ */
+export function saisieDe(present: boolean | null, notes: (number | null)[], neutraliser = false): SaisieEvaluation | null {
+  if (present === false) return neutraliser ? null : { present: false, notes };
   if (present === null && notes.every((n) => n == null)) return null;
   return { present: true, notes };
 }
@@ -53,14 +56,16 @@ export async function feuilleDeNotes(db: Db, u: Utilisateur, classroomId: string
   const classe = await classeAccessible(db, u, classroomId);
   if (!classe || ![1, 2, 3, 4].includes(numero)) return null;
   const feuille = feuilleDuNiveau(classe.level.code) as FeuilleNotes;
-  const [evaluation, matieres, inscriptions] = await Promise.all([
+  const [evaluation, matieres, inscriptions, reglages] = await Promise.all([
     db.assessment.findFirstOrThrow({
       where: { academicYearId: classe.academicYearId, number: numero, track: classe.level.code === "CM2" ? "CM2" : "STANDARD" },
       include: { classStates: { where: { classroomId } } },
     }),
     db.subject.findMany({ where: { schoolId: classe.schoolId, gradeSheet: classe.level.gradeSheet, assessmentNumber: numero }, orderBy: { position: "asc" } }),
     db.enrollment.findMany({ where: { classroomId }, include: { student: true }, orderBy: { student: { schoolMatricule: "asc" } } }),
+    db.schoolSettings.findUnique({ where: { schoolId: classe.schoolId } }),
   ]);
+  const neutraliser = !!reglages?.neutralizeJustifiedAbsence;
   const [presences, notes] = await Promise.all([
     db.assessmentPresence.findMany({ where: { assessmentId: evaluation.id, enrollmentId: { in: inscriptions.map((i) => i.id) } } }),
     db.grade.findMany({ where: { assessmentId: evaluation.id, enrollmentId: { in: inscriptions.map((i) => i.id) } } }),
@@ -74,7 +79,8 @@ export async function feuilleDeNotes(db: Db, u: Utilisateur, classroomId: string
       return g ? Number(g.score) : null;
     });
     const present = p ? p.present : null;
-    const s = saisieDe(present, n);
+    const justifie = !!p && !p.present && p.justified;
+    const s = saisieDe(present, n, neutraliser && justifie);
     return {
       enrollmentId: i.id,
       matricule: i.student.schoolMatricule,
@@ -82,6 +88,7 @@ export async function feuilleDeNotes(db: Db, u: Utilisateur, classroomId: string
       sexe: i.student.sex,
       statut: i.status,
       present,
+      justifie,
       notes: n,
       moyenne: moyenneEvaluation(feuille, cfg, s, echelle),
       total: feuille === "CP" ? null : totalEvaluation(s),
@@ -94,6 +101,7 @@ export async function feuilleDeNotes(db: Db, u: Utilisateur, classroomId: string
     etat,
     feuille,
     echelle,
+    neutraliser,
     matieres: matieres.map((m, i) => ({ id: m.id, nom: m.name, max: feuille === "CP" ? 10 : Number(m.maxScore), poids: cfg[i].poids })),
     lignes,
     modifiable: peutSaisir(u.role, etat),
@@ -104,13 +112,15 @@ export async function feuilleDeNotes(db: Db, u: Utilisateur, classroomId: string
 export type FeuilleDeNotes = NonNullable<Awaited<ReturnType<typeof feuilleDeNotes>>>;
 
 /** Empreinte du contenu d'une feuille : sert à détecter qu'elle a changé depuis son ouverture. */
-function empreinte(lignes: { enrollmentId: string; present: boolean | null; notes: (number | null)[] }[]) {
-  return sha256(JSON.stringify(lignes.map((l) => [l.enrollmentId, l.present, l.notes])));
+function empreinte(lignes: { enrollmentId: string; present: boolean | null; justifie: boolean; notes: (number | null)[] }[]) {
+  return sha256(JSON.stringify(lignes.map((l) => [l.enrollmentId, l.present, l.justifie, l.notes])));
 }
 
 export interface SaisieLigne {
   enrollmentId: string;
   present: boolean;
+  /** Absence justifiée (utile seulement si l'école neutralise ces absences). */
+  justifie?: boolean;
   /** Note brute saisie par matière (subjectId → texte). */
   notes: Record<string, string>;
 }
@@ -135,16 +145,18 @@ export async function enregistrerNotes(
     return { ok: false, erreur: "Les notes de cette feuille ont été modifiées ailleurs depuis son ouverture. Rechargez la page pour voir la dernière version : vos saisies n'ont pas été enregistrées." };
 
   const changements: { eleve: string; matiere: string; avant: number | string | null; apres: number | string | null }[] = [];
-  const presences: { enrollmentId: string; present: boolean }[] = [];
+  const presences: { enrollmentId: string; present: boolean; justified: boolean }[] = [];
   const upserts: { enrollmentId: string; subjectId: string; score: number }[] = [];
   const suppressions: { enrollmentId: string; subjectId: string }[] = [];
 
   for (const s of saisies) {
     const l = f.lignes.find((x) => x.enrollmentId === s.enrollmentId);
     if (!l) return { ok: false, erreur: "Un élève de la saisie n'appartient pas à cette classe." };
-    if (l.present !== s.present && !(l.present === null && s.present && Object.values(s.notes).every((v) => !v.trim()))) {
-      presences.push({ enrollmentId: l.enrollmentId, present: s.present });
-      changements.push({ eleve: l.matricule, matiere: "Présent ?", avant: l.present === null ? null : l.present ? "OUI" : "NON", apres: s.present ? "OUI" : "NON" });
+    const justifie = !s.present && !!s.justifie;
+    const libelle = (p: boolean | null, j: boolean) => (p === null ? null : p ? "OUI" : j ? "NON (justifiée)" : "NON");
+    if ((l.present !== s.present || l.justifie !== justifie) && !(l.present === null && s.present && Object.values(s.notes).every((v) => !v.trim()))) {
+      presences.push({ enrollmentId: l.enrollmentId, present: s.present, justified: justifie });
+      changements.push({ eleve: l.matricule, matiere: "Présent ?", avant: libelle(l.present, l.justifie), apres: libelle(s.present, justifie) });
     }
     if (!s.present) continue; // absent : notes conservées telles quelles, moyenne 0
     for (const [i, m] of f.matieres.entries()) {
@@ -167,7 +179,7 @@ export async function enregistrerNotes(
       db.assessmentPresence.upsert({
         where: { assessmentId_enrollmentId: { assessmentId, enrollmentId: p.enrollmentId } },
         create: { assessmentId, ...p },
-        update: { present: p.present },
+        update: { present: p.present, justified: p.justified },
       }),
     ),
     ...upserts.map((g) =>

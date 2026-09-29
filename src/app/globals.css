@@ -75,3 +75,57 @@ body {
     @apply font-medium text-principal underline-offset-2 hover:underline;
   }
 }
+
+/* États officiels et bulletins : tableaux à bordures, identiques à l'écran et sur papier. */
+.tableau-officiel {
+  border-collapse: collapse;
+}
+.tableau-officiel th,
+.tableau-officiel td {
+  border: 1px solid var(--bordure);
+  padding: 4px 6px;
+  text-align: center;
+}
+.tableau-officiel th {
+  background: var(--fond);
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+.tableau-officiel td.gauche,
+.tableau-officiel th.gauche {
+  text-align: left;
+}
+.tableau-officiel tr.total td {
+  font-weight: 700;
+  background: var(--fond);
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 10mm 8mm;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .tableau-officiel th,
+  .tableau-officiel td {
+    border-color: #000;
+  }
+  .tableau-officiel th,
+  .tableau-officiel tr.total td {
+    background: #eee;
+  }
+  .page-imprimee {
+    break-after: page;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .page-imprimee:last-child {
+    break-after: auto;
+  }
+  .paysage {
+    zoom: 0.8;
+  }
+}

@@ -4,6 +4,9 @@ import { db } from "@/lib/db";
 import { lireAccesParent } from "@/lib/auth/next";
 import { actionQuitterParent } from "@/app/actions/auth";
 import { anneesRevolues } from "@/lib/regles";
+import { bulletinEleve } from "@/lib/bulletin";
+import { f2, rangTexte } from "@/lib/format";
+import Link from "next/link";
 
 export const metadata: Metadata = { title: "Informations de l'élève", robots: { index: false } };
 
@@ -23,6 +26,7 @@ export default async function EleveParent() {
   });
   if (!e) redirect("/parents");
   const ins = e.enrollments[0];
+  const b = await bulletinEleve(db(), acces.schoolId, e.id);
   const lignes: [string, string][] = [
     ["Matricule école", e.schoolMatricule],
     ["Matricule DESPS", e.despsId ?? "—"],
@@ -64,10 +68,39 @@ export default async function EleveParent() {
           </ul>
         </section>
       )}
-      <p className="mt-6 text-sm text-attenue">
-        Les notes, résultats et le bulletin imprimable s&apos;afficheront ici dès que l&apos;école aura saisi les compositions.
-        Cet accès se ferme automatiquement après 30 minutes.
-      </p>
+      {b && (
+        <section className="carte mt-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Résultats {b.annee.label}</h2>
+            <Link href="/parents/eleve/bulletin" className="btn-principal text-sm">Voir et imprimer le bulletin</Link>
+          </div>
+          <dl className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+            {b.evaluations.map((ev, k) => (
+              <div key={ev.id}>
+                <dt className="text-xs text-attenue">{ev.libelle}</dt>
+                <dd className="font-medium tabular-nums">{f2(b.resultat.moyennes[k])}</dd>
+              </div>
+            ))}
+            <div>
+              <dt className="text-xs text-attenue">MGA</dt>
+              <dd className="font-bold tabular-nums">{f2(b.resultat.mga)} / {b.classe.bareme}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-attenue">Rang</dt>
+              <dd className="font-medium">{b.resultat.rang == null ? "—" : `${rangTexte(b.resultat.rang, b.resultat.sexe)} sur ${b.effectifClasse}`}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-attenue">Décision</dt>
+              <dd className="font-medium">{b.resultat.decision || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-attenue">Absences / retards</dt>
+              <dd className="font-medium">{b.absences.jours} j · {b.absences.retards}</dd>
+            </div>
+          </dl>
+        </section>
+      )}
+      <p className="mt-6 text-sm text-attenue">Cet accès se ferme automatiquement après 30 minutes.</p>
     </div>
   );
 }
