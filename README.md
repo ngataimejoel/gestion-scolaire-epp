@@ -21,7 +21,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 9 | Absences, rapports (PDF, Excel, impression) | Fait |
 | 10 | Abonnement et paiement | Fait |
 | 11 | Notifications, historique, assistant | Fait |
-| 11 bis | Import et export du classeur Excel, sauvegarde et restauration | À faire |
+| 11 bis | Import et export du classeur Excel, sauvegarde et restauration | Fait |
 | 12 | Tests complets, documentation de déploiement | À faire |
 
 ## Pile technique
@@ -94,6 +94,26 @@ développement et dans les journaux du serveur. En production, il n'est affiché
   réponses sont calculées sur les données de l'école (effectifs, réussite, classes, premiers, élèves en difficulté,
   absences du mois, feuilles à valider, prochaine évaluation, abandons, extraits, sur-âge, orphelins, abonnement).
   Aucun service d'IA externe : aucune donnée ne quitte la plateforme.
+
+## Import, export et sauvegarde (menu « Import et sauvegarde », directeur)
+
+- **Import du classeur** (.xlsm ou .xlsx, 8 Mo au plus) : le fichier est lu feuille par feuille (PARAMETRES,
+  REGISTRE ELEVES, PERSONNEL, NOTES CP / CE1 / CE2-CM1 / CM2, ABSENCES ELEVES, ABSENCES PERSONNEL), sans exécuter
+  ses macros. L'aperçu montre les élèves et agents nouveaux, les doublons (même matricule DESPS, ou même nom et même
+  date de naissance ; pour le personnel, même matricule, téléphone ou nom), les erreurs ligne par ligne et les réglages
+  différents de ceux de l'école. Rien n'est écrit avant la confirmation, puis tout est écrit en une seule transaction.
+- **Jamais d'écrasement** : un élève ou un agent déjà présent est ignoré ; les notes ne sont importées que pour les
+  nouveaux élèves et pas dans une feuille verrouillée ; les réglages de l'école ne sont remplacés que si le directeur
+  coche l'option. Un matricule école déjà pris est remplacé par le suivant libre (signalé dans le rapport).
+- **Rapport** : nombres importés, et comparaison des MGA, décisions et rangs recalculés par le site avec ceux du fichier.
+- **Comptes enseignants** : créés à l'import seulement si le directeur coche l'option (identifiants par SMS).
+- Le contenu du fichier n'est gardé que jusqu'à la confirmation ou l'annulation.
+- **Export au format du classeur** : sauvegarde complète (toutes les feuilles, valeurs sans formules ni macros) ou
+  registre des élèves, personnel, résultats. La sauvegarde complète reste disponible quand l'abonnement a expiré.
+  Réimportée dans une école vide, elle redonne exactement les mêmes données (vérifié par les tests).
+
+Décision signalée : un matricule DESPS mal formé est importé avec un avertissement (le classeur l'accepte en le
+signalant ; le formulaire du site, lui, le refuse).
 
 ## Tests
 

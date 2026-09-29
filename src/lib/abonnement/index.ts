@@ -23,7 +23,6 @@ export const FONCTIONS: Record<string, string> = {
   import_excel: "Import du classeur Excel",
   notifications_sms: "Notifications par SMS",
   assistant: "Assistant du directeur",
-  sauvegarde: "Sauvegarde et restauration de l'école",
   support_prioritaire: "Support prioritaire",
 };
 
