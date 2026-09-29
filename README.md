@@ -16,7 +16,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 4 | Comptes : inscription directeur + SMS, comptes enseignants, accès parents | Fait |
 | 5 | Établissement et paramètres | Fait |
 | 6 | Registre des élèves, personnel | Fait |
-| 7 | Classes et notes (validation, verrouillage) | À faire |
+| 7 | Classes et notes (validation, verrouillage) | Fait |
 | 8 | Résultats, tableau de bord, statistiques | À faire |
 | 9 | Absences, rapports (PDF, Excel, impression) | À faire |
 | 10 | Abonnement et paiement | À faire |
@@ -41,7 +41,11 @@ docker compose up -d          # base PostgreSQL locale
 npm install                   # génère aussi le client Prisma
 npx prisma migrate dev        # crée les tables
 npm run dev                   # http://localhost:3000
+npm run db:seed               # facultatif : école de démonstration du classeur (EPP LIGUIYO)
 ```
+
+L'école de démonstration reprend les 64 élèves, le personnel, les notes et les absences du classeur.
+Directeur : `07 30 90 80 35`, mot de passe `Demo2026` (modifiables avec `DEMO_TELEPHONE` et `DEMO_MOT_DE_PASSE`).
 
 ## Comptes et connexion
 
