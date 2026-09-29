@@ -6,6 +6,7 @@ import { formaterTelephone } from "@/lib/auth/telephone";
 import { etatAbonnement } from "@/lib/abonnement";
 import { db } from "@/lib/db";
 import { dateFr } from "@/lib/dates";
+import { nombreNonLues } from "@/lib/notifications";
 
 // Menu du cahier des charges. Les modules des étapes suivantes apparaissent grisés tant qu'ils ne sont pas livrés.
 const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
@@ -18,7 +19,9 @@ const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
   { titre: "Absences", href: "/absences" },
   { titre: "Rapports", href: "/rapports", directeur: true },
   { titre: "Statistiques", href: "/statistiques", directeur: true },
-  { titre: "Notifications" },
+  { titre: "Notifications", href: "/notifications" },
+  { titre: "Assistant", href: "/assistant", directeur: true },
+  { titre: "Historique", href: "/historique", directeur: true },
   { titre: "Abonnement", href: "/abonnement", directeur: true },
   { titre: "Paramètres", href: "/parametres", directeur: true },
 ];
@@ -26,7 +29,7 @@ const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
 export default async function EspaceLayout({ children }: LayoutProps<"/">) {
   const u = await exigerUtilisateur();
   if (u.role === "PLATFORM_ADMIN" || !u.schoolId) redirect("/admin");
-  const abonnement = await etatAbonnement(db(), u.schoolId);
+  const [abonnement, nonLues] = await Promise.all([etatAbonnement(db(), u.schoolId), nombreNonLues(db(), u.id)]);
   const directeur = u.role === "DIRECTOR";
   const menu = MENU.filter((m) => !m.directeur || u.role === "DIRECTOR");
   return (
@@ -39,8 +42,13 @@ export default async function EspaceLayout({ children }: LayoutProps<"/">) {
         <nav aria-label="Menu principal" className="flex gap-1 overflow-x-auto px-2 pb-3 md:flex-col md:overflow-visible">
           {menu.map((m) =>
             m.href ? (
-              <Link key={m.titre} href={m.href} className="shrink-0 rounded-lg px-3 py-2 text-sm font-medium hover:bg-fond">
+              <Link key={m.titre} href={m.href} className="flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium hover:bg-fond">
                 {m.titre}
+                {m.href === "/notifications" && nonLues > 0 && (
+                  <span className="rounded-full bg-principal px-1.5 text-xs font-semibold text-white tabular-nums" aria-label={`${nonLues} non lues`}>
+                    {nonLues}
+                  </span>
+                )}
               </Link>
             ) : (
               <span key={m.titre} className="shrink-0 cursor-default rounded-lg px-3 py-2 text-sm text-attenue/70" title="Disponible dans une prochaine étape">
