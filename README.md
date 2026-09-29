@@ -18,7 +18,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 6 | Registre des élèves, personnel | Fait |
 | 7 | Classes et notes (validation, verrouillage) | Fait |
 | 8 | Résultats, tableau de bord, statistiques, bulletins | Fait |
-| 9 | Absences, rapports (PDF, Excel, impression) | À faire |
+| 9 | Absences, rapports (PDF, Excel, impression) | Fait |
 | 10 | Abonnement et paiement | À faire |
 | 11 | Notifications, historique, import/export Excel, assistant | À faire |
 | 12 | Tests complets, documentation de déploiement | À faire |
