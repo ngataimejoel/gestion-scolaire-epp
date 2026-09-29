@@ -19,7 +19,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 7 | Classes et notes (validation, verrouillage) | Fait |
 | 8 | Résultats, tableau de bord, statistiques, bulletins | Fait |
 | 9 | Absences, rapports (PDF, Excel, impression) | Fait |
-| 10 | Abonnement et paiement | À faire |
+| 10 | Abonnement et paiement | Fait |
 | 11 | Notifications, historique, import/export Excel, assistant | À faire |
 | 12 | Tests complets, documentation de déploiement | À faire |
 
@@ -62,6 +62,24 @@ par adresse IP en 15 minutes. Mots de passe en Argon2id, codes SMS et jetons de 
 **Mode simulation des SMS** (`SMS_PROVIDER="simulation"`) : aucun SMS n'est envoyé, le code s'affiche à l'écran en
 développement et dans les journaux du serveur. En production, il n'est affiché que si `AFFICHER_SMS_SIMULES=oui`
 (à n'utiliser que pour une démonstration) : branchez un vrai fournisseur avant l'ouverture aux écoles.
+
+## Abonnement et paiement
+
+- Les offres (essai, Standard, Premium) sont **en base** : prix, durée, nombre maximum d'élèves et de comptes enseignants,
+  fonctions incluses. Elles se modifient dans l'espace administrateur `/admin`. `prisma/offres-initiales.json` ne sert
+  qu'à remplir une table vide (`npm run db:offres`) ; ses prix sont indicatifs.
+- Compte administrateur : `ADMIN_TELEPHONE=… ADMIN_MOT_DE_PASSE=… npm run admin:creer`, puis connexion normale (code SMS).
+- Une école reçoit l'essai à son inscription. À l'échéance, le site passe en **lecture seule** (consultation, impression
+  et exports restent possibles, aucune donnée n'est supprimée) jusqu'au paiement.
+- Parcours : choix de l'offre → paiement en attente → confirmation du fournisseur → activation. Le montant vient toujours
+  de l'offre en base et il est recontrôlé à la confirmation. Un renouvellement payé à l'avance s'ajoute après la période
+  en cours ; un paiement pendant l'essai démarre l'offre immédiatement.
+- Fournisseurs (`PAYMENT_PROVIDERS`) : `simulation`, `cinetpay` (Orange Money, MTN, Moov, Wave, cartes), `wave`.
+  Adresse de notification à déclarer chez le fournisseur : `https://<votre-domaine>/api/paiement/cinetpay` ou `/api/paiement/wave`.
+  La notification n'est jamais crue seule : signature vérifiée, puis statut et montant relus auprès du fournisseur.
+- L'administrateur peut activer un abonnement payé hors ligne (espèces, virement) avec la référence du reçu ; c'est tracé.
+- Rappels J-15, J-7 et J-1 (dans l'application et par SMS) : appeler chaque jour
+  `curl -X POST -H "Authorization: Bearer $CRON_SECRET" https://<votre-domaine>/api/taches`.
 
 ## Tests
 

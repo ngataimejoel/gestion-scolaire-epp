@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { actionDeconnexion } from "@/app/actions/auth";
 import { exigerUtilisateur } from "@/lib/auth/next";
 import { formaterTelephone } from "@/lib/auth/telephone";
+import { etatAbonnement } from "@/lib/abonnement";
+import { db } from "@/lib/db";
+import { dateFr } from "@/lib/dates";
 
 // Menu du cahier des charges. Les modules des étapes suivantes apparaissent grisés tant qu'ils ne sont pas livrés.
 const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
@@ -15,12 +19,15 @@ const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
   { titre: "Rapports", href: "/rapports", directeur: true },
   { titre: "Statistiques", href: "/statistiques", directeur: true },
   { titre: "Notifications" },
-  { titre: "Abonnement", directeur: true },
+  { titre: "Abonnement", href: "/abonnement", directeur: true },
   { titre: "Paramètres", href: "/parametres", directeur: true },
 ];
 
 export default async function EspaceLayout({ children }: LayoutProps<"/">) {
   const u = await exigerUtilisateur();
+  if (u.role === "PLATFORM_ADMIN" || !u.schoolId) redirect("/admin");
+  const abonnement = await etatAbonnement(db(), u.schoolId);
+  const directeur = u.role === "DIRECTOR";
   const menu = MENU.filter((m) => !m.directeur || u.role === "DIRECTOR");
   return (
     <div className="flex flex-1 flex-col md:flex-row">
@@ -54,6 +61,20 @@ export default async function EspaceLayout({ children }: LayoutProps<"/">) {
             <button className="lien">Déconnexion</button>
           </form>
         </header>
+        {abonnement.lectureSeule ? (
+          <p role="alert" className="print:hidden bg-erreur-fond px-4 py-2.5 text-sm text-erreur sm:px-8">
+            L&apos;abonnement de l&apos;école est arrivé à échéance : le site est en lecture seule, aucune donnée n&apos;est perdue.{" "}
+            {directeur ? <Link href="/abonnement" className="font-semibold underline">Renouveler l&apos;abonnement</Link> : "Le directeur peut le renouveler."}
+          </p>
+        ) : (
+          abonnement.joursRestants <= 15 && (
+            <p role="status" className="print:hidden bg-info-fond px-4 py-2.5 text-sm sm:px-8">
+              {abonnement.essai ? "Période d'essai" : `Abonnement ${abonnement.plan?.name ?? ""}`} : fin le {dateFr(abonnement.finLe)} ({abonnement.joursRestants} jour
+              {abonnement.joursRestants > 1 ? "s" : ""}).{" "}
+              {directeur && <Link href="/abonnement" className="font-semibold underline">Renouveler</Link>}
+            </p>
+          )
+        )}
         <main className="flex-1 px-4 py-6 sm:px-8 print:p-0">{children}</main>
       </div>
     </div>

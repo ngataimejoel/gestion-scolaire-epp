@@ -7,9 +7,12 @@ import "dotenv/config";
 import donnees from "../tests/fixtures/donnees-classeur.json";
 import { creerClient } from "../src/lib/db";
 import { chargerClasseur, type DonneesClasseur } from "../src/lib/demo/classeur";
+import { initialiserOffres } from "../src/lib/abonnement";
 
 async function main() {
   const db = creerClient();
+  const offres = await initialiserOffres(db);
+  if (offres) console.log(`${offres} offres de départ chargées (modifiables dans /admin).`);
   const code = "DEMO-LIGUIYO";
   if (await db.school.findUnique({ where: { code } })) {
     console.log("L'école de démonstration existe déjà : rien à faire.");

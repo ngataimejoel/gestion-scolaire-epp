@@ -42,6 +42,8 @@ export async function exigerUtilisateur(roles?: Role[], options: { autoriserChan
   const u = await utilisateurCourant();
   if (!u) redirect("/connexion");
   if (u.mustChangePassword && !options.autoriserChangementMdp) redirect("/changer-mot-de-passe");
+  // L'administrateur de la plateforme n'a pas d'école : il n'accède qu'à son espace /admin.
+  if (u.role === "PLATFORM_ADMIN" && !roles?.includes("PLATFORM_ADMIN") && !options.autoriserChangementMdp) redirect("/admin");
   if (roles && !roles.includes(u.role)) redirect("/tableau-de-bord");
   return u;
 }

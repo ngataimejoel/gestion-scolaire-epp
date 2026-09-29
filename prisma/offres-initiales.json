@@ -1,0 +1,38 @@
+{
+  "_note": "Valeurs de départ, chargées une seule fois quand la table des offres est vide (npm run db:offres ou db:seed). Ensuite, les prix, durées, limites et fonctions se modifient dans l'espace administrateur (/admin), jamais dans le code. Prix indicatifs à fixer par le propriétaire de la plateforme.",
+  "offres": [
+    {
+      "code": "TRIAL",
+      "name": "Essai gratuit",
+      "priceXof": 0,
+      "durationDays": 30,
+      "maxStudents": 100,
+      "maxTeachers": 6,
+      "features": ["notes", "absences", "rapports", "statistiques", "export_excel", "import_excel"],
+      "isTrial": true,
+      "position": 0
+    },
+    {
+      "code": "STANDARD",
+      "name": "Standard",
+      "priceXof": 30000,
+      "durationDays": 365,
+      "maxStudents": 400,
+      "maxTeachers": 15,
+      "features": ["notes", "absences", "rapports", "statistiques", "export_excel", "import_excel"],
+      "isTrial": false,
+      "position": 1
+    },
+    {
+      "code": "PREMIUM",
+      "name": "Premium",
+      "priceXof": 60000,
+      "durationDays": 365,
+      "maxStudents": null,
+      "maxTeachers": null,
+      "features": ["notes", "absences", "rapports", "statistiques", "export_excel", "import_excel", "notifications_sms", "assistant", "sauvegarde", "support_prioritaire"],
+      "isTrial": false,
+      "position": 2
+    }
+  ]
+}

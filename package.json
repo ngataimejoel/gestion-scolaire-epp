@@ -11,7 +11,9 @@
     "typecheck": "next typegen && tsc --noEmit",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:offres": "tsx scripts/offres.ts",
+    "admin:creer": "tsx scripts/creer-admin.ts"
   },
   "dependencies": {
     "@node-rs/argon2": "^2.2.1",

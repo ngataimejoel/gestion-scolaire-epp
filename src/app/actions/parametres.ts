@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth/next";
+import { ecritureBloquee } from "@/lib/abonnement";
 import type { Resultat } from "@/lib/auth/service";
 import * as p from "@/lib/parametres/service";
 import type { ChoiceList } from "@/generated/prisma/client";
@@ -12,6 +13,8 @@ const LISTES: ChoiceList[] = ["NATIONALITY", "STAFF_FUNCTION", "ORPHAN_OF", "ABS
 
 async function executer(fn: (d: Awaited<ReturnType<typeof exigerUtilisateur>>) => Promise<Resultat>): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await fn(u);
   if (!r.ok) return { erreur: r.erreur, champ: r.champ };
   revalidatePath("/", "layout");

@@ -11,6 +11,7 @@
  */
 import { z } from "zod";
 import type { Db } from "./db";
+import { limiteAtteinte } from "./abonnement";
 import type { EnrollmentStatus, GuardianRelation, Prisma, User } from "@/generated/prisma/client";
 import { journaliser } from "./audit";
 import type { Resultat } from "./auth/service";
@@ -170,6 +171,8 @@ async function prochainMatricule(tx: Prisma.TransactionClient, schoolId: string,
 /** Inscrit un nouvel élève dans une classe de l'année active. */
 export async function inscrireEleve(db: Db, u: Utilisateur, donnees: DonneesEleve): Promise<Resultat<{ studentId: string; matricule: string }>> {
   if (u.role !== "DIRECTOR" || !u.schoolId) return { ok: false, erreur: "Seul le directeur peut inscrire un élève." };
+  const limite = await limiteAtteinte(db, u.schoolId, "eleves");
+  if (limite) return { ok: false, erreur: limite };
   const p = schemaEleve.safeParse(donnees);
   if (!p.success) return erreur(p.error);
   const v = p.data;

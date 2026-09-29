@@ -3,11 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth/next";
+import { ecritureBloquee } from "@/lib/abonnement";
 import { enregistrerEvenement, supprimerEvenement } from "@/lib/absences";
 import type { EtatFormulaire } from "./auth";
 
 export async function actionEnregistrerAbsence(cible: "eleve" | "personnel", _: EtatFormulaire, fd: FormData): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR", "TEACHER"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const t = (k: string) => String(fd.get(k) ?? "");
   const r = await enregistrerEvenement(db(), u, {
     cible,
@@ -28,6 +31,8 @@ export async function actionEnregistrerAbsence(cible: "eleve" | "personnel", _: 
 
 export async function actionSupprimerAbsence(id: string, _: EtatFormulaire): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR", "TEACHER"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await supprimerEvenement(db(), u, id);
   if (!r.ok) return { erreur: r.erreur };
   revalidatePath("/absences");

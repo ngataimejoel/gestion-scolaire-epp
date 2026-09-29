@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth/next";
+import { ecritureBloquee } from "@/lib/abonnement";
 import { creerCompteEnseignant } from "@/lib/auth/service";
 import { changerActivationCompte, enregistrerPersonnel, modifierPersonnel, supprimerPersonnel } from "@/lib/personnel";
 import type { EtatFormulaire } from "./auth";
@@ -17,6 +18,8 @@ const lire = (fd: FormData) => Object.fromEntries(CHAMPS.map((k) => [k, String(f
 
 export async function actionEnregistrerPersonnel(staffId: string | null, _: EtatPersonnel, fd: FormData): Promise<EtatPersonnel> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const d = lire(fd);
   if (staffId) {
     const r = await modifierPersonnel(db(), u, staffId, d);
@@ -35,6 +38,8 @@ export async function actionEnregistrerPersonnel(staffId: string | null, _: Etat
 
 export async function actionNouveauMotDePasse(staffId: string, _: EtatPersonnel): Promise<EtatPersonnel> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await creerCompteEnseignant(db(), u, staffId);
   if (!r.ok) return { erreur: r.erreur };
   revalidatePath("/personnel");
@@ -43,6 +48,8 @@ export async function actionNouveauMotDePasse(staffId: string, _: EtatPersonnel)
 
 export async function actionActivationCompte(staffId: string, actif: boolean, _: EtatFormulaire): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await changerActivationCompte(db(), u, staffId, actif);
   if (!r.ok) return { erreur: r.erreur };
   revalidatePath("/personnel");
@@ -51,6 +58,8 @@ export async function actionActivationCompte(staffId: string, actif: boolean, _:
 
 export async function actionSupprimerPersonnel(staffId: string, _: EtatFormulaire): Promise<EtatFormulaire> {
   const u = await exigerUtilisateur(["DIRECTOR"]);
+  const bloque = await ecritureBloquee(db(), u);
+  if (bloque) return { erreur: bloque };
   const r = await supprimerPersonnel(db(), u, staffId);
   if (!r.ok) return { erreur: r.erreur };
   revalidatePath("/personnel");
