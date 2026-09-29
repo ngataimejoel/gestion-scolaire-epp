@@ -158,7 +158,7 @@ const champsEleve = (v: z.output<typeof schemaEleve>) => ({
 });
 
 /** Prochain matricule du niveau pour l'année : plus grand numéro attribué + 1 (un numéro libéré par la suppression d'une fiche saisie par erreur peut resservir s'il était le dernier). */
-async function prochainMatricule(tx: Prisma.TransactionClient, schoolId: string, niveau: string, anneeDebut: number) {
+export async function prochainMatricule(tx: Prisma.TransactionClient, schoolId: string, niveau: string, anneeDebut: number) {
   const suffixe = `-${String(anneeDebut).slice(2, 4)}`;
   const existants = await tx.student.findMany({
     where: { schoolId, schoolMatricule: { startsWith: `${niveau}-`, endsWith: suffixe } },

@@ -30,7 +30,7 @@
       "durationDays": 365,
       "maxStudents": null,
       "maxTeachers": null,
-      "features": ["notes", "absences", "rapports", "statistiques", "export_excel", "import_excel", "notifications_sms", "assistant", "sauvegarde", "support_prioritaire"],
+      "features": ["notes", "absences", "rapports", "statistiques", "export_excel", "import_excel", "notifications_sms", "assistant", "support_prioritaire"],
       "isTrial": false,
       "position": 2
     }

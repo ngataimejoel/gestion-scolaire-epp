@@ -22,6 +22,7 @@ const MENU: { titre: string; href?: string; directeur?: boolean }[] = [
   { titre: "Notifications", href: "/notifications" },
   { titre: "Assistant", href: "/assistant", directeur: true },
   { titre: "Historique", href: "/historique", directeur: true },
+  { titre: "Import et sauvegarde", href: "/import-export", directeur: true },
   { titre: "Abonnement", href: "/abonnement", directeur: true },
   { titre: "Paramètres", href: "/parametres", directeur: true },
 ];
