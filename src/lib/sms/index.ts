@@ -1,5 +1,8 @@
+import { orange } from "./orange";
+
 /**
  * Envoi de SMS par un fournisseur interchangeable, choisi par SMS_PROVIDER.
+ * "orange" : API SMS d'Orange Côte d'Ivoire (voir orange.ts).
  * "simulation" : aucun envoi, le message est gardé en mémoire et écrit dans les journaux du serveur,
  * et l'interface peut l'afficher avec la mention « SMS simulé ». Aucune clé n'est lue côté navigateur.
  */
@@ -25,7 +28,7 @@ const simulation: FournisseurSms = {
   },
 };
 
-const fournisseurs: Record<string, FournisseurSms> = { simulation };
+const fournisseurs: Record<string, FournisseurSms> = { simulation, orange };
 
 /** Permet de brancher un fournisseur réel (Orange SMS API, etc.) sans toucher au reste du code. */
 export function enregistrerFournisseurSms(f: FournisseurSms) {

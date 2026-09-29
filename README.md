@@ -22,7 +22,7 @@ peuvent utiliser la même installation ; leurs données sont strictement isolée
 | 10 | Abonnement et paiement | Fait |
 | 11 | Notifications, historique, assistant | Fait |
 | 11 bis | Import et export du classeur Excel, sauvegarde et restauration | Fait |
-| 12 | Tests complets, documentation de déploiement | À faire |
+| 12 | Tests complets, documentation de déploiement | Fait (`docs/DEPLOIEMENT.md`) |
 
 ## Pile technique
 
@@ -48,6 +48,12 @@ npm run db:seed               # facultatif : école de démonstration du classeu
 L'école de démonstration reprend les 64 élèves, le personnel, les notes et les absences du classeur.
 Directeur : `07 30 90 80 35`, mot de passe `Demo2026` (modifiables avec `DEMO_TELEPHONE` et `DEMO_MOT_DE_PASSE`).
 
+## Mise en production
+
+Tout est décrit dans [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md) : variables d'environnement, installation,
+proxy HTTPS, premiers réglages (administrateur, prix des offres, webhooks de paiement), tâche quotidienne,
+sauvegardes nocturnes (`scripts/sauvegarde-base.sh`), restauration, mise à jour et liste de vérifications.
+
 ## Comptes et connexion
 
 | Qui | Comment |
@@ -59,6 +65,8 @@ Directeur : `07 30 90 80 35`, mot de passe `Demo2026` (modifiables avec `DEMO_TE
 Règles de sécurité : codes SMS à 6 chiffres valables 5 minutes, 3 essais, 1 minute entre deux envois et 5 envois par heure ;
 compte bloqué 15 minutes après 5 mauvais mots de passe ; 10 échecs par adresse IP en 15 minutes ; 5 essais ratés d'accès parent
 par adresse IP en 15 minutes. Mots de passe en Argon2id, codes SMS et jetons de session stockés uniquement sous forme d'empreinte.
+
+**SMS en production** : `SMS_PROVIDER="orange"` (API SMS d'Orange Côte d'Ivoire, voir `docs/DEPLOIEMENT.md`).
 
 **Mode simulation des SMS** (`SMS_PROVIDER="simulation"`) : aucun SMS n'est envoyé, le code s'affiche à l'écran en
 développement et dans les journaux du serveur. En production, il n'est affiché que si `AFFICHER_SMS_SIMULES=oui`
@@ -118,10 +126,13 @@ signalant ; le formulaire du site, lui, le refuse).
 ## Tests
 
 ```bash
-npm test            # moteur de calcul + comptes (base de test TEST_DATABASE_URL)
+npm test            # tous les tests (base de test TEST_DATABASE_URL, vidée à chaque fichier)
 npm run typecheck
 npm run lint
 ```
+
+`tests/securite.test.ts` vérifie les règles transversales : aucun secret côté navigateur, mots de passe hachés,
+contrôle d'accès de chaque action et route, lecture seule respectée par chaque écriture, isolation entre écoles.
 
 `tests/fixtures/` contient les données extraites du classeur (`donnees-classeur.json`) et les valeurs
 qu'il calcule (`attendu-classeur.json` : résultats des 64 élèves, fréquentation d'octobre, synthèse de fin
