@@ -38,14 +38,14 @@
     "copyright": "NGATTA",
     "directories": {
       "output": "dist",
-      "buildResources": "build"
+      "buildResources": "assets"
     },
     "files": [
       "electron/main.js",
       "electron/preload.js",
       "electron/db.js",
       "out/**/*",
-      "build/icon.png",
+      "assets/icon.png",
       "package.json"
     ],
     "win": {
@@ -54,7 +54,7 @@
           "target": "nsis"
         }
       ],
-      "icon": "build/icon.png",
+      "icon": "assets/icon.png",
       "artifactName": "Gestion-Scolaire-EPP-Setup-${version}.${ext}"
     },
     "nsis": {
