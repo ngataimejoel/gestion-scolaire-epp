@@ -1,26 +1,74 @@
 {
   "name": "gestion-scolaire-epp",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.3.6",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "lint": "eslint",
+    "test": "node --test electron/db.test.js",
+    "app:dev": "concurrently -k \"next dev\" \"wait-on http://localhost:3000 && electron . --dev\"",
+    "app:start": "next build && electron .",
+    "dist:win": "next build && electron-builder --win --x64 --publish never"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "concurrently": "^10.0.5",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.6",
+    "next": "16.3.6",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wait-on": "^9.5.1",
+    "xlsx": "^0.18.5"
+  },
+  "description": "Gestion scolaire pour école primaire (application Windows)",
+  "author": "NGATTA",
+  "main": "electron/main.js",
+  "build": {
+    "appId": "ci.epp.gestionscolaire",
+    "productName": "Gestion Scolaire EPP",
+    "copyright": "NGATTA",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/main.js",
+      "electron/preload.js",
+      "electron/db.js",
+      "out/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis"
+        }
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "Gestion-Scolaire-EPP-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Gestion Scolaire EPP",
+      "installerLanguages": [
+        "fr_FR"
+      ],
+      "language": "1036",
+      "deleteAppDataOnUninstall": false
+    }
   }
 }
