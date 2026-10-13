@@ -181,7 +181,8 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
         "titre_decision": "Décision du conseil des maîtres" if annuel else "Résultat", "decision": dec,
         "signatures": [(lab, noms[i] if i < len(noms) else "") for i, lab in enumerate(sigs)],
         "photo": o.get("photo", True),
-        "couleurs": teintes("vive" if o.get("palette") == "vive" else "douce"),
+        "couleurs": teintes("vive" if ((params or {}).get("bulletin_palette") or o.get("palette")) == "vive"
+                           else "douce"),
     }
 
 

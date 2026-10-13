@@ -83,6 +83,12 @@ def selftest(out=sys.stdout) -> int:
         app = QApplication.instance() or QApplication([])
         from PySide6.QtPdf import QPdfDocument   # noqa: F401  (aperçu des rapports)
         ok(f"Qt {__import__('PySide6').__version__} disponible")
+        import importlib
+        from epp.ui.main import PAGES, classe_page
+        for _, _, _, cible, _ in PAGES:     # écrans chargés à la demande : vérifie qu'ils sont embarqués
+            classe_page(cible)
+        importlib.import_module("epp.ui.designer.editeur")
+        ok(f"{len(PAGES)} écrans de l'interface disponibles")
         app.quit()
     except Exception:
         traceback.print_exc(file=out)
@@ -107,13 +113,7 @@ def main(argv: list[str] | None = None) -> int:
                 return selftest(f)
         return selftest(sys.stdout or open(Path(tempfile.gettempdir()) / "epp_selftest.txt", "w", encoding="utf-8"))
     _logging()
-    try:
-        from epp.ui.main import run
-    except ImportError:
-        from PySide6.QtWidgets import QApplication, QMessageBox
-        app = QApplication(sys.argv[:1] + qt_args)
-        QMessageBox.information(None, APP_NAME, "L'interface graphique est en cours de développement.")
-        return 0
+    from epp.ui.main import run
     return run(sys.argv[:1] + qt_args)
 
 

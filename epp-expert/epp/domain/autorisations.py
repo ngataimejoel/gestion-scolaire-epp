@@ -9,11 +9,11 @@
 """
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date
 
 from epp.core.db import Database
 from epp.core.security import Session, log
-from epp.domain import calculs, repo
+from epp.domain import calculs, calendrier, repo
 from epp.domain.repo import Annee, ValidationError
 
 STATUTS = {"EN_ATTENTE": "En attente", "ACCORDEE": "Accordée", "REFUSEE": "Refusée"}
@@ -75,23 +75,18 @@ def preremplir(db: Database, annee: Annee, recherche: str, kind: str | None = No
 
 
 # =================================================================== jours et absences
-def jours_ouvres(debut: date, fin: date) -> list[date]:
-    """Jours de classe (lundi à vendredi) de la période."""
-    out, d = [], debut
-    while d <= fin:
-        if d.weekday() < 5:
-            out.append(d)
-        d += timedelta(days=1)
-    return out
+def jours_ouvres(debut: date, fin: date, exclus: set[date] | None = None) -> list[date]:
+    """Jours de classe de la période : lundi à vendredi, hors jours fériés et vacances (exclus)."""
+    return calendrier.jours_de_classe(debut, fin, exclus)
 
 
-def _segments(debut: date, fin: date, demi: str | None) -> list[tuple[date, float, date]]:
+def _segments(debut: date, fin: date, demi: str | None, exclus: set[date] | None = None) -> list[tuple[date, float, date]]:
     """[(premier jour, nombre de jours, dernier jour)] par mois : une ligne d'absence par mois concerné,
     pour que chaque rapport mensuel compte ses propres jours."""
     if demi:
         return [(debut, 0.5, debut)]
     par_mois: dict[tuple[int, int], list[date]] = {}
-    for d in jours_ouvres(debut, fin):
+    for d in jours_ouvres(debut, fin, exclus):
         par_mois.setdefault((d.year, d.month), []).append(d)
     return [(js[0], float(len(js)), js[-1]) for _, js in sorted(par_mois.items())]
 
@@ -120,9 +115,13 @@ def _valider(db: Database, annee: Annee, data: dict, aid: int | None) -> dict:
         raise ValidationError("Demi-journée : MATIN ou APRES_MIDI.", "demi_journee")
     if demi and d1 != d2:
         raise ValidationError("Une demi-journée ne concerne qu'un seul jour.", "demi_journee")
-    jours = 0.5 if demi else float(len(jours_ouvres(d1, d2)))
+    exclus = calendrier.jours_sans_classe(db, annee)
+    if demi and (d1.weekday() >= 5 or d1 in exclus):
+        raise ValidationError("Ce jour n'est pas un jour de classe (week-end, jour férié ou vacances).", "date_debut")
+    jours = 0.5 if demi else float(len(jours_ouvres(d1, d2, exclus)))
     if jours == 0:
-        raise ValidationError("La période ne contient aucun jour de classe (samedi et dimanche).", "date_debut")
+        raise ValidationError("La période ne contient aucun jour de classe (week-end, jours fériés ou vacances).",
+                              "date_debut")
     motif = (data.get("motif") or "").strip()
     if not motif:
         raise ValidationError("Le motif est obligatoire.", "motif")
@@ -167,7 +166,7 @@ def _reporter_absences(db: Database, annee: Annee, aid: int) -> None:
     if a["statut"] != "ACCORDEE":
         return
     d1, d2 = calculs.to_date(a["date_debut"]), calculs.to_date(a["date_fin"])
-    for premier, jours, dernier in _segments(d1, d2, a["demi_journee"]):
+    for premier, jours, dernier in _segments(d1, d2, a["demi_journee"], calendrier.jours_sans_classe(db, annee)):
         obs = f"Autorisation n° {a['numero']}"
         obs += f" ({DEMI[a['demi_journee']].lower()} du {premier:%d/%m/%Y})" if a["demi_journee"] else \
             (f" (le {premier:%d/%m/%Y})" if premier == dernier else f" (du {premier:%d/%m/%Y} au {dernier:%d/%m/%Y})")
@@ -176,6 +175,22 @@ def _reporter_absences(db: Database, annee: Annee, aid: int) -> None:
         db.execute(f"INSERT INTO {table}(annee_id, {fk}, date, nature, jours, motif, justifie, observations, "
                    "autorisation_id) VALUES(?,?,?,?,?,?,?,?,?)",
                    (annee.id, a[fk], premier.isoformat(), "ABSENCE", jours, a["motif"], "OUI", obs[:250], aid))
+
+
+def recalculer(db: Database, annee: Annee) -> int:
+    """Après une modification du calendrier (jour férié, vacances) : durée et absences des demandes
+    mises à jour. Renvoie le nombre de demandes recalculées."""
+    exclus = calendrier.jours_sans_classe(db, annee)
+    n = 0
+    with db.transaction():
+        for a in db.query("SELECT * FROM autorisation_absence WHERE annee_id=?", (annee.id,)):
+            d1, d2 = calculs.to_date(a["date_debut"]), calculs.to_date(a["date_fin"])
+            jours = 0.5 if a["demi_journee"] else float(len(jours_ouvres(d1, d2, exclus)))
+            if jours != a["jours"]:
+                db.execute("UPDATE autorisation_absence SET jours=? WHERE id=?", (jours, a["id"]))
+                n += 1
+            _reporter_absences(db, annee, a["id"])
+    return n
 
 
 # =================================================================== enregistrement

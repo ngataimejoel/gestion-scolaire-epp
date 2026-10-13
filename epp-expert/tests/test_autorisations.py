@@ -5,7 +5,7 @@ import pytest
 from docx import Document
 from pypdf import PdfReader
 
-from epp.core.db import AnneeCloturee
+from epp.core.db import SCHEMA_VERSION, AnneeCloturee
 from epp.core.security import AccessDenied, Session, system_session
 from epp.domain import autorisations as au
 from epp.domain import repo
@@ -167,7 +167,7 @@ def test_migration_d_une_base_version_3(tmp_path):
     con.close()
     assert _AUTORISATION_SQL
     db = open_database(chemin)
-    assert db.meta("schema_version") == "4"
+    assert db.meta("schema_version") == str(SCHEMA_VERSION)
     annee = repo.load_annee(db, annee.id)
     f = au.preremplir(db, annee, repo.personnel(db, annee)[0]["matricule"])
     aid = au.enregistrer(db, sys_s(), annee, None, f | {"date_debut": "2026-10-12", "motif": "Maladie",

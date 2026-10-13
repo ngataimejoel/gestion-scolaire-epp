@@ -196,3 +196,74 @@ def admin_count(db: Database) -> int:
 def log(db: Database, utilisateur: str, action: str, objet: str = "", details: str = "") -> None:
     db.execute("INSERT INTO journal(utilisateur, action, objet, details) VALUES(?,?,?,?)",
                (utilisateur, action, objet, details))
+
+
+# ---------------------------------------------------------------------- gestion des utilisateurs
+def lister_utilisateurs(db: Database) -> list[dict]:
+    return [dict(r) for r in db.query(
+        "SELECT u.id, u.login, u.nom, u.actif, u.doit_changer, u.derniere_connexion, u.cree_le, "
+        "r.code AS role, r.libelle AS role_libelle FROM utilisateur u JOIN role r ON r.id=u.role_id "
+        "ORDER BY u.login")]
+
+
+def lister_roles(db: Database) -> list[dict]:
+    return [dict(r) for r in db.query("SELECT id, code, libelle FROM role ORDER BY id")]
+
+
+def ajouter_utilisateur(db: Database, s: Session, login: str, nom: str, password: str, role_code: str) -> int:
+    """Création par un administrateur : l'utilisateur devra changer son mot de passe à la connexion."""
+    s.require("utilisateurs.gerer")
+    uid = create_user(db, login, nom, password, role_code, doit_changer=True)
+    log(db, s.login, "AJOUT_UTILISATEUR", "utilisateur", f"{login} ({role_code})")
+    return uid
+
+
+def _proteger_dernier_admin(db: Database, user_id: int) -> None:
+    row = db.one("SELECT r.code, u.actif FROM utilisateur u JOIN role r ON r.id=u.role_id WHERE u.id=?", (user_id,))
+    if row and row["code"] == "ADMIN" and row["actif"] and admin_count(db) <= 1:
+        raise ValueError("Impossible : c'est le dernier administrateur actif de l'application.")
+
+
+def modifier_utilisateur(db: Database, s: Session, user_id: int, nom: str | None = None,
+                         role_code: str | None = None, actif: bool | None = None) -> None:
+    s.require("utilisateurs.gerer")
+    row = db.one("SELECT u.login, r.code FROM utilisateur u JOIN role r ON r.id=u.role_id WHERE u.id=?", (user_id,))
+    if row is None:
+        raise ValueError("Utilisateur introuvable.")
+    if (role_code and role_code != row["code"]) or actif is False:
+        _proteger_dernier_admin(db, user_id)
+    if user_id == s.user_id and actif is False:
+        raise ValueError("Vous ne pouvez pas désactiver votre propre compte.")
+    with db.transaction():
+        if nom is not None and nom.strip():
+            db.execute("UPDATE utilisateur SET nom=? WHERE id=?", (nom.strip(), user_id))
+        if role_code:
+            rid = db.scalar("SELECT id FROM role WHERE code=?", (role_code,))
+            if rid is None:
+                raise ValueError(f"Rôle inconnu : {role_code}")
+            db.execute("UPDATE utilisateur SET role_id=? WHERE id=?", (rid, user_id))
+        if actif is not None:
+            db.execute("UPDATE utilisateur SET actif=? WHERE id=?", (int(actif), user_id))
+    log(db, s.login, "MODIF_UTILISATEUR", "utilisateur", f"{row['login']} role={role_code} actif={actif}")
+
+
+def reinitialiser_mot_de_passe(db: Database, s: Session, user_id: int, password: str) -> None:
+    """Mot de passe provisoire donné par un administrateur, à changer à la prochaine connexion."""
+    s.require("utilisateurs.gerer")
+    set_password(db, user_id, password)
+    db.execute("UPDATE utilisateur SET doit_changer=1 WHERE id=?", (user_id,))
+    log(db, s.login, "REINIT_MOT_DE_PASSE", "utilisateur", str(user_id))
+
+
+def changer_mon_mot_de_passe(db: Database, s: Session, ancien: str, nouveau: str) -> None:
+    stored = db.scalar("SELECT hash FROM utilisateur WHERE id=?", (s.user_id,))
+    if not stored or not verify_password(ancien, stored):
+        raise ValueError("Le mot de passe actuel est incorrect.")
+    if ancien == nouveau:
+        raise ValueError("Le nouveau mot de passe doit être différent de l'actuel.")
+    set_password(db, s.user_id, nouveau)
+    log(db, s.login, "CHANGEMENT_MOT_DE_PASSE", "utilisateur", s.login)
+
+
+def doit_changer(db: Database, user_id: int) -> bool:
+    return bool(db.scalar("SELECT doit_changer FROM utilisateur WHERE id=?", (user_id,), 0))

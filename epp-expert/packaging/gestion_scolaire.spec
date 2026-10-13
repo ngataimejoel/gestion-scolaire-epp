@@ -6,6 +6,9 @@ from PyInstaller.utils.hooks import collect_data_files
 
 ROOT = Path(SPECPATH).parent
 APP = "GestionScolaireEPP"
+# tous les modules de l'application (les pages de l'interface sont chargées à la demande)
+MODULES = [".".join(p.relative_to(ROOT).with_suffix("").parts).removesuffix(".__init__")
+           for p in (ROOT / "epp").rglob("*.py")]
 
 a = Analysis(
     [str(ROOT / "packaging" / "lanceur.py")],
@@ -15,7 +18,8 @@ a = Analysis(
         (str(ROOT / "epp" / "resources"), "epp/resources"),
         *collect_data_files("docx"),                 # modèle Word de base de python-docx
     ],
-    hiddenimports=["epp.ui.main", "PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtMultimedia",
+    hiddenimports=[*MODULES,
+                   "PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtMultimedia",
                    "PySide6.QtMultimediaWidgets", "PySide6.QtCharts", "PySide6.QtPrintSupport"],
     excludes=["tkinter", "pandas", "numpy", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets",
               "PySide6.Qt3DCore", "PySide6.QtQuick3D", "PySide6.QtDesigner"],

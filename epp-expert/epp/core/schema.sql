@@ -316,3 +316,15 @@ CREATE TABLE IF NOT EXISTS autorisation_absence (
     UNIQUE (annee_id, numero),
     CHECK ((kind = 'eleve' AND inscription_id IS NOT NULL) OR (kind = 'personnel' AND personnel_id IS NOT NULL))
 );
+
+-- version 5 : jours fériés et vacances scolaires (exclus des jours de classe)
+CREATE TABLE IF NOT EXISTS conge (
+    id INTEGER PRIMARY KEY,
+    annee_id INTEGER NOT NULL REFERENCES annee_scolaire(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'FERIE' CHECK (type IN ('FERIE', 'VACANCES', 'AUTRE')),
+    libelle TEXT NOT NULL,
+    date_debut TEXT NOT NULL,
+    date_fin TEXT NOT NULL,
+    CHECK (date_fin >= date_debut)
+);
+CREATE INDEX IF NOT EXISTS idx_conge_annee ON conge(annee_id, date_debut);

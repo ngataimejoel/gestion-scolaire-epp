@@ -32,6 +32,7 @@ DEFAULT_PARAMS = {
     "bulletin_slogan": "Apprendre aujourd'hui, réussir demain",
     "bulletin_devise": "Une école pour construire l'avenir !",
     "bulletin_pied": "L'éducation est la clé de la réussite",
+    "bulletin_palette": "",                          # "" = selon le modèle, "douce" ou "vive"
     "entete_gauche": ENTETE_GAUCHE_DEFAUT,
     "entete_droite": ENTETE_DROITE_DEFAUT,
     "sauvegarde_auto": "1",
@@ -150,7 +151,18 @@ def create_year(db: Database, libelle: str, copy_from: int | None = None, active
             _copy_structure(db, copy_from, aid)
         else:
             _default_structure(db, aid, a1)
+        _feries(db, aid, a1, a2)
     return aid
+
+
+def _feries(db: Database, aid: int, a1: int, a2: int) -> None:
+    """Jours fériés de date connue préremplis (les fêtes musulmanes et les vacances sont à saisir)."""
+    from types import SimpleNamespace
+
+    from epp.domain import calendrier
+    for f in calendrier.feries_de_date_connue(SimpleNamespace(date_debut=f"{a1}-09-01", date_fin=f"{a2}-08-31")):
+        db.execute("INSERT INTO conge(annee_id, type, libelle, date_debut, date_fin) VALUES(?,?,?,?,?)",
+                   (aid, f["type"], f["libelle"], f["date_debut"], f["date_fin"]))
 
 
 def _default_structure(db: Database, aid: int, a1: int) -> None:

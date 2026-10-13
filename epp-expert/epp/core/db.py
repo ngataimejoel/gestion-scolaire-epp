@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class Database:
@@ -137,7 +137,7 @@ _PHOTO_SQL = [
 # Année clôturée (archivée) : toute écriture dans ses données est refusée par la base elle-même,
 # quel que soit le chemin (interface, import, script).
 _PAR_ANNEE = ["grille_notes", "classe", "evaluation", "jours_classe", "inscription", "affectation",
-              "absence_eleve", "absence_personnel", "texte_rapport", "autorisation_absence"]
+              "absence_eleve", "absence_personnel", "texte_rapport", "autorisation_absence", "conge"]
 _PAR_INSCRIPTION = ["presence_eval", "note", "decision_fin_annee"]
 _MSG_CLOTUREE = "ANNEE_CLOTUREE"
 
@@ -230,10 +230,24 @@ _AUTORISATION_SQL = [
                      "INTEGER REFERENCES autorisation_absence(id) ON DELETE CASCADE"),
 ]
 
+_CONGE_SQL = [
+    """CREATE TABLE IF NOT EXISTS conge (
+    id INTEGER PRIMARY KEY,
+    annee_id INTEGER NOT NULL REFERENCES annee_scolaire(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'FERIE' CHECK (type IN ('FERIE', 'VACANCES', 'AUTRE')),
+    libelle TEXT NOT NULL,
+    date_debut TEXT NOT NULL,
+    date_fin TEXT NOT NULL,
+    CHECK (date_fin >= date_debut)
+)""",
+    "CREATE INDEX IF NOT EXISTS idx_conge_annee ON conge(annee_id, date_debut)",
+]
+
 MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexion)
     2: _PHOTO_SQL,          # photos des élèves et du personnel
     3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
     4: _AUTORISATION_SQL + _archive_triggers(),   # demandes d'autorisation d'absence liées aux absences
+    5: _CONGE_SQL + _archive_triggers(),          # jours fériés et vacances (non comptés comme jours de classe)
 }
 
 
