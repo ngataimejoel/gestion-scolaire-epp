@@ -33,8 +33,18 @@ jobs:
           cache: pip
           cache-dependency-path: epp-expert/requirements-dev.txt
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Installer les dépendances
         run: python -m pip install -r requirements-dev.txt
+
+      - name: Tests du service d'activation (Node)
+        working-directory: epp-expert/activation
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
 
       - name: Tests automatiques
         run: python -m pytest -q -rs

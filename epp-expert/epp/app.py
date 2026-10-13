@@ -63,6 +63,19 @@ def selftest(out=sys.stdout) -> int:
             service.generer(db, s, annee, "SYNTHESE", {}, Path(tmp) / "synthese.xlsx")
             ok(f"{n} modèles de rapports générés en PDF, export Excel OK")
             db.close()
+            import base64
+            from cryptography.hazmat.primitives import serialization
+            from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+            from epp.core import licence
+            k = Ed25519PrivateKey.generate()
+            pub = base64.b64encode(k.public_key().public_bytes(serialization.Encoding.Raw,
+                                                              serialization.PublicFormat.Raw)).decode()
+            m = licence.empreinte_machine()
+            lic = base64.urlsafe_b64encode(f'{{"machine": "{m}"}}'.encode()).decode().rstrip("=")
+            sig = base64.urlsafe_b64encode(k.sign(base64.urlsafe_b64decode(lic + "=="))).decode().rstrip("=")
+            assert licence.verifier(lic, sig, pub, m) and not licence.verifier(lic, sig[:-4] + "AAAA", pub, m)
+            assert licence.etat().statut in ("essai", "active", "essai_termine", "expiree")
+            ok("contrôle de licence (signature Ed25519) opérationnel")
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance() or QApplication([])
