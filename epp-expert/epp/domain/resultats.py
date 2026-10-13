@@ -37,6 +37,9 @@ def compute(db: Database, annee: Annee, classe_code: str | None = None) -> list[
     """Une ligne par inscription : moyennes, MGA, décision, rang, observation."""
     rows = repo.inscriptions(db, annee)
     moys = moyennes_par_evaluation(db, annee)
+    valides = {x["inscription_id"]: x for x in db.query(
+        "SELECT d.* FROM decision_fin_annee d JOIN inscription i ON i.id = d.inscription_id WHERE i.annee_id=?",
+        (annee.id,))}
     for r in rows:
         cl = annee.classe(r["classe"])
         m = moys.get(r["inscription_id"], {})
@@ -51,7 +54,14 @@ def compute(db: Database, annee: Annee, classe_code: str | None = None) -> list[
             r["mga"] = calculs.mga_standard(r["moy_compos"], e[3])
         r["bareme"] = cl.bareme
         r["seuil"] = cl.seuil
-        r["decision"] = calculs.decision(r["statut"], r["mga"], cl.seuil)
+        calc = calculs.decision(r["statut"], r["mga"], cl.seuil)
+        r["decision_calculee"] = calc
+        v = valides.get(r["inscription_id"])
+        if v is not None:      # décision validée en fin d'année : elle remplace la proposition calculée
+            r.update(decision=v["decision"], decision_validee="OUI", motif_decision=v["motif"] or "",
+                     a_revoir=v["decision_calculee"] != calc)
+        else:
+            r.update(decision=calc, decision_validee="NON", motif_decision="", a_revoir=False)
         r["observation"] = calculs.observation(r["decision"], r["mga"], cl.bareme)
     for code in annee.codes:
         groupe = {r["inscription_id"]: r["mga"] for r in rows if r["classe"] == code}

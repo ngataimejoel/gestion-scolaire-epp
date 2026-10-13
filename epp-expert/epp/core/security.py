@@ -28,6 +28,7 @@ PERMISSIONS: dict[str, str] = {
     "modeles.gerer": "Créer et modifier ses modèles de rapports",
     "modeles.partages": "Modifier ou supprimer les modèles partagés et intégrés",
     "parametres.modifier": "Modifier les paramètres de l'établissement et des années",
+    "fin_annee.valider": "Valider les décisions de fin d'année (admis, redoublants, sorties)",
     "utilisateurs.gerer": "Gérer les utilisateurs et les rôles",
     "sauvegarde.creer": "Créer des sauvegardes",
     "sauvegarde.restaurer": "Restaurer une sauvegarde",
@@ -45,6 +46,12 @@ DEFAULT_ROLES: dict[str, tuple[str, list[str]]] = {
     "ENSEIGNANT": ("Enseignant", [
         "eleves.lire", "notes.lire", "notes.modifier", "absences.lire", "absences.modifier",
         "rapports.generer"]),
+}
+
+
+# Permissions ajoutées après la première version : {permission: rôles qui la reçoivent}
+PERMISSIONS_AJOUTEES: dict[str, list[str]] = {
+    "fin_annee.valider": ["DIRECTEUR"],
 }
 
 
@@ -112,6 +119,16 @@ def ensure_roles(db: Database) -> None:
                              (code, libelle)).lastrowid
             db.executemany("INSERT OR IGNORE INTO role_permission(role_id, permission) VALUES(?,?)",
                            [(rid, p) for p in perms])
+    # permissions apparues avec une mise à jour : données une seule fois aux rôles prévus
+    # (un administrateur qui les retire ensuite n'est pas contredit)
+    for perm, roles in PERMISSIONS_AJOUTEES.items():
+        if db.meta(f"permission_ajoutee:{perm}"):
+            continue
+        for code in roles:
+            rid = db.scalar("SELECT id FROM role WHERE code=?", (code,))
+            if rid:
+                db.execute("INSERT OR IGNORE INTO role_permission(role_id, permission) VALUES(?,?)", (rid, perm))
+        db.set_meta(f"permission_ajoutee:{perm}", "1")
     admin_id = db.scalar("SELECT id FROM role WHERE code='ADMIN'")
     db.executemany("INSERT OR IGNORE INTO role_permission(role_id, permission) VALUES(?,?)",
                    [(admin_id, p) for p in PERMISSIONS])

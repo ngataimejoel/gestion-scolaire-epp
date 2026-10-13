@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 class Database:
@@ -120,8 +120,19 @@ _PHOTO_SQL = [
         BEGIN DELETE FROM photo WHERE kind='personnel' AND ref_id=OLD.id; END""",
 ]
 
+_DECISION_SQL = [
+    """CREATE TABLE IF NOT EXISTS decision_fin_annee (
+        inscription_id INTEGER PRIMARY KEY REFERENCES inscription(id) ON DELETE CASCADE,
+        decision TEXT NOT NULL CHECK (decision IN ('ADMIS', 'REDOUBLE', 'ABANDON', 'EXCLU', 'TRANSFERE')),
+        decision_calculee TEXT,
+        motif TEXT,
+        valide_par TEXT NOT NULL,
+        valide_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')))""",
+]
+
 MIGRATIONS: dict[int, list[str]] = {
     2: _PHOTO_SQL,          # photos des élèves et du personnel
+    3: _DECISION_SQL,       # validation des décisions de fin d'année
 }
 
 
@@ -143,7 +154,9 @@ def open_database(path: str | Path | None = None, seed: bool = True) -> Database
         if seed:
             from epp.core import seed as seed_mod
             from epp.reports import store
+            from epp.core import security
             seed_mod.ensure_params(db)              # nouveaux paramètres livrés avec une mise à jour
+            security.ensure_roles(db)               # nouvelles permissions livrées avec une mise à jour
             store.install_builtin_templates(db)   # nouveaux modèles livrés avec une mise à jour
     return db
 

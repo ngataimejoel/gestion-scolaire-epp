@@ -365,6 +365,23 @@ EX_ABSENCES = _modele(
          "agregats": {"jours": "somme", "retard_min": "somme"}, "renumeroter": True},
         SIGNATURE])
 
+DECISIONS_FIN_ANNEE = _modele(
+    "DÉCISIONS DE FIN D'ANNÉE", parametres=["classe"], sections=[
+        {"type": "repartition", "titre": "Récapitulatif des décisions", "source": "resultats", "champ": "decision",
+         "filtres": [{"champ": "classe", "op": "=", "parametre": "classe"}], "pourcentage": True},
+        {"type": "tableau", "titre": "", "source": "resultats", "colonnes": [
+            _col("numero"), _col("matricule_ecole"), _col("nom"), _col("sexe"), _col("mga"), _col("rang"),
+            _col("decision_calculee", "Proposition"), _col("decision", "Décision retenue"),
+            _col("decision_validee", "Validée"), _col("motif_decision", "Motif")],
+         "filtres": [{"champ": "classe", "op": "=", "parametre": "classe"}], "tri": [], "regroupement": "classe",
+         "saut_page_groupe": True, "agregats": {}, "sous_totaux": False, "total_general": False,
+         "renumeroter": True},
+        {"type": "texte", "style": "note", "texte":
+            "Proposition : décision calculée (ADMIS si MGA ≥ seuil de la classe, sinon REDOUBLE). Décision "
+            "retenue : décision validée par le directeur ; « NON » dans la colonne Validée signale une "
+            "proposition pas encore validée."},
+        SIGNATURE])
+
 # (code, nom, catégorie, description, définition)
 TEMPLATES = [
     ("REGISTRE", "Registre général des élèves", OFFICIEL, "Toutes classes (feuille REGISTRE ELEVES).", REGISTRE),
@@ -390,6 +407,8 @@ TEMPLATES = [
      "Notes par matière, moyenne, rang et appréciation ; un élève, une classe ou toute l'école.", BULLETIN_EVAL),
     ("BULLETIN_ANNUEL", "Bulletins annuels", "Bulletins",
      "Moyennes des évaluations, MGA, rang, décision et observation de fin d'année.", BULLETIN_ANNUEL),
+    ("DECISIONS_FIN_ANNEE", "Décisions de fin d'année", "Fin d'année",
+     "Admis, redoublants, abandons, exclus et transférés validés, par classe.", DECISIONS_FIN_ANNEE),
     ("EX_LISTE_CLASSE", "Liste des élèves par classe", EXEMPLE, "Liste alphabétique, une page par classe.",
      EX_LISTE_CLASSE),
     ("EX_EFFECTIFS_NIVEAU", "État des effectifs par niveau", EXEMPLE, "Effectifs, sorties, nationalités.",

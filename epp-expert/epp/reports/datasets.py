@@ -83,6 +83,8 @@ RESULTAT_CHAMPS = [
     C("moy4", "Moy. 4e évaluation (passage)", "decimal"), C("mga", "MGA", "decimal"),
     C("bareme", "Barème", "entier"), C("seuil", "Seuil", "decimal"), C("decision", "Décision"),
     C("rang", "Rang", "entier"), C("observation", "Observation"), C("regle_mga", "Règle de MGA"),
+    C("decision_calculee", "Décision calculée"), C("decision_validee", "Décision validée (OUI/NON)"),
+    C("motif_decision", "Motif de la décision"),
 ]
 
 PERSONNEL_CHAMPS = [

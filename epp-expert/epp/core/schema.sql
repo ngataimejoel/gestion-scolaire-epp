@@ -275,3 +275,13 @@ CREATE TRIGGER IF NOT EXISTS photo_eleve_suppr AFTER DELETE ON eleve
     BEGIN DELETE FROM photo WHERE kind='eleve' AND ref_id=OLD.id; END;
 CREATE TRIGGER IF NOT EXISTS photo_personnel_suppr AFTER DELETE ON personnel
     BEGIN DELETE FROM photo WHERE kind='personnel' AND ref_id=OLD.id; END;
+
+-- version 3 : décisions de fin d'année validées (la décision calculée sert de proposition)
+CREATE TABLE IF NOT EXISTS decision_fin_annee (
+    inscription_id INTEGER PRIMARY KEY REFERENCES inscription(id) ON DELETE CASCADE,
+    decision TEXT NOT NULL CHECK (decision IN ('ADMIS', 'REDOUBLE', 'ABANDON', 'EXCLU', 'TRANSFERE')),
+    decision_calculee TEXT,                    -- proposition au moment de la validation
+    motif TEXT,
+    valide_par TEXT NOT NULL,
+    valide_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);

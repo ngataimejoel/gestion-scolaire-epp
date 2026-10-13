@@ -528,6 +528,8 @@ def _bulletin(doc: E.Document, b: E.Bulletin, avail: float) -> list:
         dec = d.get("decision") or "–"
         if dec == "ADMIS":
             dec = f"ADMIS(E) en {suite}" if suite else "ADMIS(E) – entrée en 6ème"
+        else:
+            dec = {"EXCLU": "EXCLU(E)", "TRANSFERE": "TRANSFÉRÉ(E)"}.get(dec, dec)
         res = [("MOYENNE GÉNÉRALE ANNUELLE", f"{E.fmt(d['mga'], 'decimal')} / {E.fmt(echelle, 'entier')}"
                 if d.get("mga") is not None else "–"),
                ("RANG", f"{_rang(d.get('rang'))} sur {d['effectif']}" if d.get("rang") else "–"),

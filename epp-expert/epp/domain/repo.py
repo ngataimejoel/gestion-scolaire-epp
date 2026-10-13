@@ -366,31 +366,46 @@ def inscriptions(db: Database, annee: Annee, classe_code: str | None = None, rec
 
 
 def reinscrire(db: Database, s: Session, src: Annee, dst: Annee, decisions: dict[int, str] | None = None,
-               inscription_ids: list[int] | None = None) -> dict:
-    """Passage d'année : ADMIS -> classe suivante (CM2 admis : sortie), REDOUBLE -> même classe (redoublant OUI).
+               inscription_ids: list[int] | None = None, exiger_validation: bool = False) -> dict:
+    """Passage d'année : ADMIS -> classe suivante (CM2 admis : sortie), REDOUBLE -> même classe (redoublant OUI) ;
+    ABANDON, EXCLU et TRANSFERE ne sont pas réinscrits.
 
-    decisions : {inscription_id: décision} (calculées par le module résultats si absent).
-    Renvoie un bilan {'reinscrits': n, 'sortants': n, 'ignores': n, 'deja': n}.
+    decisions : {inscription_id: décision}. Sans ce paramètre, la décision validée en fin d'année est
+    utilisée, et à défaut la décision calculée (comptée dans 'non_valides').
+    exiger_validation : refuse le passage tant qu'une classe n'est pas entièrement validée.
+    Renvoie un bilan {'reinscrits', 'sortants', 'partants', 'ignores', 'deja', 'non_valides'}.
     """
     s.require("eleves.modifier")
-    if decisions is None:
-        from epp.domain import resultats
-        decisions = {r["inscription_id"]: r["decision"] for r in resultats.compute(db, src)}
-    bilan = {"reinscrits": 0, "sortants": 0, "ignores": 0, "deja": 0}
+    from epp.domain import resultats
+    res = {r["inscription_id"]: r for r in resultats.compute(db, src)}
+    if exiger_validation:
+        manque = sorted({r["classe"] for r in res.values() if r["decision_validee"] != "OUI"
+                         and (inscription_ids is None or r["inscription_id"] in inscription_ids)},
+                        key=lambda c: src.codes.index(c) if c in src.codes else 99)
+        if manque:
+            raise ValidationError("Décisions de fin d'année à valider d'abord pour : " + ", ".join(manque) + ".")
+    bilan = {"reinscrits": 0, "sortants": 0, "partants": 0, "ignores": 0, "deja": 0, "non_valides": 0}
     rows = inscriptions(db, src)
     with db.transaction():
         for r in rows:
-            if inscription_ids is not None and r["inscription_id"] not in inscription_ids:
+            iid = r["inscription_id"]
+            if inscription_ids is not None and iid not in inscription_ids:
                 continue
-            if r["statut"] != "PRESENT":
+            valide = decisions is None and res[iid]["decision_validee"] == "OUI"
+            if r["statut"] != "PRESENT" and not valide:
                 bilan["ignores"] += 1
                 continue
-            dec = decisions.get(r["inscription_id"])
+            dec = decisions.get(iid) if decisions is not None else res[iid]["decision"]
+            if decisions is None and not valide:
+                bilan["non_valides"] += 1
             cl = src.classe(r["classe"])
             if dec == "ADMIS":
                 cible, red = (cl.niveau_suivant if cl else None), "NON"
             elif dec == "REDOUBLE":
                 cible, red = r["classe"], "OUI"
+            elif dec in ("ABANDON", "EXCLU", "TRANSFERE"):
+                bilan["partants"] += 1
+                continue
             else:
                 bilan["ignores"] += 1
                 continue
