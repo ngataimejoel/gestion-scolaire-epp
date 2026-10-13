@@ -187,7 +187,9 @@ def etablissement(db: Database) -> dict:
 
 
 def save_etablissement(db: Database, s: Session, data: dict) -> None:
+    """Enregistre les paramètres de l'établissement. Les logos passent par set_logo (contrôle de l'image)."""
     s.require("parametres.modifier")
+    data = {k: v for k, v in data.items() if k not in LOGOS}
     with db.transaction():
         for k, v in data.items():
             db.set_param(k, v)
@@ -724,3 +726,65 @@ def set_photo(db: Database, s: Session, kind: str, ref_id: int, data: bytes | No
 
 def get_photo(db: Database, kind: str, ref_id: int) -> bytes | None:
     return db.scalar("SELECT data FROM photo WHERE kind=? AND ref_id=?", (kind, ref_id))
+
+
+# ============================================================== en-tête d'impression et logos
+LOGOS = {"logo_iepp": "Logo de l'IEPP", "logo_ecole": "Logo de l'école"}
+LOGO_MAX_PX = 400
+
+
+def normaliser_logo(data: bytes) -> bytes:
+    """Vérifie que le fichier est une image et la réduit en PNG (la transparence est conservée)."""
+    if not data or len(data) > PHOTO_MAX_OCTETS:
+        raise ValidationError("Logo vide ou trop volumineux (15 Mo maximum).", "logo")
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+    from PySide6.QtGui import QImage
+    img = QImage.fromData(QByteArray(data))
+    if img.isNull():
+        raise ValidationError("Ce fichier n'est pas une image reconnue (PNG, JPEG, BMP…).", "logo")
+    if max(img.width(), img.height()) > LOGO_MAX_PX:
+        img = img.scaled(LOGO_MAX_PX, LOGO_MAX_PX, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    buf = QBuffer()
+    buf.open(QIODevice.WriteOnly)
+    img.save(buf, "PNG")
+    return bytes(buf.data())
+
+
+def set_logo(db: Database, s: Session, quel: str, data: bytes | None) -> None:
+    """Enregistre (ou retire si data est None) le logo de l'IEPP ou de l'école. Le logo est stocké
+    dans la base : il fait donc partie des sauvegardes."""
+    if quel not in LOGOS:
+        raise ValueError(quel)
+    s.require("parametres.modifier")
+    if data is None:
+        db.set_param(quel, "")
+        log(db, s.login, "LOGO_SUPPRESSION", quel, "")
+        return
+    import base64
+    db.set_param(quel, base64.b64encode(normaliser_logo(data)).decode("ascii"))
+    log(db, s.login, "LOGO", quel, "")
+
+
+def get_logo(db: Database, quel: str) -> bytes | None:
+    return decode_logo(db.get_param(quel) if quel in LOGOS else None)
+
+
+def decode_logo(valeur: str | None) -> bytes | None:
+    if not valeur:
+        return None
+    import base64
+    import binascii
+    try:
+        return base64.b64decode(valeur, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+
+
+def reset_entete(db: Database, s: Session) -> None:
+    """Rétablit le texte officiel de l'en-tête d'impression (les logos ne sont pas touchés)."""
+    from epp.core import seed
+    s.require("parametres.modifier")
+    with db.transaction():
+        db.set_param("entete_gauche", seed.ENTETE_GAUCHE_DEFAUT)
+        db.set_param("entete_droite", seed.ENTETE_DROITE_DEFAUT)
+    log(db, s.login, "MODIF_PARAMETRES", "entete", "en-tête officiel rétabli")

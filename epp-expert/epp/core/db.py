@@ -141,7 +141,9 @@ def open_database(path: str | Path | None = None, seed: bool = True) -> Database
     else:
         migrate(db)
         if seed:
+            from epp.core import seed as seed_mod
             from epp.reports import store
+            seed_mod.ensure_params(db)              # nouveaux paramètres livrés avec une mise à jour
             store.install_builtin_templates(db)   # nouveaux modèles livrés avec une mise à jour
     return db
 

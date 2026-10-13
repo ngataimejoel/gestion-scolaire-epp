@@ -9,6 +9,10 @@ from datetime import date
 
 from epp.core.db import Database
 
+# En-tête officiel des impressions : une ligne par ligne de texte, variables entre accolades.
+ENTETE_GAUCHE_DEFAUT = "{ministere}\n{dren}\n{iepp}\n{ecole}  -  Code : {code_ecole}"
+ENTETE_DROITE_DEFAUT = "{pays}\n{devise_pays}\nANNEE SCOLAIRE : {annee}"
+
 DEFAULT_PARAMS = {
     "pays": "REPUBLIQUE DE COTE D'IVOIRE",
     "devise_pays": "Union - Discipline - Travail",
@@ -21,7 +25,11 @@ DEFAULT_PARAMS = {
     "directeur": "",
     "secteur": "",
     "monnaie": "FCFA",
-    "logo": "",
+    "logo": "",                 # ancien réglage (chemin d'un fichier), remplacé par logo_iepp / logo_ecole
+    "logo_iepp": "",            # image PNG encodée en base64 (incluse dans les sauvegardes)
+    "logo_ecole": "",
+    "entete_gauche": ENTETE_GAUCHE_DEFAUT,
+    "entete_droite": ENTETE_DROITE_DEFAUT,
     "sauvegarde_auto": "1",
     "sauvegarde_frequence_heures": "24",
     "sauvegarde_conserver": "20",
@@ -85,6 +93,12 @@ EVAL_DATES = {
     "STD": [(12, 9, 0), (3, 10, 1), (5, 26, 1), (6, 16, 1)],
     "CM2": [(12, 9, 0), (3, 10, 1), (3, 4, 1), (4, 27, 1)],
 }
+
+
+def ensure_params(db: Database) -> None:
+    """Ajoute les paramètres apparus avec une mise à jour, sans toucher aux valeurs existantes."""
+    for k, v in DEFAULT_PARAMS.items():
+        db.execute("INSERT OR IGNORE INTO parametre(cle, valeur) VALUES(?,?)", (k, v))
 
 
 def seed_database(db: Database) -> None:

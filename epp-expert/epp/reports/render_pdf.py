@@ -308,34 +308,44 @@ def _table(t: E.Table, avail: float, monnaie: str) -> list:
 
 
 # ------------------------------------------------------------------------- autres blocs
+def _logo(data: bytes, max_w: float, max_h: float):
+    try:
+        iw, ih = ImageReader(io.BytesIO(data)).getSize()
+    except Exception:
+        return None
+    k = min(max_w / iw, max_h / ih)
+    return Image(io.BytesIO(data), width=iw * k, height=ih * k)
+
+
 def _officiel(doc: E.Document, avail: float, force: bool = False) -> list:
-    o = doc.officiel
-    v = doc.variables
     if not force and not doc.entete.get("officiel", True):
         return []
-    left = [o.get("ministere", ""), o.get("dren", ""), o.get("iepp", ""),
-            f"{o.get('ecole_nom', '')}  -  Code : {o.get('ecole_code', '')}" if o.get("ecole_nom") else ""]
-    right = [o.get("pays", ""), o.get("devise_pays", ""), f"ANNEE SCOLAIRE : {v.get('annee', '')}"]
-    sl = _style(8, bold=True, align=TA_CENTER, leading=9.6)
-    sr = _style(8, bold=True, align=TA_CENTER, leading=9.6)
-    lp = [_p(x, sl) for x in left if x]
-    rp = [_p(x, sr) for x in right if x]
-    logo = None
-    lp_path = o.get("logo") or ""
-    if doc.entete.get("logo", True) and lp_path and Path(lp_path).exists():
+    gauche, droite, logos = E.entete_officiel(doc)
+    st = _style(8, bold=True, align=TA_CENTER, leading=9.6)
+    lp = [_p(x, st) for x in gauche]
+    rp = [_p(x, st) for x in droite]
+    # centre à la largeur des logos (18 mm de haut), le reste de la ligne va au texte
+    tailles = []
+    for d in logos:
         try:
-            ir = ImageReader(lp_path)
-            iw, ih = ir.getSize()
-            h = 18 * mm
-            logo = Image(lp_path, width=h * iw / ih, height=h)
+            tailles.append(ImageReader(io.BytesIO(d)).getSize())
         except Exception:
-            logo = None
-    cols = [avail * 0.42, avail * 0.16, avail * 0.42]
-    tbl = RLTable([[lp, logo or "", rp]], colWidths=cols)
+            pass
+    besoin = sum(18 * mm * w / h for w, h in tailles) + 6 * mm * len(tailles)
+    centre = max(avail * 0.16, min(besoin, avail * 0.34))
+    cote = (avail - centre) / 2
+    imgs = [i for i in (_logo(d, centre / len(logos) - 3 * mm, 18 * mm) for d in logos) if i] if logos else []
+    if len(imgs) > 1:
+        mid = RLTable([imgs], colWidths=[centre / len(imgs)] * len(imgs))
+        mid.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                 ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
+    else:
+        mid = imgs[0] if imgs else ""
+    tbl = RLTable([[lp, mid, rp]], colWidths=[cote, centre, cote])
     tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
     out = [tbl]
     if doc.entete.get("texte"):
-        out.append(_p(E.subst(doc.entete["texte"], v), _style(8, align=TA_CENTER)))
+        out.append(_p(E.subst(doc.entete["texte"], doc.variables), _style(8, align=TA_CENTER)))
     out.append(Spacer(1, 4 * mm))
     return out
 

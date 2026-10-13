@@ -30,6 +30,28 @@ def _excel_value(v, typ):
     return v
 
 
+def _entete_droite(ws, droite_rows: list, logos: list[bytes], maxcol: int) -> None:
+    """Colonne de droite de l'en-tête officiel (alignée sur la dernière colonne) et logos au centre."""
+    last = max(maxcol, 4)
+    for row, line in droite_rows:
+        c = ws.cell(row, last, line)
+        c.font = Font(bold=True, size=9)
+        c.alignment = Alignment(horizontal="right")
+    if not logos:
+        return
+    import io
+    from openpyxl.drawing.image import Image as XLImage
+    col = max(2, (last + 1) // 2)
+    for i, data in enumerate(logos):
+        try:
+            img = XLImage(io.BytesIO(data))
+        except Exception:
+            continue
+        k = 70 / max(img.height, 1)            # environ 18 mm de haut
+        img.width, img.height = img.width * k, img.height * k
+        ws.add_image(img, f"{get_column_letter(col + 2 * i)}1")
+
+
 def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> None:
     wb = Workbook()
     ws = wb.active
@@ -37,14 +59,15 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
     widths: dict[int, float] = {}
     r = 1
     maxcol = 1
-    o, v = doc.officiel, doc.variables
+    droite_rows, logos = [], []
     if doc.entete.get("officiel", True):
-        for line in (o.get("ministere"), o.get("dren"), o.get("iepp"),
-                     f"{o.get('ecole_nom', '')} - Code : {o.get('ecole_code', '')}", f"ANNEE SCOLAIRE : {v.get('annee')}"):
-            if line:
-                ws.cell(r, 1, line).font = Font(bold=True, size=9)
-                r += 1
-        r += 1
+        gauche, droite, logos = E.entete_officiel(doc)
+        h0 = r
+        for line in gauche:
+            ws.cell(r, 1, line).font = Font(bold=True, size=9)
+            r += 1
+        droite_rows = [(h0 + i, line) for i, line in enumerate(droite)]   # placées une fois la largeur connue
+        r = max(r, h0 + len(droite), h0 + (5 if logos else 0)) + 1
     print_title_rows = None
     for b in doc.blocks:
         if isinstance(b, tuple) and b[0] == "TITRE":
@@ -193,5 +216,7 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
     ws.page_margins.left = ws.page_margins.right = 0.8 / 2.54
     if print_title_rows:
         ws.print_title_rows = print_title_rows
+    if droite_rows or logos:
+        _entete_droite(ws, droite_rows, logos, maxcol)
     ws.oddFooter.center.text = "Page &P / &N"
     wb.save(out)

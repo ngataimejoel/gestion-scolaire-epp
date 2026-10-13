@@ -5,6 +5,7 @@ impression) lisent ce document. Aucun code n'est spécifique à un rapport donn�
 from __future__ import annotations
 
 import copy
+import re
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -102,6 +103,38 @@ class Document:
     pied: dict
     blocks: list = field(default_factory=list)
     variables: dict = field(default_factory=dict)
+
+
+def entete_officiel(doc: Document) -> tuple[list[str], list[str], list[bytes]]:
+    """Lignes de gauche et de droite de l'en-tête officiel (texte modifiable dans les paramètres,
+    variables remplacées) et logos à placer au centre (IEPP puis école, s'ils existent)."""
+    from epp.core import seed
+    o = doc.officiel
+
+    def lignes(cle: str, defaut: str) -> list[str]:
+        out = []
+        for brut in (o[cle] if cle in o else defaut).splitlines():
+            x = subst(brut, doc.variables).strip()
+            if brut.rstrip().endswith("}") and x.endswith(":"):
+                x = re.sub(r"\s*(?:-\s*)?[^-:]*:$", "", x)    # « - Code : » sans code : libellé retiré
+            if x:
+                out.append(x)
+        return out
+
+    logos = []
+    if doc.entete.get("logo", True):
+        for cle in repo.LOGOS:
+            data = repo.decode_logo(o.get(cle))
+            if data:
+                logos.append(data)
+        ancien = o.get("logo") or ""          # ancien réglage : chemin d'un fichier image
+        if not logos and ancien:
+            try:
+                from pathlib import Path
+                logos.append(Path(ancien).read_bytes())
+            except OSError:
+                pass
+    return lignes("entete_gauche", seed.ENTETE_GAUCHE_DEFAUT), lignes("entete_droite", seed.ENTETE_DROITE_DEFAUT), logos
 
 
 # ======================================================================= formatage
