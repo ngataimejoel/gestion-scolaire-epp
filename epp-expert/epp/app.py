@@ -35,6 +35,7 @@ def selftest(out=sys.stdout) -> int:
     try:
         with tempfile.TemporaryDirectory(prefix="epp_selftest_") as tmp:
             os.environ["EPP_DATA_DIR"] = tmp
+            os.environ["EPP_ESSAI_SECONDAIRE"] = str(Path(tmp) / "essai_secondaire.json")  # essai réel intact
             from epp.core.db import open_database
             from epp.core import security
             db = open_database(Path(tmp) / "selftest.sqlite")

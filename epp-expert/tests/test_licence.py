@@ -40,6 +40,7 @@ def service(tmp_path, monkeypatch):
     monkeypatch.setenv("EPP_ACTIVATION_URL", url)
     monkeypatch.setenv("EPP_LICENCE_CLE_PUBLIQUE", cles["cle_publique"])
     monkeypatch.setenv("EPP_GENERATEUR_CONFIG", str(tmp_path / "generateur"))
+    monkeypatch.setenv("EPP_ESSAI_SECONDAIRE", str(tmp_path / "registre" / "essai.json"))
     gen.ecrire_config(url=url, jeton=cles["EPP_ADMIN_TOKEN"])
     yield url
     p.terminate()
@@ -48,9 +49,12 @@ def service(tmp_path, monkeypatch):
 
 def test_essai_puis_lecture_seule(service):
     t0 = datetime.now(timezone.utc)
+    assert licence.ESSAI_JOURS == 7
     e = licence.etat(t0)
-    assert e.statut == "essai" and e.jours_restants == licence.ESSAI_JOURS and e.utilisable
-    e = licence.etat(t0 + timedelta(days=31))
+    assert e.statut == "essai" and e.jours_restants == 7 and e.utilisable
+    assert "7 jour(s) restant(s)" in e.message
+    assert licence.etat(t0 + timedelta(days=6, hours=23)).statut == "essai"
+    e = licence.etat(t0 + timedelta(days=7, hours=1))
     assert e.statut == "essai_termine" and not e.utilisable
     s = licence.restreindre(system_session(), e)
     assert s.can("eleves.lire") and s.can("rapports.generer") and s.can("sauvegarde.creer")
@@ -130,3 +134,19 @@ def test_generateur_absent_de_l_application():
     spec_txt = (RACINE / "packaging" / "gestion_scolaire.spec").read_text(encoding="utf-8")
     assert "generateur" not in spec_txt.lower() and "outils" not in spec_txt
     assert not list((RACINE / "epp").rglob("*generateur*"))
+
+
+def test_reinstallation_ne_relance_pas_l_essai(service):
+    t0 = datetime.now(timezone.utc) - timedelta(days=8)
+    licence._ecrire_json(licence.FICHIER_ESSAI, {"premier_lancement": t0.isoformat(),
+                                                 "derniere_date_vue": t0.isoformat()})
+    assert licence.etat().statut == "essai_termine"
+    # dossier de données supprimé (désinstallation complète puis réinstallation)
+    (licence.paths.data_dir() / licence.FICHIER_ESSAI).unlink()
+    assert licence.etat().statut == "essai_termine"
+    # l'autre copie effacée seule : la première suffit
+    import os
+    Path(os.environ["EPP_ESSAI_SECONDAIRE"]).unlink()
+    assert licence.etat().statut == "essai_termine"
+    # l'activation d'un code lève la restriction
+    assert licence.activer(gen.generer("1an", 1)[0]["code"]).utilisable

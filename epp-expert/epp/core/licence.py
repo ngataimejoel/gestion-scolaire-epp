@@ -3,7 +3,8 @@
 - Internet n'est nécessaire qu'au moment de l'activation. Le service renvoie une licence signée
   (Ed25519) liée à cet ordinateur ; l'application la vérifie ensuite hors ligne avec la clé publique
   livrée dans resources/activation.json.
-- Sans licence : 30 jours d'essai complets, puis lecture seule (consultation, impression, export et
+- Sans licence : 7 jours d'essai complets (comptés depuis le premier lancement, mémorisés à deux
+  endroits pour qu'une réinstallation ne les remette pas à zéro), puis lecture seule (consultation, impression, export et
   sauvegarde restent possibles : les données de l'école ne sont jamais bloquées).
 - Licence 1 an échue : même lecture seule, jusqu'à l'activation d'un nouveau code.
 """
@@ -25,7 +26,7 @@ from epp.core import paths
 from epp.core.paths import resource_path
 from epp.core.security import PERMISSIONS, Session
 
-ESSAI_JOURS = 30
+ESSAI_JOURS = 7
 FICHIER = "licence.json"
 FICHIER_ESSAI = "essai.json"
 # Ce qui reste permis quand la licence n'est pas (ou plus) valable
@@ -139,16 +140,64 @@ def verifier(licence: str, signature: str, cle_publique: str | None = None, mach
     return contenu
 
 
+# Copie des dates d'essai hors du dossier de données (registre de l'utilisateur sous Windows) :
+# supprimer les données ou réinstaller ne relance pas la période d'essai.
+_CLE_REGISTRE = r"Software\GestionScolaireEPP"
+
+
+def _lire_secondaire() -> dict:
+    f = os.environ.get("EPP_ESSAI_SECONDAIRE")
+    try:
+        if f or not sys.platform.startswith("win"):
+            p = Path(f) if f else Path.home() / ".config" / "GestionScolaireEPP-essai.json"
+            return json.loads(p.read_text(encoding="utf-8"))
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _CLE_REGISTRE) as k:
+            return json.loads(winreg.QueryValueEx(k, "Essai")[0])
+    except (OSError, ValueError):
+        return {}
+
+
+def _ecrire_secondaire(data: dict) -> None:
+    f = os.environ.get("EPP_ESSAI_SECONDAIRE")
+    try:
+        if f or not sys.platform.startswith("win"):
+            p = Path(f) if f else Path.home() / ".config" / "GestionScolaireEPP-essai.json"
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(data), encoding="utf-8")
+            return
+        import winreg
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, _CLE_REGISTRE) as k:
+            winreg.SetValueEx(k, "Essai", 0, winreg.REG_SZ, json.dumps(data))
+    except OSError:
+        pass
+
+
+def _lire_essai() -> dict:
+    """Dates d'essai les plus défavorables des deux copies : premier lancement le plus ancien,
+    dernière date vue la plus récente."""
+    a, b = _lire_json(FICHIER_ESSAI), _lire_secondaire()
+    out = {}
+    debuts = [x["premier_lancement"] for x in (a, b) if x.get("premier_lancement")]
+    vues = [x["derniere_date_vue"] for x in (a, b) if x.get("derniere_date_vue")]
+    if debuts:
+        out["premier_lancement"] = min(debuts, key=datetime.fromisoformat)
+    if vues:
+        out["derniere_date_vue"] = max(vues, key=datetime.fromisoformat)
+    return out
+
+
 def etat(maintenant: datetime | None = None) -> Etat:
     now = maintenant or _maintenant()
-    essai = _lire_json(FICHIER_ESSAI)
+    essai = _lire_essai()
     vue = essai.get("derniere_date_vue")
     if vue and datetime.fromisoformat(vue) > now + timedelta(days=1):
         return Etat("horloge")
     if maintenant is None or "premier_lancement" not in essai:   # seule l'horloge réelle est mémorisée
-        essai["derniere_date_vue"] = max(filter(None, [vue, now.isoformat()]))
+        essai["derniere_date_vue"] = max(filter(None, [vue, now.isoformat()]), key=datetime.fromisoformat)
         essai.setdefault("premier_lancement", now.isoformat())
         _ecrire_json(FICHIER_ESSAI, essai)
+        _ecrire_secondaire(essai)
 
     lic = _lire_json(FICHIER)
     contenu = verifier(lic.get("licence", ""), lic.get("signature", ""))
