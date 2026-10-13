@@ -46,6 +46,51 @@ def _moyenne_annuelle(valeurs: dict[int, float | None], regle: str) -> float | N
     return calculs.xround(sum(v.values()) / len(v), 2)
 
 
+TRIMESTRES = ("1er trimestre", "2e trimestre", "3e trimestre")
+
+
+def trimestre(date_iso: str | None, num: int) -> int:
+    """Trimestre d'une évaluation d'après sa date : septembre à décembre = 1, janvier à mars = 2,
+    avril à août = 3. Sans date : 1re évaluation = 1, 2e = 2, les suivantes = 3."""
+    if date_iso:
+        m = int(str(date_iso)[5:7])
+        return 1 if m >= 9 else 2 if m <= 3 else 3
+    return min(num, 3)
+
+
+def _moyenne(valeurs) -> float | None:
+    v = [x for x in valeurs if x is not None]
+    return calculs.xround(sum(v) / len(v), 2) if v else None
+
+
+def _par_trimestre(out: dict) -> None:
+    """Regroupe les évaluations par trimestre : note d'une discipline et moyenne générale du trimestre =
+    moyenne des évaluations du trimestre ; rang du trimestre dans la classe. La moyenne annuelle reste
+    calculée sur les évaluations, avec la règle du classeur."""
+    groupes: dict[int, list[int]] = {}
+    for p in out["periodes"]:
+        p["trimestre"] = trimestre(p.get("date"), p["num"])
+        groupes.setdefault(p["trimestre"], []).append(p["num"])
+    out["trimestres"] = [{"num": t, "libelle": TRIMESTRES[t - 1], "evaluations": groupes.get(t, [])}
+                         for t in (1, 2, 3)]
+    moys: dict[int, dict] = {t: {} for t in (1, 2, 3)}
+    for iid, e in out["eleves"].items():
+        e["notes_trim"] = {lib: {t: _moyenne(v.get(n) for n in nums) for t, nums in groupes.items()}
+                           for lib, v in e["notes"].items()}
+        e["moyennes_trim"], e["presents_trim"] = {}, {}
+        for t, nums in groupes.items():
+            e["moyennes_trim"][t] = _moyenne(e["moyennes"].get(n) for n in nums)
+            e["presents_trim"][t] = any(e["presents"].get(n) for n in nums)
+            moys[t][iid] = e["moyennes_trim"][t]
+    out["effectifs_trim"] = {}
+    for t, m in moys.items():
+        rk = calculs.rangs(m, {i for i, e in out["eleves"].items() if e.get("statut") == "PRESENT"})
+        out["effectifs_trim"][t] = len(rk)
+        out.setdefault("stats_trim", {})[t] = _stats_classe([m[i] for i in rk])
+        for iid, e in out["eleves"].items():
+            e.setdefault("rangs_trim", {})[t] = rk.get(iid)
+
+
 def releve_classe(db: Database, annee: Annee, classe_code: str) -> dict:
     """Relevé de toute l'année d'une classe : disciplines du niveau, évaluations du calendrier de la
     classe, notes, moyennes et rangs de chaque élève pour chaque évaluation."""
@@ -75,9 +120,11 @@ def releve_classe(db: Database, annee: Annee, classe_code: str) -> dict:
             e["moyennes"][num] = r["moyenne"] if r["present"] else None
             e["rangs"][num] = rk.get(r["inscription_id"])
             e["presents"][num] = bool(r["present"])
+            e["statut"] = r["statut"]
     out["disciplines"] = list(vues.values())
     for e in out["eleves"].values():
         e["moyennes_disciplines"] = {lib: _moyenne_annuelle(v, cl.regle_mga) for lib, v in e["notes"].items()}
+    _par_trimestre(out)
     return out
 
 
@@ -100,7 +147,8 @@ def _completer(db: Database, annee: Annee, bulletins: list[dict]) -> list[dict]:
         rel = releves[b["classe"]]
         e = rel["eleves"].get(b["inscription_id"], {"notes": {}, "moyennes": {}, "rangs": {}, "presents": {},
                                                      "moyennes_disciplines": {}})
-        b["releve"] = {k: rel[k] for k in ("periodes", "disciplines", "echelle")} | e
+        b["releve"] = {k: rel.get(k) for k in ("periodes", "trimestres", "effectifs_trim", "stats_trim", "disciplines",
+                                                   "echelle")} | e
         b["enseignant"] = profs.get(b["classe"], "")
         b["regle_mga"] = annee.classe(b["classe"]).regle_mga
     return bulletins

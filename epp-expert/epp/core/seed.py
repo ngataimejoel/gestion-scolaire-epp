@@ -33,6 +33,7 @@ DEFAULT_PARAMS = {
     "bulletin_devise": "Une école pour construire l'avenir !",
     "bulletin_pied": "L'éducation est la clé de la réussite",
     "bulletin_palette": "",                          # "" = selon le modèle, "douce" ou "vive"
+    "bulletin_colonnes": "trimestres",               # bulletin coloré : "trimestres" ou "evaluations"
     "entete_gauche": ENTETE_GAUCHE_DEFAUT,
     "entete_droite": ENTETE_DROITE_DEFAUT,
     "sauvegarde_auto": "1",

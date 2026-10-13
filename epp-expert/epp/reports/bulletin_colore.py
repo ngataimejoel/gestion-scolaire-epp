@@ -94,47 +94,74 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
     def visible(num):
         return annuel or (courant is not None and num <= courant)
 
+    notes, moyd = rel.get("notes", {}), rel.get("moyennes_disciplines", {})
+    moys, rangs, presents = rel.get("moyennes", {}), rel.get("rangs", {}), rel.get("presents", {})
+    trim = colonnes(params, o) == "trimestres" and bool(rel.get("trimestres"))
+    if trim:
+        # colonnes 1er, 2e, 3e trimestre (modèle de l'école) : moyennes des évaluations de chaque trimestre
+        t_courant = next((p.get("trimestre") for p in periodes if p["num"] == courant), None)
+        cols = [{"num": x["num"], "libelle": x["libelle"].replace("trimestre", "Trimestre")}
+                for x in rel["trimestres"]]
+        c_notes, c_moys = rel.get("notes_trim", {}), rel.get("moyennes_trim", {})
+        c_rangs, c_presents = rel.get("rangs_trim", {}), rel.get("presents_trim", {})
+
+        def c_visible(num):
+            return annuel or (t_courant is not None and num <= t_courant)
+    else:
+        t_courant = None
+        cols, c_notes, c_moys, c_rangs, c_presents, c_visible = periodes, notes, moys, rangs, presents, visible
+
     dernier = periodes[-1]["num"] if periodes else None
     titre_moy = "Moyenne annuelle" if annuel or courant == dernier else "Moyenne à ce jour"
-    entetes = [(p["libelle"], COULEURS_PERIODES[i % len(COULEURS_PERIODES)]) for i, p in enumerate(periodes)]
-    notes, moyd = rel.get("notes", {}), rel.get("moyennes_disciplines", {})
-    presents = rel.get("presents", {})
+    entetes = [(p["libelle"], COULEURS_PERIODES[i % len(COULEURS_PERIODES)]) for i, p in enumerate(cols)]
     lignes = []
     for m in rel["disciplines"]:
         vals = []
-        for p in periodes:
-            val = notes.get(m["libelle"], {}).get(p["num"])
-            vals.append(None if not visible(p["num"]) else "Abs." if presents.get(p["num"]) is False else _fmt(val))
+        for p in cols:
+            val = c_notes.get(m["libelle"], {}).get(p["num"])
+            vals.append(None if not c_visible(p["num"]) else "Abs." if c_presents.get(p["num"]) is False
+                        else _fmt(val))
         moy = ""
         if annuel or courant:
             vs = {p["num"]: notes.get(m["libelle"], {}).get(p["num"]) for p in periodes if visible(p["num"])}
             moy = _fmt(moyd.get(m["libelle"]) if annuel else _moy_partielle(vs, d.get("regle_mga")))
         lignes.append({"libelle": _casse(m["libelle"]), "max": _fmt(m["max"]), "valeurs": vals, "moyenne": moy})
     ech = rel.get("echelle") or 10
-    moys, rangs = rel.get("moyennes", {}), rel.get("rangs", {})
     totaux = []
     for k, (lab, vals, fin) in enumerate((
-            (f"Moyenne générale (/{_fmt(ech)})", {p["num"]: _fmt(moys.get(p["num"])) for p in periodes},
+            (f"Moyenne générale (/{_fmt(ech)})", {p["num"]: _fmt(c_moys.get(p["num"])) for p in cols},
              _fmt(d.get("mga") if annuel else _moy_partielle(
                  {p["num"]: moys.get(p["num"]) for p in periodes if visible(p["num"])}, d.get("regle_mga")))),
-            ("Rang", {p["num"]: _rang(rangs.get(p["num"])) for p in periodes},
+            ("Rang", {p["num"]: _rang(c_rangs.get(p["num"])) for p in cols},
              f"{_rang(d.get('rang'))} / {d.get('effectif')}" if annuel and d.get("rang") else ""))):
         cells = []
-        for p in periodes:
-            absent = presents.get(p["num"]) is False
-            cells.append(None if not visible(p["num"]) else "Abs." if absent and k == 0 else vals[p["num"]])
+        for p in cols:
+            absent = c_presents.get(p["num"]) is False
+            cells.append(None if not c_visible(p["num"]) else "Abs." if absent and k == 0 else vals[p["num"]])
         totaux.append({"libelle": lab, "valeurs": cells, "fin": fin})
     stats = None
-    if o.get("statistiques_classe", True) and d.get("moy_classe") is not None:
-        stats = (f"Moyenne de la classe : {_fmt(d.get('moy_classe'))}   •   Plus forte : {_fmt(d.get('moy_max'))}"
-                 f"   •   Plus faible : {_fmt(d.get('moy_min'))}   •   Élèves classés : {d.get('effectif')}")
+    st = d
+    if trim and not annuel:
+        st = (rel.get("stats_trim") or {}).get(t_courant) or {}
+        st = {"moy_classe": st.get("moy_classe"), "moy_max": st.get("moy_max"), "moy_min": st.get("moy_min"),
+              "effectif": st.get("classes")}
+    if o.get("statistiques_classe", True) and st.get("moy_classe") is not None:
+        stats = (f"Moyenne de la classe : {_fmt(st.get('moy_classe'))}   •   Plus forte : {_fmt(st.get('moy_max'))}"
+                 f"   •   Plus faible : {_fmt(st.get('moy_min'))}   •   Élèves classés : {st.get('effectif')}")
     moy = d.get("mga") if annuel else d.get("moyenne")
     app = d.get("observation") if annuel else d.get("appreciation")
     if annuel and not app:
         from epp.domain.bulletins import appreciation
         app = appreciation(moy, d.get("bareme") or ech)
-    app_txt = " – ".join(x for x in [app, None if annuel else d.get("resultat")] if x) + "." if app else ""
     seuil = d.get("seuil") or 5
+    resultat = None if annuel else d.get("resultat")
+    if trim and not annuel:
+        # bulletin d'un trimestre : moyenne, appréciation et rang du trimestre (toutes ses évaluations)
+        from epp.domain.bulletins import appreciation
+        moy = c_moys.get(t_courant)
+        app = appreciation(moy, ech) if moy is not None else "Absent(e) au trimestre"
+        resultat = None if moy is None else "Moyenne atteinte" if moy >= seuil else "Moyenne non atteinte"
+    app_txt = " – ".join(x for x in [app, resultat] if x) + "." if app else ""
     bareme = d.get("bareme") or ech
     choix = None
     if moy is not None:
@@ -147,6 +174,9 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
         suite = d.get("classe_suivante")
         dec = {"ADMIS": f"ADMIS(E) en {suite}" if suite else "ADMIS(E) en 6ème",
                "REDOUBLE": "REDOUBLE", "EXCLU": "EXCLU(E)", "TRANSFERE": "TRANSFÉRÉ(E)"}.get(dec, dec)
+    elif trim:
+        r_ = c_rangs.get(t_courant)
+        dec = f"{_rang(r_)} sur {(rel.get('effectifs_trim') or {}).get(t_courant)}" if r_ else "Absent(e)"
     else:
         dec = f"{_rang(d.get('rang'))} sur {d.get('effectif')}" if d.get("rang") else (
             "Absent(e)" if not d.get("present", True) else "")
@@ -158,7 +188,8 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
         gauche, droite, _ = E.entete_officiel(doc)
         mention = "  •  ".join([*gauche[:3], *(droite[:1])])
     return {
-        "annuel": annuel, "periodes": periodes, "courant": courant, "visible": visible, "mention": mention,
+        "annuel": annuel, "periodes": cols, "courant": t_courant if trim else courant, "visible": c_visible,
+        "mention": mention,
         "titre": E.subst(params.get("bulletin_titre") or "{ecole}", v).upper(),
         "slogan": E.subst(params.get("bulletin_slogan", seed.DEFAULT_PARAMS["bulletin_slogan"]) or "", v),
         "devise": E.subst(params.get("bulletin_devise", seed.DEFAULT_PARAMS["bulletin_devise"]) or "", v),
@@ -171,13 +202,16 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
         "naissance": E.fmt(d.get("date_naissance"), "date") or "",
         "age": f"{age} ans" if age not in (None, "") else "",
         "classe": d.get("classe", ""), "enseignant": d.get("enseignant", ""), "ecole": v.get("ecole", ""),
-        "choix_periode": [("Année complète", True)] if annuel else [(_court(p["libelle"]), p["num"] == courant)
-                                                                    for p in periodes],
+        "label_periode": "Trimestre :" if trim else "Période :",
+        "choix_periode": ([(x, False) for x in ("1er", "2e", "3e")] + [("Année", True)] if trim and annuel
+                          else [(x, i + 1 == t_courant) for i, x in enumerate(("1er", "2e", "3e"))] if trim
+                          else [("Année complète", True)] if annuel
+                          else [(_court(p["libelle"]), p["num"] == courant) for p in periodes]),
         "titre_moyenne": titre_moy, "entetes": entetes, "lignes": lignes, "totaux": totaux, "stats": stats,
         "appreciation": app_txt, "bilan_choix": choix,
         "bilan": [("fel", "Félicitations"), ("enc", "Encouragements"), ("prog", "Doit progresser"),
                   ("suivi", "Doit être suivi")],
-        "titre_bilan": "Bilan de l'année" if annuel else "Bilan de la période",
+        "titre_bilan": "Bilan de l'année" if annuel else "Bilan du trimestre" if trim else "Bilan de la période",
         "titre_decision": "Décision du conseil des maîtres" if annuel else "Résultat", "decision": dec,
         "signatures": [(lab, noms[i] if i < len(noms) else "") for i, lab in enumerate(sigs)],
         "photo": o.get("photo", True),
@@ -432,8 +466,8 @@ class BulletinColore(Flowable):
         wr = xp - x2 - 2 * mm
         champ(x2, y - 6.5 * mm, "Établissement :", K["ecole"], wr)
         champ(x2, y - 13.5 * mm, "Année scolaire :", K["annee"], wr)
-        self._txt(x2, y - 20.5 * mm, "Période :", self.FB, 8.5)
-        xx = x2 + stringWidth("Période :", self.FB, 8.5) + 2.5 * mm
+        self._txt(x2, y - 20.5 * mm, K["label_periode"], self.FB, 8.5)
+        xx = x2 + stringWidth(K["label_periode"], self.FB, 8.5) + 2.5 * mm
         for lib, coche in K["choix_periode"]:
             c.setStrokeColor(C["marine"])
             c.setFillColor(C["marine"] if coche else colors.white)
@@ -640,6 +674,12 @@ class BulletinColore(Flowable):
         c.setLineWidth(0.8)
         c.line(x + 6 * mm, y0 + 0.5 * mm, x + 6 * mm, y0 - 5 * mm)
         c.restoreState()
+
+
+def colonnes(params: dict | None, options: dict | None = None) -> str:
+    """« trimestres » (par défaut, comme le modèle de l'école) ou « evaluations » (une colonne par évaluation)."""
+    v = ((params or {}).get("bulletin_colonnes") or (options or {}).get("colonnes") or "trimestres").lower()
+    return "evaluations" if v.startswith("eval") else "trimestres"
 
 
 def _moy_partielle(vals: dict, regle: str | None):

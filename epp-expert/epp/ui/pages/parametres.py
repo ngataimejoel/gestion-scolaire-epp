@@ -147,10 +147,14 @@ class OngletBulletin(QWidget):
             ("bulletin_palette", "Couleurs", "liste",
              [("", "Selon le modèle (douces par défaut)"),
               ("douce", "Douces : lisibles en noir et blanc, peu d'encre"),
-              ("vive", "Vives : pour une impression en couleur")])])
+              ("vive", "Vives : pour une impression en couleur")]),
+            ("bulletin_colonnes", "Colonnes des notes", "liste",
+             [("trimestres", "1er, 2e et 3e trimestre (évaluations regroupées selon leur date)"),
+              ("evaluations", "Une colonne par évaluation (compositions, examens blancs)")])])
         v.addWidget(self.f)
-        v.addWidget(label("Ces textes apparaissent sur le bulletin coloré. Variables : {ecole}, {annee}, {iepp}.",
-                          discret=True, wrap=True))
+        v.addWidget(label("Ces textes apparaissent sur le bulletin coloré. Variables : {ecole}, {annee}, {iepp}. "
+                          "Trimestres : septembre à décembre, janvier à mars, avril à la fin de l'année ; la "
+                          "moyenne annuelle reste calculée comme dans le classeur.", discret=True, wrap=True))
         self.b_ok = bouton("Enregistrer", self._ok, "primaire")
         v.addLayout(ligne(None, self.b_ok))
         v.addStretch(1)

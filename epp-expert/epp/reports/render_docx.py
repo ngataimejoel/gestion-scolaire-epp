@@ -810,7 +810,7 @@ class BulletinWord:
         dcell = t.cell(0, 1)
         champ(dcell, True, [("Établissement :", K["ecole"])])
         champ(dcell, False, [("Année scolaire :", K["annee"])])
-        p = champ(dcell, False, [("Période :", "")])
+        p = champ(dcell, False, [(K["label_periode"], "")])
         for lib, coche in K["choix_periode"]:
             _run(p, ("☑ " if coche else "☐ "), 9, couleur=C["marine"], police="Segoe UI Symbol")
             _run(p, lib + "   ", 8, gras=coche, couleur=C["texte"])
