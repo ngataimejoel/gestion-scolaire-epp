@@ -308,10 +308,10 @@ def _table(t: E.Table, avail: float, monnaie: str) -> list:
 
 
 # ------------------------------------------------------------------------- autres blocs
-def _officiel(doc: E.Document, avail: float) -> list:
+def _officiel(doc: E.Document, avail: float, force: bool = False) -> list:
     o = doc.officiel
     v = doc.variables
-    if not doc.entete.get("officiel", True):
+    if not force and not doc.entete.get("officiel", True):
         return []
     left = [o.get("ministere", ""), o.get("dren", ""), o.get("iepp", ""),
             f"{o.get('ecole_nom', '')}  -  Code : {o.get('ecole_code', '')}" if o.get("ecole_nom") else ""]
@@ -408,6 +408,146 @@ def _signature(b: E.Signature, avail: float) -> list:
     return [Spacer(1, 4 * mm), KeepTogether([tbl])]
 
 
+def _rang(r) -> str:
+    if r is None:
+        return "–"
+    return "1er" if r == 1 else f"{r}e"
+
+
+def _bulletin(doc: E.Document, b: E.Bulletin, avail: float) -> list:
+    d, o = b.data, b.options
+    out = _officiel(doc, avail, force=True)
+    annuel = d["type"] == "annuel"
+    titre = o.get("titre_bulletin") or ("BULLETIN ANNUEL DE NOTES" if annuel else "BULLETIN DE NOTES")
+    sous = f"Année scolaire {doc.variables.get('annee', '')}" if annuel else \
+        f"{d['evaluation']}" + (f" du {E.fmt(d.get('date_evaluation'), 'date')}" if d.get("date_evaluation") else "") + \
+        f" – Année scolaire {doc.variables.get('annee', '')}"
+    out += [_p(titre, _style(14, bold=True, align=TA_CENTER, color=BLEU, leading=17)),
+            _p(sous, _style(9.5, align=TA_CENTER)), Spacer(1, 4 * mm)]
+    # identité + photo
+    lab, val = _style(8, color=colors.HexColor("#404040")), _style(10, bold=True)
+    ident = [("Nom et prénoms", d.get("nom")), ("Matricule école", d.get("matricule_ecole")),
+             ("Matricule DESPS", d.get("matricule_desps") or "–"), ("Classe", d.get("classe")),
+             ("Sexe", {"M": "Masculin", "F": "Féminin"}.get(d.get("sexe"), "")),
+             ("Né(e) le", E.fmt(d.get("date_naissance"), "date") or "–"),
+             ("Redoublant", d.get("redoublant") or "NON"), ("Effectif classé", str(d.get("effectif") or 0))]
+    cells = [[_p(k, lab), _p(str(v or ""), val)] for k, v in ident]
+    grid = [cells[i] + cells[i + 1] for i in range(0, len(cells), 2)]
+    pw, ph = 30 * mm, 38 * mm
+    left_w = avail - pw - 4 * mm
+    t_ident = RLTable(grid, colWidths=[left_w * 0.18, left_w * 0.32, left_w * 0.18, left_w * 0.32])
+    t_ident.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                                 ("LINEBELOW", (0, 0), (-1, -2), 0.3, colors.HexColor("#C0C0C0"))]))
+    if o.get("photo", True) and b.photo:
+        try:
+            ph_img = Image(io.BytesIO(b.photo))
+            iw, ih = ph_img.imageWidth, ph_img.imageHeight
+            k = min(pw / iw, ph / ih)
+            ph_img = Image(io.BytesIO(b.photo), width=iw * k, height=ih * k)
+        except Exception:
+            ph_img = _p("PHOTO", _style(8, align=TA_CENTER, color=colors.grey))
+    else:
+        ph_img = _p("PHOTO", _style(8, align=TA_CENTER, color=colors.grey))
+    show_photo = o.get("photo", True)
+    if show_photo:
+        box = RLTable([[ph_img]], colWidths=[pw], rowHeights=[ph])
+        box.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, colors.grey), ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+        top = RLTable([[t_ident, box]], colWidths=[left_w + 4 * mm, pw])
+    else:
+        t_ident = RLTable(grid, colWidths=[avail * 0.15, avail * 0.35, avail * 0.15, avail * 0.35])
+        top = t_ident
+    top.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0)]))
+    out += [top, Spacer(1, 5 * mm)]
+    hs = _style(9, bold=True, align=TA_CENTER, color=colors.white)
+    cs = _style(9.5)
+    cn = _style(9.5, align=TA_CENTER)
+    base_style = [("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#808080")), ("BACKGROUND", (0, 0), (-1, 0), BLEU),
+                  ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("TOPPADDING", (0, 0), (-1, -1), 3),
+                  ("BOTTOMPADDING", (0, 0), (-1, -1), 3)]
+    app = o.get("appreciations", True)
+    if not annuel:
+        coef = d["mode"] == "COEF"
+        head = ["MATIÈRE", "NOTE", "COEF." if coef else "SUR"] + (["APPRÉCIATION"] if app else [])
+        rows = [[_p(h, hs) for h in head]]
+        for n in d["notes"]:
+            note = "Abs." if not d["present"] else (E.fmt(n["note"], "decimal") if n["note"] is not None else "–")
+            r = [_p(n["matiere"], cs), _p(note + ("" if coef else ""), cn),
+                 _p(E.fmt(n["coef"] if coef else n["max"], "decimal"), cn)]
+            if app:
+                r.append(_p(n["appreciation"] or "", cs))
+            rows.append(r)
+        tot = [_p("TOTAL", _style(9.5, bold=True)), _p(E.fmt(d["total"], "decimal") if d["total"] is not None else "–",
+                                                     _style(9.5, bold=True, align=TA_CENTER)),
+               _p("" if coef else E.fmt(d["total_max"], "decimal"), cn)] + ([_p("", cs)] if app else [])
+        rows.append(tot)
+        widths = [avail * 0.42, avail * 0.14, avail * 0.12] + ([avail * 0.32] if app else [])
+        if not app:
+            widths = [w * avail / sum(widths) for w in widths]
+        t = RLTable(rows, colWidths=widths, repeatRows=1)
+        t.setStyle(TableStyle(base_style + [("BACKGROUND", (0, -1), (-1, -1), GRIS_FONCE)]))
+        out += [t, Spacer(1, 4 * mm)]
+        res = [("MOYENNE", f"{E.fmt(d['moyenne'], 'decimal')} / {E.fmt(d['echelle'], 'entier')}"
+                if d["moyenne"] is not None else "–"),
+               ("RANG", f"{_rang(d['rang'])} sur {d['effectif']}" if d.get("rang") else "–"),
+               ("APPRÉCIATION", d.get("appreciation") or "–"), ("RÉSULTAT", d.get("resultat") or "–")]
+    else:
+        echelle = d["bareme"]
+        head = ["ÉVALUATION", "DATE", f"MOYENNE (/{E.fmt(echelle, 'entier')})"] + (["APPRÉCIATION"] if app else [])
+        rows = [[_p(h, hs) for h in head]]
+        for e in d["evaluations"]:
+            m = "Abs. (0)" if not e["present"] else (E.fmt(e["moyenne"], "decimal") if e["moyenne"] is not None else "–")
+            r = [_p(e["evaluation"], cs), _p(E.fmt(e["date"], "date"), cn), _p(m, cn)]
+            if app:
+                r.append(_p(e["appreciation"] or "", cs))
+            rows.append(r)
+        if d.get("regle_mga") == "STANDARD":
+            rows.append([_p("Moyenne des 3 compositions", _style(9.5, italic=True)), _p("", cn),
+                         _p(E.fmt(d.get("moy_compos"), "decimal") if d.get("moy_compos") is not None else "–", cn)] +
+                        ([_p("", cs)] if app else []))
+        widths = [avail * 0.40, avail * 0.16, avail * 0.16] + ([avail * 0.28] if app else [])
+        if not app:
+            widths = [w * avail / sum(widths) for w in widths]
+        t = RLTable(rows, colWidths=widths)
+        t.setStyle(TableStyle(base_style))
+        out += [t, Spacer(1, 2 * mm)]
+        regle = "MGA = (moyenne des 3 compositions + 2 × composition de passage) ÷ 3" \
+            if d.get("regle_mga") == "STANDARD" else "MGA = moyenne des 4 évaluations"
+        out += [_p(regle, _style(7.5, italic=True, color=colors.HexColor("#404040"))), Spacer(1, 3 * mm)]
+        suite = d.get("classe_suivante")
+        dec = d.get("decision") or "–"
+        if dec == "ADMIS":
+            dec = f"ADMIS(E) en {suite}" if suite else "ADMIS(E) – entrée en 6ème"
+        res = [("MOYENNE GÉNÉRALE ANNUELLE", f"{E.fmt(d['mga'], 'decimal')} / {E.fmt(echelle, 'entier')}"
+                if d.get("mga") is not None else "–"),
+               ("RANG", f"{_rang(d.get('rang'))} sur {d['effectif']}" if d.get("rang") else "–"),
+               ("DÉCISION", dec), ("OBSERVATION", d.get("observation") or "–")]
+    kv = [[_p(k, _style(8, color=colors.HexColor("#404040"), align=TA_CENTER)) for k, _ in res],
+          [_p(v, _style(12, bold=True, align=TA_CENTER, color=BLEU)) for _, v in res]]
+    t = RLTable(kv, colWidths=[avail / 4] * 4)
+    t.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, BLEU), ("INNERGRID", (0, 0), (-1, -1), 0.3, colors.grey),
+                           ("BACKGROUND", (0, 0), (-1, 0), BLEU_CLAIR), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                           ("TOPPADDING", (0, 1), (-1, 1), 6), ("BOTTOMPADDING", (0, 1), (-1, 1), 6)]))
+    out += [t, Spacer(1, 3 * mm)]
+    if o.get("statistiques_classe", True):
+        ech = d.get("echelle") if not annuel else d.get("bareme")
+        stat = (f"Classe : moyenne {E.fmt(d.get('moy_classe'), 'decimal') or '–'}  •  plus forte "
+                f"{E.fmt(d.get('moy_max'), 'decimal') or '–'}  •  plus faible {E.fmt(d.get('moy_min'), 'decimal') or '–'}"
+                f"  (sur {E.fmt(ech, 'entier')})  •  seuil d'admission {E.fmt(d.get('seuil'), 'decimal')}")
+        out += [_p(stat, _style(8.5, align=TA_CENTER, color=colors.HexColor("#303030"))), Spacer(1, 4 * mm)]
+    if o.get("observations", True):
+        out += _zone(E.TextZone("Observations de l'enseignant(e) :", "", 3), avail)
+    sig = o.get("signatures") or []
+    if sig:
+        n = len(sig)
+        lieu = f"Fait à {doc.variables.get('localite', '')}, le {doc.variables.get('date_edition', '')}"
+        st = RLTable([[_p(x, _style(9, bold=True, align=TA_CENTER)) for x in sig], [""] * n],
+                     colWidths=[avail / n] * n, rowHeights=[None, 18 * mm])
+        st.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        out += [_p(lieu, _style(9)), Spacer(1, 2 * mm), st]
+    return [KeepTogether(out)]
+
+
 PSTYLE = {"normal": dict(size=9), "titre2": dict(size=10, bold=True, color=BLEU), "note": dict(size=8, italic=True),
           "encadre": dict(size=9)}
 
@@ -467,6 +607,8 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
             emit(_zone(b, avail))
         elif isinstance(b, E.Signature):
             emit(_signature(b, avail))
+        elif isinstance(b, E.Bulletin):
+            emit(_bulletin(doc, b, avail))
         elif isinstance(b, E.PageBreak):
             if carry:
                 story.extend(carry)

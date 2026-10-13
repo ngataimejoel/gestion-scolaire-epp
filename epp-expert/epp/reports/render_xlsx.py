@@ -151,6 +151,30 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
             r += 1
             ws.cell(r, 1, b.text or "")
             r += 2
+        elif isinstance(b, E.Bulletin):
+            d = b.data
+            ws.cell(r, 1, d.get("nom")).font = Font(bold=True, size=12)
+            ws.cell(r, 3, f"{d.get('matricule_ecole')} – {d.get('classe')}")
+            r += 1
+            if d["type"] == "annuel":
+                lignes = [(e["evaluation"], e["moyenne"], e["appreciation"]) for e in d["evaluations"]]
+                lignes += [("MGA", d.get("mga"), d.get("observation") or ""), ("Rang", d.get("rang"), ""),
+                           ("Décision", d.get("decision") or "", "")]
+            else:
+                lignes = [(n["matiere"], n["note"], n["appreciation"]) for n in d["notes"]]
+                lignes += [("Total", d.get("total"), ""), ("Moyenne", d.get("moyenne"), d.get("appreciation") or ""),
+                           ("Rang", d.get("rang"), f"sur {d.get('effectif')}")]
+            for lib, val, app in lignes:
+                ws.cell(r, 1, lib).border = BORDER
+                x = ws.cell(r, 2, val)
+                x.border = BORDER
+                if isinstance(val, float):
+                    x.number_format = "0.00"
+                ws.cell(r, 3, app).border = BORDER
+                r += 1
+            widths[1] = max(widths.get(1, 0), 30)
+            widths[3] = max(widths.get(3, 0), 22)
+            r += 1
         elif isinstance(b, E.Signature):
             r += 1
             ws.cell(r, 1, b.lieu_date)

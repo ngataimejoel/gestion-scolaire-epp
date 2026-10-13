@@ -33,6 +33,7 @@ SECTION_TYPES = {
     "zone_redaction": "Zones à rédiger",
     "signature": "Bloc signature",
     "saut_page": "Saut de page",
+    "bulletin": "Bulletins des élèves (une page par élève)",
 }
 
 PARAMETRES = {
@@ -41,6 +42,7 @@ PARAMETRES = {
     "compo": "Évaluation / composition",
     "date_debut": "Du (date)",
     "date_fin": "Au (date)",
+    "eleve": "Élève (un seul bulletin)",
 }
 
 OPERATEURS = {
@@ -110,6 +112,10 @@ def nouvelle_section(type_: str) -> dict:
         base.update(texte="", style="normal")
     elif type_ == "zone_redaction":
         base.update(rapport="LIBRE", cle="", champs=[{"champ": "observations", "titre": "OBSERVATIONS :"}], lignes=4)
+    elif type_ == "bulletin":
+        base.update(periode="evaluation", photo=True, appreciations=True, statistiques_classe=True,
+                    observations=True, inclure_sortis=False, titre_bulletin="",
+                    signatures=["L'enseignant(e)", "Le Directeur", "Les parents"])
     elif type_ == "signature":
         base.update(lieu_date=True, fonction="LE DIRECTEUR", nom="{directeur}")
     return base

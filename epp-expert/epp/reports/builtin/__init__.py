@@ -271,6 +271,19 @@ TABLEAU_DE_BORD = _modele(
         {"type": "graphique", "titre": "Effectifs par classe", "metrique": "inscrits", "sexes": ["M", "F"]},
         {"type": "graphique", "titre": "Taux d'admission par classe", "metrique": "taux_admission", "sexes": ["T"]}])
 
+def _bulletin(periode):
+    d = _modele("", sous_titre="", parametres=["classe", "eleve"] + (["compo"] if periode == "evaluation" else []),
+                sections=[{"type": "bulletin", "titre": "", "periode": periode, "photo": True, "appreciations": True,
+                           "statistiques_classe": True, "observations": True, "inclure_sortis": False,
+                           "titre_bulletin": "", "signatures": ["L'enseignant(e)", "Le Directeur", "Les parents"]}],
+                pied="{ecole} – {annee}")
+    d["entete"] = {"officiel": False, "logo": True, "texte": ""}   # chaque bulletin porte son propre en-tête
+    return d
+
+
+BULLETIN_EVAL = _bulletin("evaluation")
+BULLETIN_ANNUEL = _bulletin("annuel")
+
 # ---------------------------------------------------------------- exemples demandés
 EX_LISTE_CLASSE = _modele(
     "LISTE DES ÉLÈVES PAR CLASSE", parametres=["classe"],
@@ -373,6 +386,10 @@ TEMPLATES = [
     ("FEUILLE_NOTES", "Feuille de notes", OFFICIEL, "Notes d'une classe pour une évaluation (NOTES).", FEUILLE_NOTES),
     ("TABLEAU_DE_BORD", "Tableau de bord", OFFICIEL, "Indicateurs, tableau par classe, alertes et graphiques.",
      TABLEAU_DE_BORD),
+    ("BULLETIN_EVAL", "Bulletins d'évaluation", "Bulletins",
+     "Notes par matière, moyenne, rang et appréciation ; un élève, une classe ou toute l'école.", BULLETIN_EVAL),
+    ("BULLETIN_ANNUEL", "Bulletins annuels", "Bulletins",
+     "Moyennes des évaluations, MGA, rang, décision et observation de fin d'année.", BULLETIN_ANNUEL),
     ("EX_LISTE_CLASSE", "Liste des élèves par classe", EXEMPLE, "Liste alphabétique, une page par classe.",
      EX_LISTE_CLASSE),
     ("EX_EFFECTIFS_NIVEAU", "État des effectifs par niveau", EXEMPLE, "Effectifs, sorties, nationalités.",

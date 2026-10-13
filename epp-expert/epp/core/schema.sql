@@ -261,3 +261,17 @@ CREATE TABLE IF NOT EXISTS journal (
     objet TEXT,
     details TEXT
 );
+
+-- version 2 : photos des élèves et du personnel (image JPEG réduite, incluse dans les sauvegardes)
+CREATE TABLE IF NOT EXISTS photo (
+    kind TEXT NOT NULL CHECK (kind IN ('eleve', 'personnel')),
+    ref_id INTEGER NOT NULL,
+    data BLOB NOT NULL,
+    mime TEXT NOT NULL DEFAULT 'image/jpeg',
+    modifie_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (kind, ref_id)
+);
+CREATE TRIGGER IF NOT EXISTS photo_eleve_suppr AFTER DELETE ON eleve
+    BEGIN DELETE FROM photo WHERE kind='eleve' AND ref_id=OLD.id; END;
+CREATE TRIGGER IF NOT EXISTS photo_personnel_suppr AFTER DELETE ON personnel
+    BEGIN DELETE FROM photo WHERE kind='personnel' AND ref_id=OLD.id; END;

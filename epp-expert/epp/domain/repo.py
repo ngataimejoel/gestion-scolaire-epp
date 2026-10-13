@@ -678,3 +678,49 @@ def set_texte(db: Database, s: Session, annee_id: int, rapport: str, cle: str, c
     db.execute("INSERT INTO texte_rapport(annee_id, rapport, cle, champ, texte) VALUES(?,?,?,?,?) "
                "ON CONFLICT(annee_id, rapport, cle, champ) DO UPDATE SET texte=excluded.texte",
                (annee_id, rapport, cle or "", champ, texte))
+
+
+# ============================================================== photos
+PHOTO_MAX_PX = 480          # côté le plus long après réduction
+PHOTO_MAX_OCTETS = 15 * 1024 * 1024
+
+
+def normaliser_photo(data: bytes) -> bytes:
+    """Vérifie que le fichier est une image et la réduit en JPEG (≈ 30 à 80 Ko)."""
+    if not data or len(data) > PHOTO_MAX_OCTETS:
+        raise ValidationError("Photo vide ou trop volumineuse (15 Mo maximum).", "photo")
+    from PySide6.QtCore import QBuffer, QByteArray, QIODevice, Qt
+    from PySide6.QtGui import QImage
+    img = QImage.fromData(QByteArray(data))
+    if img.isNull():
+        raise ValidationError("Ce fichier n'est pas une image reconnue (JPEG, PNG, BMP…).", "photo")
+    if max(img.width(), img.height()) > PHOTO_MAX_PX:
+        img = img.scaled(PHOTO_MAX_PX, PHOTO_MAX_PX, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    img = img.convertToFormat(QImage.Format_RGB888)
+    buf = QBuffer()
+    buf.open(QIODevice.WriteOnly)
+    img.save(buf, "JPEG", 85)
+    return bytes(buf.data())
+
+
+def set_photo(db: Database, s: Session, kind: str, ref_id: int, data: bytes | None) -> None:
+    """Enregistre (ou supprime si data est None) la photo d'un élève ou d'un agent."""
+    if kind not in ("eleve", "personnel"):
+        raise ValueError(kind)
+    s.require("eleves.modifier" if kind == "eleve" else "personnel.modifier")
+    table = "eleve" if kind == "eleve" else "personnel"
+    if not db.scalar(f"SELECT 1 FROM {table} WHERE id=?", (ref_id,)):
+        raise ValidationError("Fiche introuvable.")
+    if data is None:
+        db.execute("DELETE FROM photo WHERE kind=? AND ref_id=?", (kind, ref_id))
+        log(db, s.login, "PHOTO_SUPPRESSION", kind, str(ref_id))
+        return
+    jpeg = normaliser_photo(data)
+    db.execute("INSERT INTO photo(kind, ref_id, data, mime) VALUES(?,?,?,'image/jpeg') "
+               "ON CONFLICT(kind, ref_id) DO UPDATE SET data=excluded.data, mime=excluded.mime, "
+               "modifie_le=datetime('now','localtime')", (kind, ref_id, jpeg))
+    log(db, s.login, "PHOTO", kind, str(ref_id))
+
+
+def get_photo(db: Database, kind: str, ref_id: int) -> bytes | None:
+    return db.scalar("SELECT data FROM photo WHERE kind=? AND ref_id=?", (kind, ref_id))

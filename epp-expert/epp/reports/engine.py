@@ -79,6 +79,14 @@ class Chart:
 
 
 @dataclass
+class Bulletin:
+    """Un bulletin d'élève (une page) : données calculées + options d'affichage."""
+    data: dict
+    photo: bytes | None = None
+    options: dict = field(default_factory=dict)
+
+
+@dataclass
 class PageBreak:
     pass
 
@@ -568,6 +576,31 @@ class Builder:
     def signature(self, s: dict) -> list:
         ld = f"Fait à {self.vars['localite']}, le {self.vars['date_edition']}" if s.get("lieu_date", True) else ""
         return [Signature(ld, self.t(s.get("fonction", "")), self.t(s.get("nom", "")))]
+
+    def bulletin(self, s: dict) -> list:
+        from epp.domain import bulletins
+        classe = self.params.get("classe") or None
+        eleve = self.params.get("eleve")
+        eleve = int(eleve) if eleve not in (None, "") else None
+        if s.get("periode", "evaluation") == "annuel":
+            data = bulletins.bulletins_annuels(self.db, self.annee, classe, eleve)
+        else:
+            data = bulletins.bulletins_evaluation(self.db, self.annee, int(self.params.get("compo") or 1),
+                                                  classe, eleve)
+        if not s.get("inclure_sortis", False):
+            data = [d for d in data if d.get("statut") == "PRESENT"]
+        out = []
+        opts = {k: s.get(k) for k in ("photo", "appreciations", "signatures", "observations", "statistiques_classe",
+                                      "titre_bulletin")}
+        opts["titre_bulletin"] = self.t(opts.get("titre_bulletin") or "")
+        for i, d in enumerate(data):
+            if i:
+                out.append(PageBreak())
+            photo = repo.get_photo(self.db, "eleve", d["eleve_id"]) if s.get("photo", True) else None
+            out.append(Bulletin(d, photo, opts))
+        if not data:
+            out.append(Paragraph("Aucun élève ne correspond aux critères choisis.", "note"))
+        return out
 
     def saut_page(self, s: dict) -> list:
         return [PageBreak()]

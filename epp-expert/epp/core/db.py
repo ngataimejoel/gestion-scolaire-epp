@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class Database:
@@ -106,7 +106,23 @@ def _schema_sql() -> str:
 
 # Migrations successives : {version_cible: [instructions SQL]}.
 # Pour faire évoluer le schéma, ajouter une entrée SCHEMA_VERSION + 1 ici.
-MIGRATIONS: dict[int, list[str]] = {}
+_PHOTO_SQL = [
+    """CREATE TABLE IF NOT EXISTS photo (
+        kind TEXT NOT NULL CHECK (kind IN ('eleve', 'personnel')),
+        ref_id INTEGER NOT NULL,
+        data BLOB NOT NULL,
+        mime TEXT NOT NULL DEFAULT 'image/jpeg',
+        modifie_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+        PRIMARY KEY (kind, ref_id))""",
+    """CREATE TRIGGER IF NOT EXISTS photo_eleve_suppr AFTER DELETE ON eleve
+        BEGIN DELETE FROM photo WHERE kind='eleve' AND ref_id=OLD.id; END""",
+    """CREATE TRIGGER IF NOT EXISTS photo_personnel_suppr AFTER DELETE ON personnel
+        BEGIN DELETE FROM photo WHERE kind='personnel' AND ref_id=OLD.id; END""",
+]
+
+MIGRATIONS: dict[int, list[str]] = {
+    2: _PHOTO_SQL,          # photos des élèves et du personnel
+}
 
 
 def open_database(path: str | Path | None = None, seed: bool = True) -> Database:
