@@ -711,6 +711,7 @@ class BulletinWord:
         self.r, self.b, self.d = r, b, r.d
         self.K = contenu(r.doc, b)
         self.C = {k: v.hexval()[2:].upper() for k, v in C.items()}
+        self.T = self.K["couleurs"]
         self.W = r.avail
 
     def rendre(self) -> None:
@@ -757,9 +758,14 @@ class BulletinWord:
         _bordures(band, None)
         _largeurs(band, [min(108, W - g - dr - 4)])
         bc = band.cell(0, 0)
-        _ombre(bc, C["bleu"])
-        _ecrire(bc, K["nom_bulletin"], 18, gras=True, couleur="FFFFFF", align=WD_ALIGN_PARAGRAPH.CENTER)
-        _para(bc, f"Année scolaire : {K['annee'].replace('-', ' - ')}", 10, gras=True, couleur="FFFFFF",
+        T = self.T
+        _ombre(bc, T["bande_fond"])
+        if T["bande_bord"]:
+            b = (12, T["bande_bord"])
+            _bordures_cellule(bc, top=b, bottom=b, left=b, right=b)
+        bt = T["bande_texte"].lstrip("#")
+        _ecrire(bc, K["nom_bulletin"], 18, gras=True, couleur=bt, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _para(bc, f"Année scolaire : {K['annee'].replace('-', ' - ')}", 10, gras=True, couleur=bt,
               align=WD_ALIGN_PARAGRAPH.CENTER)
         c.paragraphs[-1].paragraph_format.space_after = Pt(0)
         droite = t.cell(0, 2)
@@ -782,7 +788,7 @@ class BulletinWord:
         _bordures(t, 8, C["bord"], interieur=False)
         _largeurs(t, [xg, W - wp - xg] + ([wp] if photo else []))
         for cell in t.rows[0].cells:
-            _ombre(cell, C["fond"])
+            _ombre(cell, self.T["identite"])
         _bordures_cellule(t.cell(0, 0), right=(4, C["bord"]))
 
         def champ(cell, premier, paires):
@@ -830,18 +836,20 @@ class BulletinWord:
         _bordures(t, None)
         _marges_cellules(t, 0.3, 1.2)
         _largeurs(t, [w_no, w_disc] + [w_p] * np_ + [w_moy])
-        blanc = (8, "FFFFFF")
+        T = self.T
+        blanc = (8, "FFFFFF") if T["separateur"] == "#FFFFFF" else (4, T["separateur"])
         for i, (lab, coul) in enumerate(heads):
             cell = t.cell(0, i)
-            _ombre(cell, C[coul])
-            _ecrire(cell, lab, 9, gras=True, couleur="FFFFFF", align=WD_ALIGN_PARAGRAPH.CENTER)
-            _bordures_cellule(cell, left=blanc, right=blanc)
+            fond, texte, trait = T["tete"][coul]
+            _ombre(cell, fond)
+            _ecrire(cell, lab, 9, gras=True, couleur=texte.lstrip("#"), align=WD_ALIGN_PARAGRAPH.CENTER)
+            _bordures_cellule(cell, left=blanc, right=blanc, **({"top": (24, trait)} if trait else {}))
         _hauteur(t.rows[0], 10)
         _entete_repetee(t.rows[0])
         h = max(5.5, min(9.0, 150 / max(n_lignes, 1)))
         for k, m in enumerate(K["lignes"], start=1):
             tr = t.rows[k]
-            fond = C["ligne_a"] if k % 2 else C["ligne_b"]
+            fond = T["ligne_a"] if k % 2 else T["ligne_b"]
             vals = [str(k), None] + [x or "" for x in m["valeurs"]] + [m["moyenne"]]
             if not K["entetes"]:
                 vals.insert(2, "")
@@ -865,7 +873,7 @@ class BulletinWord:
                 vals.insert(2, "")
             for i, x in enumerate(vals):
                 cell = tr.cells[i]
-                _ombre(cell, C["pied_tab"])
+                _ombre(cell, T["pied_tab"])
                 _bordures_cellule(cell, left=blanc, right=blanc, bottom=(2, C["bord"]))
                 _ecrire(cell, x, 10.5, gras=True, couleur=C["marine"],
                         align=WD_ALIGN_PARAGRAPH.LEFT if i == 1 else WD_ALIGN_PARAGRAPH.CENTER)
@@ -909,7 +917,8 @@ class BulletinWord:
         pts = "." * 95
         corps = [(l, dict(taille=10, gras=True, couleur=C["vert_fonce"])) for l in [K["appreciation"]] if l]
         corps += [(pts, dict(taille=8, couleur=C["gris"]))] * (6 - len(corps))
-        self._cadre(g, gw, "Appréciation générale", "FFFFFF", C["vert"], C["vert"], corps)
+        self._cadre(g, gw, "Appréciation générale", self.T["app_texte"].lstrip("#"), self.T["app_fond"], C["vert"],
+                    corps)
         _para(g, "", 1, apres=3)
         self._cadre(g, gw, "Observations des parents", C["marine"], C["ligne_a"], C["bord"],
                     [(pts, dict(taille=8, couleur=C["gris"]))] * 5, 10)
@@ -971,10 +980,14 @@ class BulletinWord:
         _bordures(t, None)
         _largeurs(t, [W])
         c = t.cell(0, 0)
-        _ombre(c, C["marine"])
-        _bordures_cellule(c, top=(24, C["jaune"]))
+        leger = self.T["pied"] == "leger"
+        if leger:
+            _bordures_cellule(c, top=(18, C["jaune"]), bottom=(8, C["marine"]))
+        else:
+            _ombre(c, C["marine"])
+            _bordures_cellule(c, top=(24, C["jaune"]))
         if K["pied"]:
-            _ecrire(c, f"—  {K['pied']}  —", 12, gras=True, italique=True, couleur="FFFFFF",
+            _ecrire(c, f"—  {K['pied']}  —", 12, gras=True, italique=True, couleur=C["marine"] if leger else "FFFFFF",
                     align=WD_ALIGN_PARAGRAPH.CENTER)
         _hauteur(t.rows[0], 11)
         _insecable(t.rows[0])

@@ -74,3 +74,30 @@ def test_style_classique_toujours_disponible(demo, tmp_path):
     store.creer(db, s, "Bulletin classique", defn, "Bulletins", code="MON_BULLETIN")
     t = _texte(service.generer(db, s, annee, "MON_BULLETIN", {"classe": annee.codes[0]}, tmp_path / "c.pdf"))
     assert "BULLETIN ANNUEL DE NOTES" in t and "Bilan de l'année" not in t
+
+
+def test_couleurs_douces_pour_le_noir_et_blanc(demo, tmp_path):
+    """Par défaut, fonds très clairs et textes foncés (lisible en noir et blanc) ; palette vive au choix."""
+    from epp.reports.bulletin_colore import teintes
+
+    def lum(h):
+        h = h.lstrip("#")
+        r, g, b = (int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
+        return 0.299 * r + 0.587 * g + 0.114 * b
+
+    douce = teintes("douce")
+    for fond, texte, _ in douce["tete"].values():
+        assert lum(fond) > 0.85 and lum(texte) < 0.35            # contraste suffisant sans couleur
+    for k in ("ligne_a", "ligne_b", "pied_tab", "identite", "bande_fond", "app_fond"):
+        assert lum(douce[k]) > 0.85
+    assert lum(teintes("vive")["bande_fond"]) < 0.5               # l'ancienne version reste disponible
+    db, annee = demo
+    s = system_session()
+    m = store.get(db, "BULLETIN_ANNUEL")
+    defn = copy.deepcopy(store.definition(db, m["id"]))
+    assert defn["sections"][0]["palette"] == "douce"
+    defn["sections"][0]["palette"] = "vive"
+    store.creer(db, s, "Bulletin couleurs vives", defn, "Bulletins", code="BUL_VIF")
+    for code in ("BULLETIN_ANNUEL", "BUL_VIF"):
+        t = _texte(service.generer(db, s, annee, code, {"classe": "CM2"}, tmp_path / f"{code}.pdf"))
+        assert "BULLETIN ANNUEL" in t

@@ -273,7 +273,7 @@ TABLEAU_DE_BORD = _modele(
 
 def _bulletin(periode):
     d = _modele("", sous_titre="", parametres=["classe", "eleve"] + (["compo"] if periode == "evaluation" else []),
-                sections=[{"type": "bulletin", "titre": "", "periode": periode, "style": "colore",
+                sections=[{"type": "bulletin", "titre": "", "periode": periode, "style": "colore", "palette": "douce",
                            "mention_officielle": True, "bilan_felicitations": 7, "bilan_suivi": 4,
                            "photo": True, "appreciations": True,
                            "statistiques_classe": True, "observations": True, "inclure_sortis": False,
