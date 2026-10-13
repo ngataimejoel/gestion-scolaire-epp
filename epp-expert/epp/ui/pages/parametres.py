@@ -5,7 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QInputDialog,
-                               QLabel, QLineEdit, QPlainTextEdit, QScrollArea, QSpinBox, QTableWidget,
+                               QLabel, QLineEdit, QPlainTextEdit, QScrollArea, QTableWidget,
                                QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
 from epp.core import security, seed
@@ -266,9 +266,9 @@ class OngletCalendrier(QWidget):
                           "absences qu'elles créent en tiennent compte automatiquement. Les fêtes à date fixe et "
                           "celles liées à Pâques sont préremplies ; ajoutez les fêtes musulmanes (Ramadan, Tabaski, "
                           "Maouloud…) et les congés scolaires de l'année.", discret=True, wrap=True))
-        self.table = Tableau([Col("type_libelle", "Type", largeur=150), Col("libelle", "Libellé", largeur=200),
-                              Col("date_debut", "Du", "date", 92), Col("date_fin", "Au", "date", 92),
-                              Col("jours_classe_perdus", "Jours de semaine", "nombre")])
+        self.table = Tableau([Col("type_libelle", "Type", largeur=110), Col("libelle", "Libellé", largeur=190),
+                              Col("date_debut", "Du", "date", 86), Col("date_fin", "Au", "date", 86),
+                              Col("jours_classe_perdus", "Jours perdus", "nombre")])
         self.table.double_clic.connect(lambda _: self._modifier())
         v.addWidget(self.table, 1)
         self.b_aj = bouton("Ajouter…", self._ajouter, "primaire")
@@ -301,10 +301,10 @@ class OngletCalendrier(QWidget):
             it.setData(Qt.UserRole, m)
             it.setFlags(Qt.ItemIsEnabled)
             self.jours.setItem(r, 0, it)
-            sp = QSpinBox()
-            sp.setRange(0, 31)
-            sp.setValue(int(j["jours"] or 0))
-            self.jours.setCellWidget(r, 1, sp)
+            nb = QTableWidgetItem()
+            nb.setData(Qt.EditRole, int(j["jours"] or 0))     # nombre entier : saisie au clavier, 0 à 31
+            nb.setTextAlignment(Qt.AlignCenter)
+            self.jours.setItem(r, 1, nb)
         ok = self.page.peut("parametres.modifier") and not a.cloturee
         for b in (self.b_aj, self.b_mod, self.b_sup, self.b_fer, self.b_calc, self.b_jours):
             b.setEnabled(ok)
@@ -341,13 +341,13 @@ class OngletCalendrier(QWidget):
         for r in range(self.jours.rowCount()):
             m = self.jours.item(r, 0).data(Qt.UserRole)
             if m in j:
-                self.jours.cellWidget(r, 1).setValue(j[m])
+                self.jours.item(r, 1).setData(Qt.EditRole, j[m])
         info(self, "Jours de classe", "Valeurs recalculées (lundi à vendredi, hors jours fériés et vacances). "
                                       "Vérifiez-les puis cliquez sur « Enregistrer ».")
 
     @protege
     def _enregistrer_jours(self):
-        j = {self.jours.item(r, 0).data(Qt.UserRole): self.jours.cellWidget(r, 1).value()
+        j = {self.jours.item(r, 0).data(Qt.UserRole): int(self.jours.item(r, 1).data(Qt.EditRole) or 0)
              for r in range(self.jours.rowCount())}
         calendrier.set_jours_classe(self.page.db, self.page.s, self.page.annee, j)
         self.page.ctx.recharger_annee()

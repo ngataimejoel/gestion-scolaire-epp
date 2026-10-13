@@ -52,11 +52,11 @@ class PageTableauBord(Page):
         c1 = Carte("Effectifs par classe")
         self.table = Tableau([Col("classe", "Classe", largeur=80), Col("garcons", "Garçons", "nombre"),
                               Col("filles", "Filles", "nombre"), Col("total", "Total", "nombre"),
-                              Col("admis", "Admis", "nombre"), Col("taux_admission", "Taux d'admission", "pourcent"),
+                              Col("admis", "Admis", "nombre"), Col("taux_admission", "% admis", "pourcent"),
                               Col("abandons", "Abandons", "nombre")])
         self.table.etirer()
         c1.lay.addWidget(self.table)
-        bas.addWidget(c1, 5)
+        bas.addWidget(c1, 3)
         droite = QVBoxLayout()
         droite.setSpacing(12)
         self.c_alertes = Carte("Points d'attention")
@@ -67,7 +67,7 @@ class PageTableauBord(Page):
         self.graph = Barres()
         c3.lay.addWidget(self.graph)
         droite.addWidget(c3, 1)
-        bas.addLayout(droite, 4)
+        bas.addLayout(droite, 2)
         self.corps.addLayout(bas, 1)
 
     def _nouvel_eleve(self):

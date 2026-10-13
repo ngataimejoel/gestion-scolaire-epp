@@ -13,7 +13,7 @@ import sys
 from PySide6.QtCore import QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPalette, QPixmap, QShortcut
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                               QMainWindow, QMenu, QMessageBox, QStackedWidget, QStyledItemDelegate, QToolButton,
+                               QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QStyledItemDelegate, QToolButton,
                                QVBoxLayout, QWidget)
 
 from epp import APP_NAME, __version__
@@ -83,6 +83,7 @@ class FenetrePrincipale(QMainWindow):
         self.resize(1360, 820)
         self.setMinimumSize(1080, 660)
         self.pages: dict[str, QWidget] = {}
+        self.zones: dict[str, QScrollArea] = {}
         central = QWidget()
         self.setCentralWidget(central)
         h = QHBoxLayout(central)
@@ -225,8 +226,13 @@ class FenetrePrincipale(QMainWindow):
             QApplication.restoreOverrideCursor()
             page.fenetre = self
             self.pages[cle] = page
-            self.pile.addWidget(page)
-        self.pile.setCurrentWidget(self.pages[cle])
+            zone = QScrollArea()        # petits écrans (1366 × 768) : la page défile au lieu d'être coupée
+            zone.setWidgetResizable(True)
+            zone.setFrameShape(QFrame.NoFrame)
+            zone.setWidget(page)
+            self.zones[cle] = zone
+            self.pile.addWidget(zone)
+        self.pile.setCurrentWidget(self.zones[cle])
         if self.menu.currentRow() != i:
             self.menu.blockSignals(True)
             self.menu.setCurrentRow(i)

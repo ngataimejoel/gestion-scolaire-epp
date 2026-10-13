@@ -147,7 +147,7 @@ def test_toutes_les_pages_s_ouvrent(fenetre, messages):
     for cle, *_ in PAGES:
         fenetre.aller(cle)
         QApplication.processEvents()
-        assert fenetre.pile.currentWidget() is fenetre.pages[cle], cle
+        assert fenetre.pile.currentWidget().widget() is fenetre.pages[cle], cle
     assert not [m for m in messages if m[0] == "critical"], _textes(messages)
 
 
