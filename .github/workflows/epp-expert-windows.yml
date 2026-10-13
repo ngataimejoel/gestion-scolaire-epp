@@ -1,0 +1,93 @@
+name: EPP EXPERT (Python) - Windows
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths: ["epp-expert/**", ".github/workflows/epp-expert-windows.yml"]
+    tags: ["expert-v*"]
+  pull_request:
+    paths: ["epp-expert/**", ".github/workflows/epp-expert-windows.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+    working-directory: epp-expert
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PYTHONUTF8: "1"
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: epp-expert/requirements-dev.txt
+
+      - name: Installer les dépendances
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Tests automatiques
+        run: python -m pytest -q -rs
+
+      - name: Construire l'exécutable (PyInstaller)
+        run: pyinstaller --noconfirm --clean packaging/gestion_scolaire.spec
+
+      - name: Auto-test de l'exécutable (sans Python)
+        run: |
+          $p = Start-Process dist\GestionScolaireEPP\GestionScolaireEPP.exe -ArgumentList "--selftest","--rapport","$pwd\selftest_exe.txt" -Wait -PassThru
+          Get-Content selftest_exe.txt
+          if ($p.ExitCode -ne 0) { throw "auto-test de l'exécutable en échec ($($p.ExitCode))" }
+
+      - name: Construire l'installateur (Inno Setup)
+        run: |
+          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
+          $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
+          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc packaging\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC en échec" }
+          Get-ChildItem dist\*.exe
+
+      - name: Installation silencieuse, auto-test, mise à jour, désinstallation
+        run: |
+          $setup = (Get-ChildItem dist\GestionScolaireEPP-Setup-*.exe).FullName
+          $dir = "$env:RUNNER_TEMP\EPPInstall"
+          $data = "$env:LOCALAPPDATA\GestionScolaireEPP"
+          # 1. installation
+          $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "installation en échec" }
+          if (-not (Test-Path "$dir\GestionScolaireEPP.exe")) { throw "exécutable absent après installation" }
+          if (Test-Path "$dir\*.sqlite") { throw "la base ne doit pas être dans le dossier d'installation" }
+          $p = Start-Process "$dir\GestionScolaireEPP.exe" -ArgumentList "--selftest","--rapport","$pwd\selftest_installe.txt" -Wait -PassThru
+          Get-Content selftest_installe.txt
+          if ($p.ExitCode -ne 0) { throw "auto-test après installation en échec" }
+          # 2. données de l'utilisateur simulées
+          New-Item -ItemType Directory -Force $data | Out-Null
+          Set-Content "$data\temoin.txt" "données de l'école"
+          # 3. mise à jour (réinstallation par-dessus)
+          $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "mise à jour en échec" }
+          if (-not (Test-Path "$data\temoin.txt")) { throw "données perdues lors de la mise à jour" }
+          # 4. désinstallation silencieuse : les données doivent rester
+          $p = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          Start-Sleep -Seconds 5
+          if (Test-Path "$dir\GestionScolaireEPP.exe") { throw "programme non supprimé par la désinstallation" }
+          if (-not (Test-Path "$data\temoin.txt")) { throw "données supprimées par la désinstallation" }
+          Write-Host "Installation, mise à jour et désinstallation : OK (données conservées)"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GestionScolaireEPP-Expert-Setup
+          path: |
+            epp-expert/dist/GestionScolaireEPP-Setup-*.exe
+            epp-expert/selftest_*.txt
+          if-no-files-found: error

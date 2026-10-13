@@ -1,0 +1,10 @@
+# Classeur source : données personnelles d'élèves, jamais dans le dépôt public
+tests/data/
+*.xlsm
+*.xlsx
+*.sqlite
+.venv/
+build/
+dist/
+selftest*.txt
+__pycache__/
