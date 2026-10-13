@@ -62,7 +62,8 @@ def selftest(out=sys.stdout) -> int:
                 service.generer(db, s, annee, m["code"], p, Path(tmp) / f"{m['code']}.pdf")
                 n += 1
             service.generer(db, s, annee, "SYNTHESE", {}, Path(tmp) / "synthese.xlsx")
-            ok(f"{n} modèles de rapports générés en PDF, export Excel OK")
+            service.generer(db, s, annee, "SYNTHESE", {}, Path(tmp) / "synthese.docx")
+            ok(f"{n} modèles de rapports générés en PDF, exports Excel et Word OK")
             db.close()
             import base64
             from cryptography.hazmat.primitives import serialization

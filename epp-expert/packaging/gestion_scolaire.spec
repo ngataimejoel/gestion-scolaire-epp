@@ -2,6 +2,8 @@
 # PyInstaller : pyinstaller packaging/gestion_scolaire.spec  (depuis le dossier epp-expert)
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 ROOT = Path(SPECPATH).parent
 APP = "GestionScolaireEPP"
 
@@ -11,6 +13,7 @@ a = Analysis(
     datas=[
         (str(ROOT / "epp" / "core" / "schema.sql"), "epp/core"),
         (str(ROOT / "epp" / "resources"), "epp/resources"),
+        *collect_data_files("docx"),                 # modèle Word de base de python-docx
     ],
     hiddenimports=["epp.ui.main", "PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtMultimedia",
                    "PySide6.QtMultimediaWidgets", "PySide6.QtCharts", "PySide6.QtPrintSupport"],

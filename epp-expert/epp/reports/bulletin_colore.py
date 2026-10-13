@@ -56,10 +56,112 @@ def _court(libelle: str) -> str:
     return libelle.split()[0] if libelle else libelle
 
 
+def contenu(doc: E.Document, b: E.Bulletin) -> dict:
+    """Textes et valeurs du bulletin, communs au PDF et au document Word."""
+    d, o, v, params = b.data, b.options, doc.variables, doc.officiel
+    annuel = d["type"] == "annuel"
+    rel = d.get("releve") or {"periodes": [], "disciplines": [], "notes": {}, "moyennes": {}, "rangs": {},
+                              "presents": {}, "moyennes_disciplines": {}, "echelle": d.get("bareme") or 10}
+    periodes = rel["periodes"]
+    courant = None if annuel else d.get("eval_num")
+
+    def visible(num):
+        return annuel or (courant is not None and num <= courant)
+
+    dernier = periodes[-1]["num"] if periodes else None
+    titre_moy = "Moyenne annuelle" if annuel or courant == dernier else "Moyenne à ce jour"
+    entetes = [(p["libelle"], COULEURS_PERIODES[i % len(COULEURS_PERIODES)]) for i, p in enumerate(periodes)]
+    notes, moyd = rel.get("notes", {}), rel.get("moyennes_disciplines", {})
+    presents = rel.get("presents", {})
+    lignes = []
+    for m in rel["disciplines"]:
+        vals = []
+        for p in periodes:
+            val = notes.get(m["libelle"], {}).get(p["num"])
+            vals.append(None if not visible(p["num"]) else "Abs." if presents.get(p["num"]) is False else _fmt(val))
+        moy = ""
+        if annuel or courant:
+            vs = {p["num"]: notes.get(m["libelle"], {}).get(p["num"]) for p in periodes if visible(p["num"])}
+            moy = _fmt(moyd.get(m["libelle"]) if annuel else _moy_partielle(vs, d.get("regle_mga")))
+        lignes.append({"libelle": _casse(m["libelle"]), "max": _fmt(m["max"]), "valeurs": vals, "moyenne": moy})
+    ech = rel.get("echelle") or 10
+    moys, rangs = rel.get("moyennes", {}), rel.get("rangs", {})
+    totaux = []
+    for k, (lab, vals, fin) in enumerate((
+            (f"Moyenne générale (/{_fmt(ech)})", {p["num"]: _fmt(moys.get(p["num"])) for p in periodes},
+             _fmt(d.get("mga") if annuel else _moy_partielle(
+                 {p["num"]: moys.get(p["num"]) for p in periodes if visible(p["num"])}, d.get("regle_mga")))),
+            ("Rang", {p["num"]: _rang(rangs.get(p["num"])) for p in periodes},
+             f"{_rang(d.get('rang'))} / {d.get('effectif')}" if annuel and d.get("rang") else ""))):
+        cells = []
+        for p in periodes:
+            absent = presents.get(p["num"]) is False
+            cells.append(None if not visible(p["num"]) else "Abs." if absent and k == 0 else vals[p["num"]])
+        totaux.append({"libelle": lab, "valeurs": cells, "fin": fin})
+    stats = None
+    if o.get("statistiques_classe", True) and d.get("moy_classe") is not None:
+        stats = (f"Moyenne de la classe : {_fmt(d.get('moy_classe'))}   •   Plus forte : {_fmt(d.get('moy_max'))}"
+                 f"   •   Plus faible : {_fmt(d.get('moy_min'))}   •   Élèves classés : {d.get('effectif')}")
+    moy = d.get("mga") if annuel else d.get("moyenne")
+    app = d.get("observation") if annuel else d.get("appreciation")
+    if annuel and not app:
+        from epp.domain.bulletins import appreciation
+        app = appreciation(moy, d.get("bareme") or ech)
+    app_txt = " – ".join(x for x in [app, None if annuel else d.get("resultat")] if x) + "." if app else ""
+    seuil = d.get("seuil") or 5
+    bareme = d.get("bareme") or ech
+    choix = None
+    if moy is not None:
+        s_ = moy / ech * 10
+        s_seuil = seuil / bareme * 10
+        fel, suivi = float(o.get("bilan_felicitations", 7)), float(o.get("bilan_suivi", 4))
+        choix = "fel" if s_ >= fel else "enc" if s_ >= s_seuil else "prog" if s_ >= suivi else "suivi"
+    if annuel:
+        dec = d.get("decision") or ""
+        suite = d.get("classe_suivante")
+        dec = {"ADMIS": f"ADMIS(E) en {suite}" if suite else "ADMIS(E) en 6ème",
+               "REDOUBLE": "REDOUBLE", "EXCLU": "EXCLU(E)", "TRANSFERE": "TRANSFÉRÉ(E)"}.get(dec, dec)
+    else:
+        dec = f"{_rang(d.get('rang'))} sur {d.get('effectif')}" if d.get("rang") else (
+            "Absent(e)" if not d.get("present", True) else "")
+    sigs = list(o.get("signatures") or ["L'enseignant(e)", "Le Directeur", "Les parents"])[:3]
+    noms = [d.get("enseignant", ""), v.get("directeur", ""), ""]
+    age = d.get("age")
+    mention = ""
+    if o.get("mention_officielle", True):
+        gauche, droite, _ = E.entete_officiel(doc)
+        mention = "  •  ".join([*gauche[:3], *(droite[:1])])
+    return {
+        "annuel": annuel, "periodes": periodes, "courant": courant, "visible": visible, "mention": mention,
+        "titre": E.subst(params.get("bulletin_titre") or "{ecole}", v).upper(),
+        "slogan": E.subst(params.get("bulletin_slogan", seed.DEFAULT_PARAMS["bulletin_slogan"]) or "", v),
+        "devise": E.subst(params.get("bulletin_devise", seed.DEFAULT_PARAMS["bulletin_devise"]) or "", v),
+        "pied": E.subst(params.get("bulletin_pied", seed.DEFAULT_PARAMS["bulletin_pied"]) or "", v),
+        "logos": [x for x in (E.repo.decode_logo(params.get("logo_ecole")),
+                              E.repo.decode_logo(params.get("logo_iepp"))) if x],
+        "nom_bulletin": o.get("titre_bulletin") or ("BULLETIN ANNUEL" if annuel else "BULLETIN DE NOTES"),
+        "annee": v.get("annee", ""),
+        "eleve": f"{d.get('nom', '')}  ({d.get('matricule_ecole', '')})",
+        "naissance": E.fmt(d.get("date_naissance"), "date") or "",
+        "age": f"{age} ans" if age not in (None, "") else "",
+        "classe": d.get("classe", ""), "enseignant": d.get("enseignant", ""), "ecole": v.get("ecole", ""),
+        "choix_periode": [("Année complète", True)] if annuel else [(_court(p["libelle"]), p["num"] == courant)
+                                                                    for p in periodes],
+        "titre_moyenne": titre_moy, "entetes": entetes, "lignes": lignes, "totaux": totaux, "stats": stats,
+        "appreciation": app_txt, "bilan_choix": choix,
+        "bilan": [("fel", "Félicitations"), ("enc", "Encouragements"), ("prog", "Doit progresser"),
+                  ("suivi", "Doit être suivi")],
+        "titre_bilan": "Bilan de l'année" if annuel else "Bilan de la période",
+        "titre_decision": "Décision du conseil des maîtres" if annuel else "Résultat", "decision": dec,
+        "signatures": [(lab, noms[i] if i < len(noms) else "") for i, lab in enumerate(sigs)],
+        "photo": o.get("photo", True),
+    }
+
+
 class BulletinColore(Flowable):
     def __init__(self, doc: E.Document, b: E.Bulletin, fonts: tuple[str, str, str, str]):
         super().__init__()
-        self.doc, self.d, self.photo, self.o = doc, b.data, b.photo, b.options
+        self.doc, self.b, self.d, self.photo, self.o = doc, b, b.data, b.photo, b.options
         self.F, self.FB, self.FI, self.FBI = fonts
         self.params = doc.officiel
         self.v = doc.variables
@@ -202,35 +304,27 @@ class BulletinColore(Flowable):
 
     # ------------------------------------------------------------------ page
     def draw(self):
-        c, d, o = self.canv, self.d, self.o
+        c, o = self.canv, self.o
         W, H = self.width, self.height
-        annuel = d["type"] == "annuel"
-        rel = d.get("releve") or {"periodes": [], "disciplines": [], "notes": {}, "moyennes": {}, "rangs": {},
-                                  "presents": {}, "moyennes_disciplines": {}, "echelle": d.get("bareme") or 10}
-        periodes = rel["periodes"]
-        courant = None if annuel else d.get("eval_num")
+        K = contenu(self.doc, self.b)
+        periodes = K["periodes"]
         y = H
 
         # mention officielle (ministère, DRENA, IEPP) en petit
-        if o.get("mention_officielle", True):
-            gauche, droite, _ = E.entete_officiel(self.doc)
-            ligne = "  •  ".join([*gauche[:3], *(droite[:1])])
-            self._txt(W / 2, y - 3 * mm, ligne, self.FB, 6.8, "gris_txt", "center", maxw=W)
+        if K["mention"]:
+            self._txt(W / 2, y - 3 * mm, K["mention"], self.FB, 6.8, "gris_txt", "center", maxw=W)
             y -= 5 * mm
 
         # en-tête
         hh = 33 * mm
-        logos = [x for x in (E.repo.decode_logo(self.params.get("logo_ecole")),
-                             E.repo.decode_logo(self.params.get("logo_iepp"))) if x]
+        logos = K["logos"]
         if not (logos and self._image(logos[0], 0, y - hh + 2 * mm, 30 * mm, 29 * mm)):
             self._embleme(0, y - hh + 2 * mm, 30 * mm)
         xc0, xc1 = 34 * mm, W - 44 * mm
         cx = (xc0 + xc1) / 2
-        titre = E.subst(self.params.get("bulletin_titre") or "{ecole}", self.v).upper()
-        self._txt(cx, y - 9 * mm, titre, self.FB, 24, "marine", "center", maxw=xc1 - xc0)
-        slogan = self.params.get("bulletin_slogan", seed.DEFAULT_PARAMS["bulletin_slogan"])
-        if slogan:
-            self._txt(cx, y - 14 * mm, E.subst(slogan, self.v), self.FBI, 10, "bleu_moyen", "center", maxw=xc1 - xc0)
+        self._txt(cx, y - 9 * mm, K["titre"], self.FB, 24, "marine", "center", maxw=xc1 - xc0)
+        if K["slogan"]:
+            self._txt(cx, y - 14 * mm, K["slogan"], self.FBI, 10, "bleu_moyen", "center", maxw=xc1 - xc0)
         lw = min(110 * mm, xc1 - xc0)
         c.setLineWidth(1.6 * mm)
         for i, coul in enumerate(("bleu_moyen", "jaune", "vert")):
@@ -239,11 +333,10 @@ class BulletinColore(Flowable):
         bw = min(108 * mm, xc1 - xc0)
         c.setFillColor(C["bleu"])
         c.roundRect(cx - bw / 2, y - hh, bw, 15 * mm, 4 * mm, fill=1, stroke=0)
-        nom_b = o.get("titre_bulletin") or ("BULLETIN ANNUEL" if annuel else "BULLETIN DE NOTES")
-        self._txt(cx, y - hh + 6.4 * mm, nom_b, self.FB, 19, "blanc", "center", maxw=bw - 6 * mm)
+        self._txt(cx, y - hh + 6.4 * mm, K["nom_bulletin"], self.FB, 19, "blanc", "center", maxw=bw - 6 * mm)
         self._txt(cx, y - hh + 2 * mm, f"Année scolaire : {self.v.get('annee', '').replace('-', ' - ')}",
                   self.FB, 10, "blanc", "center")
-        devise = self.params.get("bulletin_devise", seed.DEFAULT_PARAMS["bulletin_devise"])
+        devise = K["devise"]
         y_dev, t_dev = y - 13 * mm, 11
         if len(logos) > 1:          # logo de l'IEPP en haut à droite, la devise passe dessous
             self._image(logos[1], W - 40 * mm, y - 16 * mm, 40 * mm, 15 * mm)
@@ -252,7 +345,7 @@ class BulletinColore(Flowable):
             c.saveState()
             c.translate(W - 22 * mm, y_dev)
             c.rotate(7)
-            lignes = simpleSplit(E.subst(devise, self.v), self.FBI, t_dev, 40 * mm)[:3]
+            lignes = simpleSplit(devise, self.FBI, t_dev, 40 * mm)[:3]
             for i, l in enumerate(lignes):
                 self._txt(0, (len(lignes) / 2 - i) * 4.6 * mm * t_dev / 11 - 2 * mm, l, self.FBI, t_dev, "marine",
                           "center")
@@ -273,7 +366,7 @@ class BulletinColore(Flowable):
         c.setLineWidth(1)
         c.roundRect(0, y - hi, W, hi, 3 * mm, fill=1, stroke=1)
         xp = W
-        if o.get("photo", True):
+        if K["photo"]:
             pw, ph = 20 * mm, 22 * mm
             xp = W - pw - 2 * mm
             if not (self.photo and self._image(self.photo, xp, y - hi + 1.5 * mm, pw, ph)):
@@ -291,13 +384,10 @@ class BulletinColore(Flowable):
             lw_ = stringWidth(lab, self.FB, 8.5) + 1.5 * mm
             self._txt(x + lw_, yy, val, self.F, 9.5, "marine", maxw=maxw - lw_)
 
-        age = d.get("age")
         rows = [
-            [("Élève :", f"{d.get('nom', '')}  ({d.get('matricule_ecole', '')})", split - 7 * mm)],
-            [("Né(e) le :", E.fmt(d.get("date_naissance"), "date") or "", split * 0.5),
-             ("Âge :", f"{age} ans" if age not in (None, "") else "", split * 0.4)],
-            [("Classe :", d.get("classe", ""), split * 0.4),
-             ("Enseignant(e) :", d.get("enseignant", ""), split * 0.56)],
+            [("Élève :", K["eleve"], split - 7 * mm)],
+            [("Né(e) le :", K["naissance"], split * 0.5), ("Âge :", K["age"], split * 0.4)],
+            [("Classe :", K["classe"], split * 0.4), ("Enseignant(e) :", K["enseignant"], split * 0.56)],
         ]
         for i, r in enumerate(rows):
             yy = y - 6.5 * mm - i * 7 * mm
@@ -307,13 +397,11 @@ class BulletinColore(Flowable):
                 xx += mw + 2 * mm if len(r) > 1 else 0
         x2 = split + 3.5 * mm
         wr = xp - x2 - 2 * mm
-        champ(x2, y - 6.5 * mm, "Établissement :", self.v.get("ecole", ""), wr)
-        champ(x2, y - 13.5 * mm, "Année scolaire :", self.v.get("annee", ""), wr)
+        champ(x2, y - 6.5 * mm, "Établissement :", K["ecole"], wr)
+        champ(x2, y - 13.5 * mm, "Année scolaire :", K["annee"], wr)
         self._txt(x2, y - 20.5 * mm, "Période :", self.FB, 8.5)
         xx = x2 + stringWidth("Période :", self.FB, 8.5) + 2.5 * mm
-        choix = [("Année complète", True)] if annuel else [(_court(p["libelle"]), p["num"] == courant)
-                                                          for p in periodes]
-        for lib, coche in choix:
+        for lib, coche in K["choix_periode"]:
             c.setStrokeColor(C["marine"])
             c.setFillColor(C["marine"] if coche else colors.white)
             c.rect(xx, y - 21.1 * mm, 2.8 * mm, 2.8 * mm, fill=1, stroke=1)
@@ -329,9 +417,9 @@ class BulletinColore(Flowable):
 
         # tableau des disciplines
         h_bas, h_pied = 62 * mm, 19 * mm
-        stats = o.get("statistiques_classe", True)
-        dispo = y - h_bas - h_pied - 4 * mm - (4.5 * mm if stats else 0)
-        disc = rel["disciplines"]
+        stats = K["stats"]
+        dispo = y - h_bas - h_pied - 4 * mm - (4.5 * mm if o.get("statistiques_classe", True) else 0)
+        disc = K["lignes"]
         n = len(disc) + 2
         hh_t = 11 * mm
         rh = max(5 * mm, min(10.5 * mm, (dispo - hh_t) / max(n, 1)))
@@ -341,11 +429,7 @@ class BulletinColore(Flowable):
         w_disc = W - w_no - w_moy - w_p * np_
         xs = [0, w_no, w_no + w_disc] + [w_no + w_disc + w_p * (i + 1) for i in range(np_)] + [W]
         top = y
-        dernier = periodes[-1]["num"] if periodes else None
-        titre_moy = "Moyenne annuelle" if annuel or courant == dernier else "Moyenne à ce jour"
-        heads = [("N°", "bleu"), ("DISCIPLINES", "bleu")] + \
-                [(p["libelle"], COULEURS_PERIODES[i % len(COULEURS_PERIODES)]) for i, p in enumerate(periodes)] + \
-                [(titre_moy, "marine")]
+        heads = [("N°", "bleu"), ("DISCIPLINES", "bleu")] + K["entetes"] + [(K["titre_moyenne"], "marine")]
         if not periodes:
             heads.insert(2, ("–", "ciel"))
         for i, (lab, coul) in enumerate(heads):
@@ -356,53 +440,32 @@ class BulletinColore(Flowable):
             for k, l in enumerate(lignes):
                 yy = top - hh_t / 2 - 1.2 * mm + (len(lignes) - 1) * 1.9 * mm - k * 3.8 * mm
                 self._txt((x0 + x1) / 2, yy, l, self.FB, 9.5, "blanc", "center", maxw=x1 - x0 - 1.5 * mm)
-        notes, moyd = rel.get("notes", {}), rel.get("moyennes_disciplines", {})
-        presents = rel.get("presents", {})
-
-        def visible(num):
-            return annuel or (courant is not None and num <= courant)
-
         yy = top - hh_t
         for i, m in enumerate(disc):
             c.setFillColor(C["ligne_a"] if i % 2 == 0 else C["ligne_b"])
             c.rect(0, yy - rh, W, rh, fill=1, stroke=0)
             base = yy - rh / 2 - 1.2 * mm
             self._txt(w_no / 2, base, str(i + 1), self.FB, 9.5, "marine", "center")
-            lab = _casse(m["libelle"])
+            lab = m["libelle"]
             sz = self._txt(xs[1] + 2.5 * mm, base, lab, self.F, 9.5, "texte",
                            maxw=w_disc - 15 * mm)
-            self._txt(xs[1] + 3.5 * mm + stringWidth(lab, self.F, sz), base, f"(/{_fmt(m['max'])})",
+            self._txt(xs[1] + 3.5 * mm + stringWidth(lab, self.F, sz), base, f"(/{m['max']})",
                       self.F, 7, "gris_txt")
-            for j, p in enumerate(periodes):
-                if not visible(p["num"]):
-                    continue
-                v = notes.get(m["libelle"], {}).get(p["num"])
-                txt = "Abs." if presents.get(p["num"]) is False else _fmt(v)
-                self._txt((xs[2 + j] + xs[3 + j]) / 2, base, txt, self.F, 10, "texte", "center")
-            if annuel or courant:
-                vals = {p["num"]: notes.get(m["libelle"], {}).get(p["num"]) for p in periodes if visible(p["num"])}
-                mv = moyd.get(m["libelle"]) if annuel else _moy_partielle(vals, d.get("regle_mga"))
-                self._txt((xs[-2] + xs[-1]) / 2, base, _fmt(mv), self.FB, 10, "marine", "center")
+            for j, txt in enumerate(m["valeurs"]):
+                if txt is not None:
+                    self._txt((xs[2 + j] + xs[3 + j]) / 2, base, txt, self.F, 10, "texte", "center")
+            self._txt((xs[-2] + xs[-1]) / 2, base, m["moyenne"], self.FB, 10, "marine", "center")
             yy -= rh
         # moyenne générale et rang
-        ech = rel.get("echelle") or 10
-        moys, rangs = rel.get("moyennes", {}), rel.get("rangs", {})
-        for k, (lab, vals, fin) in enumerate((
-                (f"Moyenne générale (/{_fmt(ech)})", {p["num"]: _fmt(moys.get(p["num"])) for p in periodes},
-                 _fmt(d.get("mga") if annuel else _moy_partielle(
-                     {p["num"]: moys.get(p["num"]) for p in periodes if visible(p["num"])}, d.get("regle_mga")))),
-                ("Rang", {p["num"]: _rang(rangs.get(p["num"])) for p in periodes},
-                 f"{_rang(d.get('rang'))} / {d.get('effectif')}" if annuel and d.get("rang") else ""))):
+        for t in K["totaux"]:
             c.setFillColor(C["pied_tab"])
             c.rect(0, yy - rh, W, rh, fill=1, stroke=0)
             base = yy - rh / 2 - 1.3 * mm
-            self._txt(xs[1] + 2.5 * mm, base, lab, self.FB, 10.5, "marine", maxw=w_disc - 3 * mm)
-            for j, p in enumerate(periodes):
-                if visible(p["num"]):
-                    absent = presents.get(p["num"]) is False
-                    self._txt((xs[2 + j] + xs[3 + j]) / 2, base, "Abs." if absent and k == 0 else vals[p["num"]],
-                              self.FB, 10.5, "marine", "center")
-            self._txt((xs[-2] + xs[-1]) / 2, base, fin, self.FB, 10.5, "marine", "center")
+            self._txt(xs[1] + 2.5 * mm, base, t["libelle"], self.FB, 10.5, "marine", maxw=w_disc - 3 * mm)
+            for j, txt in enumerate(t["valeurs"]):
+                if txt is not None:
+                    self._txt((xs[2 + j] + xs[3 + j]) / 2, base, txt, self.FB, 10.5, "marine", "center")
+            self._txt((xs[-2] + xs[-1]) / 2, base, t["fin"], self.FB, 10.5, "marine", "center")
             yy -= rh
         bas_tab = yy
         c.setStrokeColor(colors.white)
@@ -417,11 +480,8 @@ class BulletinColore(Flowable):
         c.setLineWidth(1.2)
         c.roundRect(0, bas_tab, W, top - bas_tab, 2.5 * mm, fill=0, stroke=1)
         y = bas_tab - 1.5 * mm
-        if stats and d.get("moy_classe") is not None:
-            self._txt(W / 2, y - 3 * mm,
-                      f"Moyenne de la classe : {_fmt(d.get('moy_classe'))}   •   Plus forte : {_fmt(d.get('moy_max'))}"
-                      f"   •   Plus faible : {_fmt(d.get('moy_min'))}   •   Élèves classés : {d.get('effectif')}",
-                      self.FI, 8, "texte", "center", maxw=W)
+        if stats:
+            self._txt(W / 2, y - 3 * mm, stats, self.FI, 8, "texte", "center", maxw=W)
             y -= 4.5 * mm
         y -= 2.5 * mm
 
@@ -433,13 +493,7 @@ class BulletinColore(Flowable):
         h_bas = max(h_bas, min(100 * mm, y - h_pied - 3 * mm))
         ha = h_bas * 0.5
         self._cadre(0, y - ha, gw, ha, "Appréciation générale", "blanc", C["vert"], C["vert"])
-        moy = d.get("mga") if annuel else d.get("moyenne")
-        app = d.get("observation") if annuel else d.get("appreciation")
-        if annuel and not app:
-            from epp.domain.bulletins import appreciation
-            app = appreciation(moy, d.get("bareme") or ech)
-        lignes = simpleSplit(" – ".join(x for x in [app, None if annuel else d.get("resultat")] if x) + ".",
-                             self.FB, 10, gw - 8 * mm) if app else []
+        lignes = simpleSplit(K["appreciation"], self.FB, 10, gw - 8 * mm) if K["appreciation"] else []
         ly = y - 7 * mm - 6 * mm
         for l in lignes[:2]:
             self._txt(4 * mm, ly, l, self.FB, 10, "vert_fonce")
@@ -458,18 +512,9 @@ class BulletinColore(Flowable):
 
         hb = max(36 * mm, h_bas * 0.6)
         pas = (hb - 9 * mm) / 4.2
-        self._cadre(xr, y - hb, rw, hb, "Bilan de l'année" if annuel else "Bilan de la période", "marine",
+        self._cadre(xr, y - hb, rw, hb, K["titre_bilan"], "marine",
                     C["jaune_clair"], C["jaune"], taille=11)
-        seuil = d.get("seuil") or 5
-        bareme = d.get("bareme") or ech
-        choix = None
-        if moy is not None:
-            s = moy / ech * 10
-            s_seuil = seuil / bareme * 10
-            fel, suivi = float(o.get("bilan_felicitations", 7)), float(o.get("bilan_suivi", 4))
-            choix = "fel" if s >= fel else "enc" if s >= s_seuil else "prog" if s >= suivi else "suivi"
-        items = [("fel", "Félicitations"), ("enc", "Encouragements"), ("prog", "Doit progresser"),
-                 ("suivi", "Doit être suivi")]
+        choix, items = K["bilan_choix"], K["bilan"]
         lw_b = rw * 0.52
         for i, (k, lab) in enumerate(items):
             iy = y - 7 * mm - pas * 0.75 - i * pas
@@ -479,36 +524,28 @@ class BulletinColore(Flowable):
         c.setStrokeColor(C["bord"])
         c.line(xr + lw_b, y - hb + 3 * mm, xr + lw_b, y - 9 * mm)
         dx0, dw = xr + lw_b + 2.5 * mm, rw - lw_b - 5 * mm
-        titre_dec = "Décision du conseil des maîtres" if annuel else "Résultat"
+        titre_dec = K["titre_decision"]
         for k, l in enumerate(simpleSplit(titre_dec, self.FB, 9, dw)[:2]):
             self._txt(dx0 + dw / 2, y - 12.5 * mm - k * 3.8 * mm, l, self.FB, 9, "marine", "center")
         c.setFillColor(C["ligne_a"])
         hd = hb - 22 * mm
         c.roundRect(dx0, y - hb + 3 * mm, dw, hd, 2.5 * mm, fill=1, stroke=0)
-        if annuel:
-            dec = d.get("decision") or ""
-            suite = d.get("classe_suivante")
-            dec = {"ADMIS": f"ADMIS(E) en {suite}" if suite else "ADMIS(E) en 6ème",
-                   "REDOUBLE": "REDOUBLE", "EXCLU": "EXCLU(E)", "TRANSFERE": "TRANSFÉRÉ(E)"}.get(dec, dec)
-        else:
-            dec = f"{_rang(d.get('rang'))} sur {d.get('effectif')}" if d.get("rang") else (
-                "Absent(e)" if not d.get("present", True) else "")
+        dec = K["decision"]
         for k, l in enumerate(simpleSplit(dec, self.FB, 11, dw - 3 * mm)[:2]):
             self._txt(dx0 + dw / 2, y - hb + 3 * mm + hd / 2 + 0.8 * mm - k * 4.5 * mm, l, self.FB, 11, "bleu_moyen",
                       "center")
 
         sy = y - hb - 3 * mm
         hs = h_bas - hb - 3 * mm         # hauteur de la zone des signatures
-        sigs = list(o.get("signatures") or ["L'enseignant(e)", "Le Directeur", "Les parents"])[:3]
-        noms = [d.get("enseignant", ""), self.v.get("directeur", ""), ""]
+        sigs = K["signatures"]
         cw = rw / max(len(sigs), 1)
-        for i, lab in enumerate(sigs):
+        for i, (lab, nom) in enumerate(sigs):
             x0 = xr + i * cw
             self._txt(x0 + cw / 2, sy - 3 * mm, "Signature", self.FB, 8, "texte", "center")
             self._txt(x0 + cw / 2, sy - 6.6 * mm, lab, self.F, 8, "texte", "center", maxw=cw - 2 * mm)
             self._pointilles(x0 + 3 * mm, x0 + cw - 3 * mm, sy - hs + 5 * mm)
-            if i < len(noms) and noms[i]:
-                self._txt(x0 + cw / 2, sy - hs + 1.5 * mm, noms[i], self.F, 7, "gris_txt", "center", maxw=cw - 2 * mm)
+            if nom:
+                self._txt(x0 + cw / 2, sy - hs + 1.5 * mm, nom, self.F, 7, "gris_txt", "center", maxw=cw - 2 * mm)
             if i:
                 c.setStrokeColor(C["bord"])
                 c.line(x0, sy - 1 * mm, x0, sy - hs + 1 * mm)
@@ -528,9 +565,8 @@ class BulletinColore(Flowable):
             p.close()
             c.setFillColor(C[coul])
             c.drawPath(p, fill=1, stroke=0)
-        texte = self.params.get("bulletin_pied", seed.DEFAULT_PARAMS["bulletin_pied"])
-        if texte:
-            t = E.subst(texte, self.v)
+        t = contenu(self.doc, self.b)["pied"]
+        if t:
             self._txt(W / 2, h * 0.28, t, self.FBI, 12, "blanc", "center", maxw=W * 0.62)
             tw = min(stringWidth(t, self.FBI, 12), W * 0.62)
             c.setStrokeColor(C["jaune"])

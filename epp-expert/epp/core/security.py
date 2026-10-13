@@ -34,6 +34,7 @@ PERMISSIONS: dict[str, str] = {
     "sauvegarde.restaurer": "Restaurer une sauvegarde",
     "import.excel": "Importer des fichiers Excel",
     "export.excel": "Exporter vers Excel",
+    "export.word": "Exporter vers Word",
 }
 
 DEFAULT_ROLES: dict[str, tuple[str, list[str]]] = {
@@ -42,7 +43,7 @@ DEFAULT_ROLES: dict[str, tuple[str, list[str]]] = {
                   [p for p in PERMISSIONS if p != "utilisateurs.gerer"]),
     "SECRETARIAT": ("Secrétariat", [
         "eleves.lire", "eleves.modifier", "personnel.lire", "absences.lire", "absences.modifier",
-        "notes.lire", "rapports.generer", "export.excel", "sauvegarde.creer"]),
+        "notes.lire", "rapports.generer", "export.excel", "export.word", "sauvegarde.creer"]),
     "ENSEIGNANT": ("Enseignant", [
         "eleves.lire", "notes.lire", "notes.modifier", "absences.lire", "absences.modifier",
         "rapports.generer"]),
@@ -52,6 +53,7 @@ DEFAULT_ROLES: dict[str, tuple[str, list[str]]] = {
 # Permissions ajoutées après la première version : {permission: rôles qui la reçoivent}
 PERMISSIONS_AJOUTEES: dict[str, list[str]] = {
     "fin_annee.valider": ["DIRECTEUR"],
+    "export.word": ["DIRECTEUR", "SECRETARIAT"],
 }
 
 
