@@ -122,6 +122,22 @@ def test_impression_par_numero_matricule_ou_recherche(demo, tmp_path):
     t = " ".join(p.extract_text() for p in PdfReader(au.imprimer(db, S, annee, "AA-2026-002", tmp_path / "a.pdf")).pages)
     assert "DEMANDE D'AUTORISATION D'ABSENCE" in t and "AA-2026-002" in t and "Conférence pédagogique" in t
     assert agent["nom"] in t and "MINISTERE" in t.upper() and "IEPP" in t
+    # personnel : lettre au modèle de l'école, remplie avec la fiche de l'agent
+    t1 = " ".join(t.split())
+    for attendu in ("Monsieur/Madame le Chef de Circonscription", "Objet : Demande d'autorisation d'absence",
+                    f"Je soussigné(e), {agent['nom']}, exerçant en qualité de {agent['fonction']} à l'EPP OUANINOU 2",
+                    "s'étend du 16/11/2026 au 18/11/2026, soit une durée de 3 jour(s) de classe",
+                    "Convocation IEPP – Conférence pédagogique", "SIGNATURES ET AVIS", "LE DEP / CPPP / CPI",
+                    "LE CHEF DE CIRCONSCRIPTION", "DRENA : TOUBA", "IEPP : OUANINOU",
+                    "Demande d'autorisation d'absence — Document administratif"):
+        assert attendu in t1, attendu
+    repo.save_etablissement(db, S, {"autorisation_destinataire": "Monsieur l'Inspecteur",
+                                    "autorisation_avis": "LE DIRECTEUR"})
+    d = au.imprimer(db, S, annee, "AA-2026-002", tmp_path / "a.docx")
+    x = Document(d)
+    texte = "\n".join([p.text for p in x.paragraphs] + [c.text for tb in x.tables for row in tb.rows for c in row.cells])
+    assert "Monsieur l'Inspecteur" in texte and "LE DIRECTEUR" in texte and agent["nom"] in texte
+    assert "SIGNATURES ET AVIS" in texte and "Chef de Circonscription" not in texte
     # par matricule : toutes les demandes de l'agent, une page chacune
     r = PdfReader(au.imprimer(db, S, annee, agent["matricule"], tmp_path / "b.pdf"))
     assert len(r.pages) == 2 and "MINISTERE" in r.pages[1].extract_text().upper()

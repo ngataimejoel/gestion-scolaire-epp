@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import re
 from datetime import date
 
 from epp.core.db import Database
@@ -327,7 +328,8 @@ def document(db: Database, annee: Annee, demandes: list[dict]):
     etab = repo.etablissement(db)
     doc = E.Document("Demande d'autorisation d'absence", "DEMANDE D'AUTORISATION D'ABSENCE", "", "portrait",
                      {"officiel": False, "logo": True, "texte": ""}, etab,
-                     {"texte": "{ecole} – {annee}", "numerotation": True, "date_edition": True}, variables=v)
+                     {"texte": "Demande d'autorisation d'absence — Document administratif",
+                      "numerotation": len(demandes) > 1, "date_edition": False}, variables=v)
     for k, a in enumerate(demandes):
         if k:
             doc.blocks.append(E.PageBreak())
@@ -345,44 +347,95 @@ def _table(E, titre_bloc: str, lignes: list[tuple[str, str]]):
                    [62, 132], first_col_header=True)   # A4 portrait : 194 mm utiles
 
 
+def _sans_prefixe(valeur: str, prefixe: str) -> str:
+    """« DRENAET DE TOUBA » -> « TOUBA » quand le libellé (DRENA, IEPP) est déjà imprimé devant."""
+    return re.sub(rf"^{prefixe}\w*\s+(?:(?:DE|DU|DES)\s+|D['’]\s*)?", "", (valeur or "").strip(), flags=re.I)
+
+
+def _date_txt(d: date) -> str:
+    return f"{d:%d/%m/%Y}"
+
+
+def _lettre_personnel(db, annee, a: dict, v: dict, E) -> list:
+    """Demande d'autorisation d'absence du personnel, sur le modèle de l'école : lettre au Chef de
+    Circonscription, remplie avec la fiche de l'agent et la demande."""
+    etab = repo.etablissement(db)
+    from epp.core.seed import DEFAULT_PARAMS as seed_p
+    dest = etab.get("autorisation_destinataire") or seed_p["autorisation_destinataire"]
+    d1, d2 = calculs.to_date(a["date_debut"]), calculs.to_date(a["date_fin"])
+    dd = calculs.to_date(a["date_demande"])
+    ecole = v.get("ecole", "")
+    a_l = "à l'" if ecole[:1].upper() in "AEIOUYÉÈH" else "à "
+    if a.get("demi_journee"):
+        periode = [("La période d'absence demandée porte sur ", False),
+                   (f"{DEMI[a['demi_journee']].lower()} du {_date_txt(d1)}", True)]
+    elif d1 == d2:
+        periode = [("La période d'absence demandée porte sur la journée du ", False), (_date_txt(d1), True)]
+    else:
+        periode = [("La période d'absence demandée s'étend du ", False), (_date_txt(d1), True),
+                   (" au ", False), (_date_txt(d2), True)]
+    periode += [(", soit une durée de ", False), (f"{_j(a['jours'])} jour(s) de classe", True), (".", False)]
+    motif = a["motif"] + (f" – {a['precisions']}" if a.get("precisions") else "")
+    engagement = ("Je m'engage à prendre toutes les dispositions nécessaires afin de favoriser la continuité du "
+                  "service pendant mon absence.")
+    if a.get("interim"):
+        engagement += f" L'intérim sera assuré par {a['interim']}."
+    corps = [
+        ("intitule", [("Objet : Demande d'autorisation d'absence", True)]),
+        ("normal", [("Je soussigné(e), ", False), (a["nom"], True), (", exerçant en qualité de ", False),
+                    (a.get("fonction") or "……………………", True), (f" {a_l}", False), (ecole, True),
+                    (", sollicite respectueusement de votre bienveillance l'autorisation de m'absenter de mon "
+                     "poste de travail.", False)]),
+        ("intitule", [("Motif de l'absence :", True)]),
+        ("normal", [(motif, False)] + ([(f" (lieu pendant l'absence : {a['lieu']})", False)]
+                                       if a.get("lieu") else [])),
+        ("normal", periode),
+        ("normal", [(engagement, False)]),
+        ("normal", [(f"Dans l'attente d'une suite favorable à ma demande, je vous prie d'agréer, {dest}, "
+                     "l'expression de mon profond respect.", False)]),
+        ("droite", [("Fait à ", False), (v.get("localite", "") or "……………………", True), (", le ", False),
+                    (_date_txt(dd), True)]),
+    ]
+    coche = {s: "[X]" if a["statut"] == s else "[  ]" for s in STATUTS}
+    decision = ["Décision, signature et cachet :", "",
+                f"{coche['ACCORDEE']} Accordée     {coche['REFUSEE']} Refusée"]
+    avis = ["Avis et signature :"] + ([""] + [a["avis"]] if a.get("avis") else [])
+    return [E.Lettre(
+        entete=[x for x in (v.get("pays", ""), v.get("devise_pays", ""), v.get("ministere", "")) if x],
+        references=[(f"DRENA : {_sans_prefixe(v.get('dren', ''), 'DRENA')}", f"N° : {a['numero']}"),
+                    (f"IEPP : {_sans_prefixe(v.get('iepp', ''), 'IEPP')}", f"Matricule : {a['matricule'] or ''}")],
+        titre="DEMANDE D'AUTORISATION D'ABSENCE", destinataire=["À", dest], corps=corps,
+        titre_signatures="SIGNATURES ET AVIS",
+        signatures=[("L'INTÉRESSÉ(E)", ["Nom et prénoms :", a["nom"], "", "Signature"]),
+                    (etab.get("autorisation_avis") or seed_p["autorisation_avis"], avis),
+                    (etab.get("autorisation_decision") or seed_p["autorisation_decision"], decision)])]
+
+
 def _fiche(db, annee, a: dict, v: dict, E) -> list:
-    eleve = a["kind"] == "eleve"
+    if a["kind"] != "eleve":
+        return _lettre_personnel(db, annee, a, v, E)
     dd = calculs.to_date(a["date_demande"])
     blocs = [E.EnteteOfficiel(),
-             ("TITRE", "DEMANDE D'AUTORISATION D'ABSENCE",
-              f"N° {a['numero']} – {'Élève' if eleve else 'Personnel'} – Année scolaire {annee.libelle}")]
-    if eleve:
-        ins = db.one("SELECT i.*, e.* FROM inscription i JOIN eleve e ON e.id=i.eleve_id WHERE i.id=?",
-                     (a["inscription_id"],))
-        fiche = _eleve_fiche(db, annee, {**dict(ins), "inscription_id": a["inscription_id"],
-                                         "classe": a["classe"]}) if ins else {}
-        demandeur = a.get("demandeur") or fiche.get("demandeur") or ""
-        blocs.append(_table(E, "ÉLÈVE CONCERNÉ", [
-            ("Nom et prénoms", a["nom"]), ("Matricule école", a["matricule"]), ("Classe", a["classe"]),
-            ("Enseignant(e)", fiche.get("enseignant", "")),
-            ("Parent / tuteur demandeur", demandeur), ("Téléphone", a.get("contact") or fiche.get("telephone", ""))]))
-        phrase = (f"Je soussigné(e) {demandeur or '……………………………'}, parent / tuteur de l'élève {a['nom']} "
-                  f"({a['classe']}), sollicite pour mon enfant une autorisation d'absence {a['periode']}, "
-                  f"soit {_j(a['jours'])} jour(s) de classe, pour le motif suivant : "
-                  f"{a['motif']}{' – ' + a['precisions'] if a.get('precisions') else ''}.")
-    else:
-        blocs.append(_table(E, "IDENTITÉ DE L'AGENT", [
-            ("Nom et prénoms", a["nom"]), ("Matricule", a["matricule"]), ("Fonction", a.get("fonction")),
-            ("Grade / emploi", a.get("grade")), ("Classe tenue", a["classe"]),
-            ("Établissement", v.get("ecole")), ("Téléphone", a.get("contact") or a.get("tel_agent"))]))
-        phrase = (f"Je soussigné(e) {a['nom']}, {a.get('fonction') or 'agent'} à l'{v.get('ecole', '')}, "
-                  f"sollicite une autorisation d'absence {a['periode']}, soit "
-                  f"{_j(a['jours'])} jour(s) de classe, pour le motif suivant : "
-                  f"{a['motif']}{' – ' + a['precisions'] if a.get('precisions') else ''}.")
+             ("TITRE", "DEMANDE D'AUTORISATION D'ABSENCE", f"N° {a['numero']} – Élève – Année scolaire {annee.libelle}")]
+    ins = db.one("SELECT i.*, e.* FROM inscription i JOIN eleve e ON e.id=i.eleve_id WHERE i.id=?",
+                 (a["inscription_id"],))
+    fiche = _eleve_fiche(db, annee, {**dict(ins), "inscription_id": a["inscription_id"],
+                                     "classe": a["classe"]}) if ins else {}
+    demandeur = a.get("demandeur") or fiche.get("demandeur") or ""
+    blocs.append(_table(E, "ÉLÈVE CONCERNÉ", [
+        ("Nom et prénoms", a["nom"]), ("Matricule école", a["matricule"]), ("Classe", a["classe"]),
+        ("Enseignant(e)", fiche.get("enseignant", "")),
+        ("Parent / tuteur demandeur", demandeur), ("Téléphone", a.get("contact") or fiche.get("telephone", ""))]))
+    phrase = (f"Je soussigné(e) {demandeur or '……………………………'}, parent / tuteur de l'élève {a['nom']} "
+              f"({a['classe']}), sollicite pour mon enfant une autorisation d'absence {a['periode']}, "
+              f"soit {_j(a['jours'])} jour(s) de classe, pour le motif suivant : "
+              f"{a['motif']}{' – ' + a['precisions'] if a.get('precisions') else ''}.")
     objet = [("Date de la demande", f"{dd:%d/%m/%Y}"), ("Période d'absence", a["periode"]),
              ("Nombre de jours de classe", _j(a["jours"])),
              ("Motif", a["motif"]), ("Précisions", a.get("precisions")),
              ("Lieu pendant l'absence", a.get("lieu"))]
-    if not eleve:
-        objet.append(("Intérim / suppléance assuré(e) par", a.get("interim")))
     blocs += [_table(E, "OBJET DE LA DEMANDE", objet), E.Paragraph(phrase, "encadre"),
-              E.Signature(f"Fait à {v.get('localite', '')}, le {dd:%d/%m/%Y}",
-                          "LE PARENT / TUTEUR" if eleve else "L'INTÉRESSÉ(E)", "" if eleve else a["nom"])]
+              E.Signature(f"Fait à {v.get('localite', '')}, le {dd:%d/%m/%Y}", "LE PARENT / TUTEUR", "")]
     coche = {s: "[X]" if a["statut"] == s else "[  ]" for s in STATUTS}
     decision = (f"{coche['ACCORDEE']} Accordée      {coche['REFUSEE']} Refusée      "
                 f"{coche['EN_ATTENTE']} En attente de décision")
@@ -391,8 +444,6 @@ def _fiche(db, annee, a: dict, v: dict, E) -> list:
     blocs += [E.Paragraph("DÉCISION DU DIRECTEUR", "titre2"), E.Paragraph(decision),
               E.TextZone("Avis et observations du directeur :", a.get("avis") or "", 3),
               E.Signature("", "LE DIRECTEUR", v.get("directeur", ""))]
-    if not eleve:
-        blocs += [E.TextZone("Avis de l'Inspecteur de l'Enseignement Préscolaire et Primaire (IEPP) :", "", 3)]
     if a["statut"] == "ACCORDEE":
         blocs.append(E.Paragraph(f"Absence reportée automatiquement dans le registre des absences "
                                  f"({_j(a['jours'])} jour(s), motif « {a['motif']} », "

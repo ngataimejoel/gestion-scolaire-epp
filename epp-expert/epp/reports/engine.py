@@ -93,6 +93,20 @@ class PageBreak:
 
 
 @dataclass
+class Lettre:
+    """Lettre administrative sur le modèle de l'école (demande d'autorisation d'absence du personnel) :
+    en-tête centré, références (gauche / droite), titre, destinataire encadré, paragraphes faits de
+    segments (texte, gras), tableau des signatures et avis."""
+    entete: list[str]
+    references: list[tuple[str, str]]
+    titre: str
+    destinataire: list[str]
+    corps: list[tuple[str, list[tuple[str, bool]]]]   # (style : normal | intitule | droite, segments)
+    titre_signatures: str
+    signatures: list[tuple[str, list[str]]]           # (titre de colonne, lignes de la case)
+
+
+@dataclass
 class EnteteOfficiel:
     """En-tête officiel (ministère, DRENA, IEPP, école, logos) répété en haut d'une nouvelle page."""
     pass

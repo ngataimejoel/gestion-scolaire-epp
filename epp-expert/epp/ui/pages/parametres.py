@@ -150,11 +150,15 @@ class OngletBulletin(QWidget):
               ("vive", "Vives : pour une impression en couleur")]),
             ("bulletin_colonnes", "Colonnes des notes", "liste",
              [("trimestres", "1er, 2e et 3e trimestre (évaluations regroupées selon leur date)"),
-              ("evaluations", "Une colonne par évaluation (compositions, examens blancs)")])])
+              ("evaluations", "Une colonne par évaluation (compositions, examens blancs)")]),
+            ("autorisation_destinataire", "Autorisation d'absence : destinataire", "texte"),
+            ("autorisation_avis", "Autorisation : case de l'avis", "texte"),
+            ("autorisation_decision", "Autorisation : case de la décision", "texte")])
         v.addWidget(self.f)
         v.addWidget(label("Ces textes apparaissent sur le bulletin coloré. Variables : {ecole}, {annee}, {iepp}. "
                           "Trimestres : septembre à décembre, janvier à mars, avril à la fin de l'année ; la "
-                          "moyenne annuelle reste calculée comme dans le classeur.", discret=True, wrap=True))
+                          "moyenne annuelle reste calculée comme dans le classeur. Les trois derniers champs servent à la demande "
+                          "d'autorisation d'absence du personnel.", discret=True, wrap=True))
         self.b_ok = bouton("Enregistrer", self._ok, "primaire")
         v.addLayout(ligne(None, self.b_ok))
         v.addStretch(1)
@@ -489,7 +493,7 @@ class PageParametres(Page):
         self.o = {"etab": OngletEtablissement(self), "bulletin": OngletBulletin(self), "annee": OngletAnnee(self),
                   "calendrier": OngletCalendrier(self), "listes": OngletListes(self)}
         self.onglets.addTab(_defilant(self.o["etab"]), "Établissement et en-tête")
-        self.onglets.addTab(self.o["bulletin"], "Bulletin")
+        self.onglets.addTab(self.o["bulletin"], "Bulletin et autorisation")
         self.onglets.addTab(self.o["annee"], "Année scolaire")
         self.onglets.addTab(self.o["calendrier"], "Calendrier")
         self.onglets.addTab(self.o["listes"], "Listes de valeurs")

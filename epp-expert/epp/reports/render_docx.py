@@ -356,6 +356,68 @@ class _Rendu:
         _para(c, b.nom, 9, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER)
         _insecable(t.rows[0])
 
+    # ------------------------------------------------------------------ lettre administrative
+    def lettre(self, b: E.Lettre) -> None:
+        def segments(p, segs, taille=9.5):
+            for s, gras in segs:
+                _run(p, s, taille, gras)
+
+        for i, ligne in enumerate(b.entete):
+            _para(self.d, ligne, 9 if i < 2 else 8.5, gras=i != 1, align=WD_ALIGN_PARAGRAPH.CENTER,
+                  apres=8 if i == 1 else 2)
+        _para(self.d, "", apres=6)
+        if b.references:
+            t = self.d.add_table(len(b.references), 2)
+            _bordures(t, None)
+            _largeurs(t, [self.avail * 0.62, self.avail * 0.38])
+            for r, paire in enumerate(b.references):
+                for c, x in enumerate(paire):
+                    p = _ecrire(t.cell(r, c), "", 8.5)
+                    if x:
+                        segments(p, [(x.split(":")[0].rstrip() + " :", True), (":".join(x.split(":")[1:]), False)], 8.5)
+            _para(self.d, "", apres=10)
+        _para(self.d, b.titre, 15, gras=True, couleur=BLEU, align=WD_ALIGN_PARAGRAPH.CENTER, apres=8)
+        if b.destinataire:
+            t = self.d.add_table(1, 1)
+            _bordures(t, 6, "9FB6CD")
+            _largeurs(t, [self.avail])
+            c = t.cell(0, 0)
+            _ombre(c, "F2F6FA")
+            _ecrire(c, b.destinataire[0], 9.5, gras=True, align=WD_ALIGN_PARAGRAPH.LEFT)
+            for x in b.destinataire[1:]:
+                _para(c, x, 9.5)
+            _para(self.d, "", apres=8)
+        for style, segs in b.corps:
+            if style == "intitule":
+                p = _para(self.d, "", avant=2, apres=3)
+                segments(p, [(s, True) for s, _ in segs])
+            elif style == "droite":
+                p = _para(self.d, "", align=WD_ALIGN_PARAGRAPH.RIGHT, avant=4, apres=6)
+                segments(p, segs)
+            else:
+                p = _para(self.d, "", align=WD_ALIGN_PARAGRAPH.JUSTIFY, apres=6)
+                p.paragraph_format.line_spacing = 1.15
+                segments(p, segs)
+        if b.signatures:
+            n = len(b.signatures)
+            p = _para(self.d, b.titre_signatures, 10, gras=True, couleur=BLEU, align=WD_ALIGN_PARAGRAPH.CENTER,
+                      avant=4, apres=4)
+            p.paragraph_format.keep_with_next = True
+            t = self.d.add_table(2, n)
+            _bordures(t, 4, "9FB6CD")
+            _largeurs(t, [self.avail / n] * n)
+            for i, (tete, lignes) in enumerate(b.signatures):
+                _ecrire(t.cell(0, i), tete, 7.5, gras=True, couleur=BLEU, align=WD_ALIGN_PARAGRAPH.CENTER)
+                _ombre(t.cell(0, i), "F2F6FA")
+                c = t.cell(1, i)
+                _ecrire(c, lignes[0] if lignes else "", 7.5, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+                for x in lignes[1:]:
+                    _para(c, x, 7.5, align=WD_ALIGN_PARAGRAPH.CENTER)
+            _hauteur(t.rows[0], 9)
+            _hauteur(t.rows[1], 34)
+            for row in t.rows:
+                _insecable(row)
+
     # ------------------------------------------------------------------ tableaux
     def tableau(self, t: E.Table) -> None:
         ncols = len(t.types)
@@ -606,6 +668,10 @@ class _Rendu:
     def rendre(self) -> DocxDocument:
         doc = self.doc
         bulletins_seuls = all(isinstance(b, (E.Bulletin, E.PageBreak)) for b in doc.blocks) and doc.blocks
+        if doc.blocks and all(isinstance(b, (E.Lettre, E.PageBreak)) for b in doc.blocks):
+            for sec in self.d.sections:          # lettre : marges d'un courrier administratif
+                sec.left_margin = sec.right_margin = Mm(MARGE_G + 16)
+            self.avail -= 32
         if not bulletins_seuls:
             self.officiel()
         dernier_saut = True
@@ -629,6 +695,8 @@ class _Rendu:
                 self.signature(b)
             elif isinstance(b, E.EnteteOfficiel):
                 self.officiel(force=True)
+            elif isinstance(b, E.Lettre):
+                self.lettre(b)
             elif isinstance(b, E.Bulletin):
                 if not premier_bulletin and not dernier_saut:
                     _saut_de_page(self.d)

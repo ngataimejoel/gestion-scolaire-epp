@@ -563,6 +563,64 @@ def _bulletin(doc: E.Document, b: E.Bulletin, avail: float) -> list:
     return [KeepTogether(out)]
 
 
+def _segments(segs: list[tuple[str, bool]]) -> str:
+    return "".join(f"<b>{escape(s)}</b>" if gras else escape(s) for s, gras in segs).replace("\n", "<br/>")
+
+
+def _lettre(b: E.Lettre, avail: float) -> list:
+    from reportlab.lib.enums import TA_JUSTIFY
+    from reportlab.platypus import Indenter
+    marge = 16 * mm
+    w = avail - 2 * marge
+    out: list = [Indenter(marge, marge)]
+    for i, ligne in enumerate(b.entete):
+        out.append(_p(ligne, _style(9 if i < 2 else 8.5, bold=i != 1, align=TA_CENTER, leading=12)))
+        if i == 1:
+            out.append(Spacer(1, 3 * mm))
+    out.append(Spacer(1, 5 * mm))
+    st_ref = _style(8.5, leading=13)
+    refs = [[RLParagraph(_segments([(g.split(":")[0] + " :", True), (":".join(g.split(":")[1:]), False)])
+                         if g else "", st_ref),
+             RLParagraph(_segments([(d.split(":")[0] + " :", True), (":".join(d.split(":")[1:]), False)])
+                         if d else "", st_ref)] for g, d in b.references]
+    if refs:
+        t = RLTable(refs, colWidths=[w * 0.62, w * 0.38])
+        t.setStyle(TableStyle([("LEFTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 1),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 1)]))
+        out += [t, Spacer(1, 7 * mm)]
+    out += [_p(b.titre, _style(15, bold=True, align=TA_CENTER, color=BLEU, leading=18)), Spacer(1, 4 * mm)]
+    if b.destinataire:
+        dest = [_p(b.destinataire[0], _style(9.5, bold=True))] + [_p(x, _style(9.5)) for x in b.destinataire[1:]]
+        t = RLTable([[dest]], colWidths=[w])
+        t.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.6, colors.HexColor("#9FB6CD")),
+                               ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F2F6FA")),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 4),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+        out += [t, Spacer(1, 5 * mm)]
+    for style, segs in b.corps:
+        if style == "intitule":
+            out += [RLParagraph(_segments(segs), _style(9.5, bold=True, leading=13)), Spacer(1, 1.5 * mm)]
+        elif style == "droite":
+            out += [Spacer(1, 2 * mm), RLParagraph(_segments(segs), _style(9.5, align=TA_RIGHT, leading=13)),
+                    Spacer(1, 3 * mm)]
+        else:
+            out += [RLParagraph(_segments(segs), _style(9.5, align=TA_JUSTIFY, leading=13.5)),
+                    Spacer(1, 2.5 * mm)]
+    if b.signatures:
+        n = len(b.signatures)
+        tete = [_p(x, _style(7.5, bold=True, align=TA_CENTER, color=BLEU)) for x, _ in b.signatures]
+        cases = [[_p(l, _style(7.5, bold=k == 0, align=TA_CENTER, leading=10)) if l else Spacer(1, 6 * mm)
+                  for k, l in enumerate(ls)] for _, ls in b.signatures]
+        t = RLTable([tete, cases], colWidths=[w / n] * n, rowHeights=[9 * mm, 34 * mm])
+        t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#9FB6CD")),
+                               ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F6FA")),
+                               ("VALIGN", (0, 0), (-1, 0), "MIDDLE"), ("VALIGN", (0, 1), (-1, 1), "MIDDLE")]))
+        out += [Spacer(1, 2 * mm), _p(b.titre_signatures, _style(10, bold=True, align=TA_CENTER, color=BLEU)),
+                Spacer(1, 2 * mm), KeepTogether([t])]
+    out.append(Indenter(-marge, -marge))
+    return out
+
+
 PSTYLE = {"normal": dict(size=9), "titre2": dict(size=10, bold=True, color=BLEU), "note": dict(size=8, italic=True),
           "encadre": dict(size=9)}
 
@@ -624,6 +682,8 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
             emit(_signature(b, avail))
         elif isinstance(b, E.Bulletin):
             emit(_bulletin(doc, b, avail))
+        elif isinstance(b, E.Lettre):
+            emit(_lettre(b, avail))
         elif isinstance(b, E.EnteteOfficiel):
             emit(_officiel(doc, avail, force=True))
         elif isinstance(b, E.PageBreak):

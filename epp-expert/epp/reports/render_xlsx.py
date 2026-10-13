@@ -198,6 +198,32 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
             widths[1] = max(widths.get(1, 0), 30)
             widths[3] = max(widths.get(3, 0), 22)
             r += 1
+        elif isinstance(b, E.Lettre):
+            for ligne in b.entete:
+                ws.cell(r, 1, ligne).font = Font(bold=True)
+                r += 1
+            for g, d in b.references:
+                ws.cell(r, 1, g)
+                ws.cell(r, 4, d)
+                r += 1
+            r += 1
+            ws.cell(r, 1, b.titre).font = Font(bold=True, size=13)
+            r += 2
+            for x in b.destinataire:
+                ws.cell(r, 1, x)
+                r += 1
+            r += 1
+            for style, segs in b.corps:
+                ws.cell(r, 1, "".join(s for s, _ in segs)).font = Font(bold=style == "intitule")
+                r += 1
+            r += 1
+            ws.cell(r, 1, b.titre_signatures).font = Font(bold=True)
+            r += 1
+            for i, (tete, lignes) in enumerate(b.signatures):
+                ws.cell(r, 1 + 2 * i, tete).font = Font(bold=True)
+                ws.cell(r + 1, 1 + 2 * i, " / ".join(lignes))
+            r += 3
+            widths[1] = max(widths.get(1, 0), 40)
         elif isinstance(b, E.EnteteOfficiel):
             gauche, _, _ = E.entete_officiel(doc)
             for line in gauche:

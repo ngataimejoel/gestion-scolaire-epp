@@ -34,6 +34,10 @@ DEFAULT_PARAMS = {
     "bulletin_pied": "L'éducation est la clé de la réussite",
     "bulletin_palette": "",                          # "" = selon le modèle, "douce" ou "vive"
     "bulletin_colonnes": "trimestres",               # bulletin coloré : "trimestres" ou "evaluations"
+    # demande d'autorisation d'absence du personnel (modèle de l'école)
+    "autorisation_destinataire": "Monsieur/Madame le Chef de Circonscription",
+    "autorisation_avis": "LE DEP / CPPP / CPI",
+    "autorisation_decision": "LE CHEF DE CIRCONSCRIPTION",
     "entete_gauche": ENTETE_GAUCHE_DEFAUT,
     "entete_droite": ENTETE_DROITE_DEFAUT,
     "sauvegarde_auto": "1",
