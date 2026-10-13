@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ["EPP_SANS_ANIMATION"] = "1"
 os.environ["EPP_SANS_VIDEO"] = "1"
 
-from PySide6.QtCore import QDate, Qt                                   # noqa: E402
+from PySide6.QtCore import QCoreApplication, QDate, QEvent, Qt         # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QInputDialog, QMessageBox   # noqa: E402
 
 from epp.core import licence, security                                 # noqa: E402
@@ -28,7 +28,17 @@ def app():
     a = QApplication.instance() or QApplication([])
     from epp.ui.main import appliquer_theme
     appliquer_theme(a)
-    return a
+    yield a
+    # détruire les fenêtres tant que l'application Qt existe : sinon Python les libère à la sortie, après
+    # elle, et l'interpréteur peut planter en quittant (tests tous réussis, code de sortie en erreur)
+    import gc
+    for w in QApplication.topLevelWidgets():
+        w.close()
+        w.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
+    a.processEvents()
+    gc.collect()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 @pytest.fixture
