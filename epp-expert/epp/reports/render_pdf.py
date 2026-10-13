@@ -624,6 +624,8 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
             emit(_signature(b, avail))
         elif isinstance(b, E.Bulletin):
             emit(_bulletin(doc, b, avail))
+        elif isinstance(b, E.EnteteOfficiel):
+            emit(_officiel(doc, avail, force=True))
         elif isinstance(b, E.PageBreak):
             if carry:
                 story.extend(carry)

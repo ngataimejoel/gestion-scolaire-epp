@@ -198,6 +198,12 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
             widths[1] = max(widths.get(1, 0), 30)
             widths[3] = max(widths.get(3, 0), 22)
             r += 1
+        elif isinstance(b, E.EnteteOfficiel):
+            gauche, _, _ = E.entete_officiel(doc)
+            for line in gauche:
+                ws.cell(r, 1, line).font = Font(bold=True, size=9)
+                r += 1
+            r += 1
         elif isinstance(b, E.Signature):
             r += 1
             ws.cell(r, 1, b.lieu_date)

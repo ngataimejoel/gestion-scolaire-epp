@@ -112,6 +112,33 @@ ABS_PERS_CHAMPS = [
 ]
 
 
+AUTORISATION_CHAMPS = [
+    C("numero", "N°", "entier"), C("numero_autorisation", "N° autorisation"), C("categorie", "Élève / personnel"),
+    C("matricule", "Matricule"), C("nom", "Nom et prénoms"), C("classe", "Classe"), C("fonction", "Fonction"),
+    C("date_demande", "Demandée le", "date"), C("date_debut", "Du", "date"), C("date_fin", "Au", "date"),
+    C("periode", "Période"), C("jours", "Jours", "decimal"), C("motif", "Motif"), C("precisions", "Précisions"),
+    C("interim", "Intérim assuré par"), C("demandeur", "Demandeur (parent)"), C("statut_libelle", "Décision"),
+    C("avis", "Avis du directeur"),
+]
+
+
+def _autorisations(ctx: Contexte) -> list[dict]:
+    from epp.domain import autorisations
+    rows = [r | {"numero_autorisation": r["numero"], "numero": r["numero_ligne"]}
+            for r in autorisations.lister(ctx.db, ctx.annee)]
+    d1, d2 = ctx.params.get("date_debut"), ctx.params.get("date_fin")
+    if d1:
+        rows = [r for r in rows if r["date_fin"] >= d1]
+    if d2:
+        rows = [r for r in rows if r["date_debut"] <= d2]
+    if ctx.params.get("mois"):
+        an = stats.annee_civile(ctx.annee, ctx.params["mois"])
+        debut = f"{an}-{ctx.params['mois']:02d}-01"
+        fin = f"{an}-{ctx.params['mois']:02d}-31"
+        rows = [r for r in rows if r["date_debut"] <= fin and r["date_fin"] >= debut]
+    return rows
+
+
 def _filtre_periode(rows: list[dict], ctx: Contexte) -> list[dict]:
     d1, d2 = ctx.params.get("date_debut"), ctx.params.get("date_fin")
     if d1:
@@ -261,6 +288,8 @@ SOURCES: dict[str, Source] = {s.code: s for s in [
            ABS_ELEVE_CHAMPS, _abs_eleves, ["mois", "date_debut", "date_fin"]),
     Source("absences_personnel", "Absences et retards du personnel", "Journal des absences et retards du personnel.",
            ABS_PERS_CHAMPS, _abs_pers, ["mois", "date_debut", "date_fin"]),
+    Source("autorisations", "Autorisations d'absence", "Demandes d'autorisation d'absence (élèves et personnel), "
+           "avec la décision du directeur.", AUTORISATION_CHAMPS, _autorisations, ["mois", "date_debut", "date_fin"]),
     Source("assiduite_personnel", "Assiduité du personnel (mois)", "Synthèse mensuelle des retards et absences par agent.",
            [C("numero", "N°", "entier"), C("nom", "Nom et prénoms"), C("matricule", "Matricule"),
             C("cours_tenu", "Cours tenu"), C("fonction", "Fonction"), C("retards", "Retards", "entier"),

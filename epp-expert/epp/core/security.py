@@ -24,6 +24,7 @@ PERMISSIONS: dict[str, str] = {
     "personnel.supprimer": "Supprimer du personnel",
     "absences.lire": "Consulter les absences",
     "absences.modifier": "Saisir les absences",
+    "absences.autoriser": "Accorder ou refuser les autorisations d'absence",
     "rapports.generer": "Générer, imprimer et exporter les rapports",
     "modeles.gerer": "Créer et modifier ses modèles de rapports",
     "modeles.partages": "Modifier ou supprimer les modèles partagés et intégrés",
@@ -54,6 +55,7 @@ DEFAULT_ROLES: dict[str, tuple[str, list[str]]] = {
 PERMISSIONS_AJOUTEES: dict[str, list[str]] = {
     "fin_annee.valider": ["DIRECTEUR"],
     "export.word": ["DIRECTEUR", "SECRETARIAT"],
+    "absences.autoriser": ["DIRECTEUR"],
 }
 
 

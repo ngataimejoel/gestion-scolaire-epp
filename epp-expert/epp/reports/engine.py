@@ -93,6 +93,12 @@ class PageBreak:
 
 
 @dataclass
+class EnteteOfficiel:
+    """En-tête officiel (ministère, DRENA, IEPP, école, logos) répété en haut d'une nouvelle page."""
+    pass
+
+
+@dataclass
 class Document:
     nom: str
     titre: str

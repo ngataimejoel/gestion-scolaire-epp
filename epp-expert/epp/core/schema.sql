@@ -178,7 +178,8 @@ CREATE TABLE IF NOT EXISTS absence_eleve (
     retard_min INTEGER,
     motif TEXT,
     justifie TEXT,
-    observations TEXT
+    observations TEXT,
+    autorisation_id INTEGER REFERENCES autorisation_absence(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS absence_personnel (
@@ -191,7 +192,8 @@ CREATE TABLE IF NOT EXISTS absence_personnel (
     retard_min INTEGER,
     motif TEXT,
     justifie TEXT,
-    observations TEXT
+    observations TEXT,
+    autorisation_id INTEGER REFERENCES autorisation_absence(id) ON DELETE CASCADE
 );
 
 -- Zones de texte à rédiger dans les rapports (observations, rapport mensuel...)
@@ -284,4 +286,33 @@ CREATE TABLE IF NOT EXISTS decision_fin_annee (
     motif TEXT,
     valide_par TEXT NOT NULL,
     valide_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+);
+
+-- Demandes d'autorisation d'absence (élèves et personnel) ; une demande accordée crée ses absences
+CREATE TABLE IF NOT EXISTS autorisation_absence (
+    id INTEGER PRIMARY KEY,
+    annee_id INTEGER NOT NULL REFERENCES annee_scolaire(id) ON DELETE CASCADE,
+    numero TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('eleve', 'personnel')),
+    personnel_id INTEGER REFERENCES personnel(id) ON DELETE CASCADE,
+    inscription_id INTEGER REFERENCES inscription(id) ON DELETE CASCADE,
+    date_demande TEXT NOT NULL,
+    date_debut TEXT NOT NULL,
+    date_fin TEXT NOT NULL,
+    demi_journee TEXT,
+    jours REAL NOT NULL,
+    motif TEXT NOT NULL,
+    precisions TEXT,
+    lieu TEXT,
+    contact TEXT,
+    interim TEXT,
+    demandeur TEXT,
+    statut TEXT NOT NULL DEFAULT 'EN_ATTENTE' CHECK (statut IN ('EN_ATTENTE', 'ACCORDEE', 'REFUSEE')),
+    avis TEXT,
+    decide_par TEXT,
+    decide_le TEXT,
+    cree_par TEXT,
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    UNIQUE (annee_id, numero),
+    CHECK ((kind = 'eleve' AND inscription_id IS NOT NULL) OR (kind = 'personnel' AND personnel_id IS NOT NULL))
 );

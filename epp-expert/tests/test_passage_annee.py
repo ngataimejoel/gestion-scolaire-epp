@@ -6,7 +6,7 @@ import zipfile
 import pytest
 
 from epp.core import backup
-from epp.core.db import AnneeCloturee
+from epp.core.db import SCHEMA_VERSION, AnneeCloturee
 from epp.core.security import AccessDenied, Session, system_session
 from epp.domain import fin_annee, repo
 from epp.reports import service
@@ -45,7 +45,7 @@ def test_passage_complet(demo, tmp_path):
     # sauvegarde faite avant, vérifiable
     assert res["sauvegarde"].exists()
     m = backup.verifier(res["sauvegarde"])
-    assert m["annees"] == [annee.libelle] and m["version_schema"] == "3"
+    assert m["annees"] == [annee.libelle] and m["version_schema"] == str(SCHEMA_VERSION)
     # nouvelle année active, ancienne clôturée
     nouv = repo.load_annee(db, repo.active_annee_id(db))
     anc = repo.load_annee(db, annee.id)

@@ -142,7 +142,7 @@ def test_migration_v2_vers_v3(tmp_path):
     d.set_meta("schema_version", 2)
     d.close()
     d = dbmod.open_database(path)
-    assert d.meta("schema_version") == str(dbmod.SCHEMA_VERSION) == "3"
+    assert d.meta("schema_version") == str(dbmod.SCHEMA_VERSION)
     assert d.scalar("SELECT COUNT(*) FROM decision_fin_annee") == 0
     assert d.scalar("SELECT COUNT(*) FROM role_permission rp JOIN role r ON r.id=rp.role_id "
                     "WHERE r.code IN ('ADMIN','DIRECTEUR') AND permission='fin_annee.valider'") == 2

@@ -627,6 +627,8 @@ class _Rendu:
                 self.zone(b)
             elif isinstance(b, E.Signature):
                 self.signature(b)
+            elif isinstance(b, E.EnteteOfficiel):
+                self.officiel(force=True)
             elif isinstance(b, E.Bulletin):
                 if not premier_bulletin and not dernier_saut:
                     _saut_de_page(self.d)

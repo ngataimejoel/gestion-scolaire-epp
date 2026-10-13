@@ -367,6 +367,17 @@ EX_ABSENCES = _modele(
          "agregats": {"jours": "somme", "retard_min": "somme"}, "renumeroter": True},
         SIGNATURE])
 
+AUTORISATIONS = _modele(
+    "REGISTRE DES AUTORISATIONS D'ABSENCE", sous_titre="Année scolaire {annee} {mois_annee}{periode}",
+    orientation="paysage", parametres=["mois", "date_debut", "date_fin"],
+    sections=[{"type": "tableau", "titre": "", "source": "autorisations", "colonnes": [
+        _col("numero"), _col("numero_autorisation"), _col("categorie", "Catégorie"), _col("matricule"), _col("nom"),
+        _col("classe"), _col("periode"), _col("jours"), _col("motif"), _col("statut_libelle"),
+        _col("avis")],
+        "filtres": [], "tri": [{"champ": "date_debut", "ordre": "asc"}], "regroupement": "categorie",
+        "agregats": {"jours": "somme"}, "sous_totaux": True, "total_general": True, "renumeroter": True},
+        SIGNATURE])
+
 DECISIONS_FIN_ANNEE = _modele(
     "DÉCISIONS DE FIN D'ANNÉE", parametres=["classe"], sections=[
         {"type": "repartition", "titre": "Récapitulatif des décisions", "source": "resultats", "champ": "decision",
@@ -402,6 +413,8 @@ TEMPLATES = [
     ("ABS_ELEVES", "Journal des absences des élèves", OFFICIEL, "Retards et absences des élèves.", ABS_ELEVES),
     ("ABS_PERSONNEL", "Journal des absences du personnel", OFFICIEL, "Retards et absences du personnel.",
      ABS_PERSONNEL),
+    ("AUTORISATIONS", "Registre des autorisations d'absence", OFFICIEL,
+     "Demandes d'autorisation d'absence des élèves et du personnel, avec la décision du directeur.", AUTORISATIONS),
     ("FEUILLE_NOTES", "Feuille de notes", OFFICIEL, "Notes d'une classe pour une évaluation (NOTES).", FEUILLE_NOTES),
     ("TABLEAU_DE_BORD", "Tableau de bord", OFFICIEL, "Indicateurs, tableau par classe, alertes et graphiques.",
      TABLEAU_DE_BORD),

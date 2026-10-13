@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class Database:
@@ -137,7 +137,7 @@ _PHOTO_SQL = [
 # Année clôturée (archivée) : toute écriture dans ses données est refusée par la base elle-même,
 # quel que soit le chemin (interface, import, script).
 _PAR_ANNEE = ["grille_notes", "classe", "evaluation", "jours_classe", "inscription", "affectation",
-              "absence_eleve", "absence_personnel", "texte_rapport"]
+              "absence_eleve", "absence_personnel", "texte_rapport", "autorisation_absence"]
 _PAR_INSCRIPTION = ["presence_eval", "note", "decision_fin_annee"]
 _MSG_CLOTUREE = "ANNEE_CLOTUREE"
 
@@ -186,9 +186,54 @@ _DECISION_SQL = [
         valide_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')))""",
 ]
 
-MIGRATIONS: dict[int, list[str]] = {
+_AUTORISATION_TABLE = """CREATE TABLE IF NOT EXISTS autorisation_absence (
+    id INTEGER PRIMARY KEY,
+    annee_id INTEGER NOT NULL REFERENCES annee_scolaire(id) ON DELETE CASCADE,
+    numero TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('eleve', 'personnel')),
+    personnel_id INTEGER REFERENCES personnel(id) ON DELETE CASCADE,
+    inscription_id INTEGER REFERENCES inscription(id) ON DELETE CASCADE,
+    date_demande TEXT NOT NULL,
+    date_debut TEXT NOT NULL,
+    date_fin TEXT NOT NULL,
+    demi_journee TEXT,
+    jours REAL NOT NULL,
+    motif TEXT NOT NULL,
+    precisions TEXT,
+    lieu TEXT,
+    contact TEXT,
+    interim TEXT,
+    demandeur TEXT,
+    statut TEXT NOT NULL DEFAULT 'EN_ATTENTE' CHECK (statut IN ('EN_ATTENTE', 'ACCORDEE', 'REFUSEE')),
+    avis TEXT,
+    decide_par TEXT,
+    decide_le TEXT,
+    cree_par TEXT,
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    UNIQUE (annee_id, numero),
+    CHECK ((kind = 'eleve' AND inscription_id IS NOT NULL) OR (kind = 'personnel' AND personnel_id IS NOT NULL))
+)"""
+
+def _ajouter_colonne(table: str, colonne: str, definition: str):
+    """Étape de migration : ajoute une colonne si elle n'existe pas encore."""
+    def etape(conn: sqlite3.Connection) -> None:
+        if colonne not in {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {colonne} {definition}")
+    return etape
+
+
+_AUTORISATION_SQL = [
+    _AUTORISATION_TABLE,
+    _ajouter_colonne("absence_eleve", "autorisation_id",
+                     "INTEGER REFERENCES autorisation_absence(id) ON DELETE CASCADE"),
+    _ajouter_colonne("absence_personnel", "autorisation_id",
+                     "INTEGER REFERENCES autorisation_absence(id) ON DELETE CASCADE"),
+]
+
+MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexion)
     2: _PHOTO_SQL,          # photos des élèves et du personnel
     3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
+    4: _AUTORISATION_SQL + _archive_triggers(),   # demandes d'autorisation d'absence liées aux absences
 }
 
 
@@ -239,7 +284,7 @@ def migrate(db: Database) -> None:
     with db.transaction():
         for version in range(current + 1, SCHEMA_VERSION + 1):
             for stmt in MIGRATIONS.get(version, []):
-                db.conn.execute(stmt)
+                stmt(db.conn) if callable(stmt) else db.conn.execute(stmt)
         db.conn.execute(
             "INSERT INTO meta(cle, valeur) VALUES('schema_version', ?) "
             "ON CONFLICT(cle) DO UPDATE SET valeur=excluded.valeur",
