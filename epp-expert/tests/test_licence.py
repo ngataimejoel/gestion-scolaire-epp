@@ -56,9 +56,10 @@ def test_essai_puis_lecture_seule(service):
     assert licence.etat(t0 + timedelta(days=6, hours=23)).statut == "essai"
     e = licence.etat(t0 + timedelta(days=7, hours=1))
     assert e.statut == "essai_termine" and not e.utilisable
+    assert licence.verrouillee(e)
     s = licence.restreindre(system_session(), e)
-    assert s.can("eleves.lire") and s.can("rapports.generer") and s.can("sauvegarde.creer")
-    assert not s.can("notes.modifier") and not s.can("eleves.modifier")
+    assert not s.permissions                      # rien n'est consultable, imprimable ni exportable
+    assert licence.restreindre(system_session(), licence.etat(t0)).permissions
     # l'ordinateur a déjà été vu à une date plus récente : horloge reculée, refusée
     licence._ecrire_json(licence.FICHIER_ESSAI, {"premier_lancement": t0.isoformat(),
                                                  "derniere_date_vue": (t0 + timedelta(days=10)).isoformat()})
@@ -150,3 +151,28 @@ def test_reinstallation_ne_relance_pas_l_essai(service):
     assert licence.etat().statut == "essai_termine"
     # l'activation d'un code lève la restriction
     assert licence.activer(gen.generer("1an", 1)[0]["code"]).utilisable
+
+
+def test_donnees_inaccessibles_mais_conservees_apres_l_essai(service, tmp_path):
+    """Essai terminé : rapports et saisie refusés ; après activation, les données sont intactes."""
+    from epp.core.db import open_database
+    from epp.core.security import AccessDenied
+    from epp.demo import creer_ecole_demo
+    from epp.domain import repo
+    from epp.reports import service as rapports
+    db = open_database(tmp_path / "ecole.sqlite")
+    annee = creer_ecole_demo(db, system_session())
+    n = len(repo.inscriptions(db, annee))
+    t0 = datetime.now(timezone.utc) - timedelta(days=8)
+    licence._ecrire_json(licence.FICHIER_ESSAI, {"premier_lancement": t0.isoformat(),
+                                                 "derniere_date_vue": t0.isoformat()})
+    s = licence.restreindre(system_session(), licence.etat())
+    with pytest.raises(AccessDenied):
+        rapports.generer(db, s, annee, "REGISTRE", {}, tmp_path / "r.pdf")
+    with pytest.raises(AccessDenied):
+        repo.save_eleve(db, s, None, {"nom": "X Y", "sexe": "M", "date_naissance": "2018-01-01"}, annee)
+    licence.activer(gen.generer("vie", 1)[0]["code"])
+    s = licence.restreindre(system_session(), licence.etat())
+    assert len(repo.inscriptions(db, annee)) == n
+    assert rapports.generer(db, s, annee, "REGISTRE", {}, tmp_path / "r.pdf").exists()
+    db.close()

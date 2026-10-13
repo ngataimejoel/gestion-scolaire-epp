@@ -4,9 +4,10 @@
   (Ed25519) liée à cet ordinateur ; l'application la vérifie ensuite hors ligne avec la clé publique
   livrée dans resources/activation.json.
 - Sans licence : 7 jours d'essai complets (comptés depuis le premier lancement, mémorisés à deux
-  endroits pour qu'une réinstallation ne les remette pas à zéro), puis lecture seule (consultation, impression, export et
-  sauvegarde restent possibles : les données de l'école ne sont jamais bloquées).
-- Licence 1 an échue : même lecture seule, jusqu'à l'activation d'un nouveau code.
+  endroits pour qu'une réinstallation ne les remette pas à zéro).
+- Essai terminé ou licence 1 an échue : l'application est verrouillée. Elle ne s'ouvre que sur
+  l'écran d'activation ; aucune donnée n'est consultable. Les données restent intactes sur
+  l'ordinateur (jamais supprimées) et redeviennent accessibles dès qu'un code est activé.
 """
 from __future__ import annotations
 
@@ -24,14 +25,11 @@ from pathlib import Path
 from epp import __version__
 from epp.core import paths
 from epp.core.paths import resource_path
-from epp.core.security import PERMISSIONS, Session
+from epp.core.security import Session
 
 ESSAI_JOURS = 7
 FICHIER = "licence.json"
 FICHIER_ESSAI = "essai.json"
-# Ce qui reste permis quand la licence n'est pas (ou plus) valable
-PERMISSIONS_LECTURE = {p for p in PERMISSIONS if p.endswith(".lire")} | {
-    "rapports.generer", "export.excel", "sauvegarde.creer"}
 
 
 class LicenceErreur(Exception):
@@ -60,10 +58,10 @@ class Etat:
         if self.statut == "essai":
             return f"Version d'essai : {self.jours_restants} jour(s) restant(s)."
         if self.statut == "expiree":
-            return "Licence expirée : l'application est en lecture seule. Activez un nouveau code."
+            return "Licence expirée : activez un nouveau code pour accéder à vos données (elles sont conservées)."
         if self.statut == "horloge":
             return "La date de l'ordinateur semble avoir été reculée : corrigez-la pour continuer."
-        return "Période d'essai terminée : l'application est en lecture seule. Activez un code."
+        return "Période d'essai terminée : activez un code pour accéder à vos données (elles sont conservées)."
 
 
 def _config() -> dict:
@@ -244,8 +242,14 @@ def activer(code: str, ecole: str = "", url: str | None = None, timeout: float =
     return etat()
 
 
+def verrouillee(e: Etat) -> bool:
+    """Vrai quand l'application ne doit afficher que l'écran d'activation."""
+    return not e.utilisable
+
+
 def restreindre(s: Session, e: Etat) -> Session:
-    """Session limitée à la consultation quand la licence n'est pas (ou plus) valable."""
+    """Session sans aucun droit quand la licence n'est pas (ou plus) valable : ni consultation, ni
+    impression, ni export. Seule l'activation d'un code reste possible."""
     if e.utilisable:
         return s
-    return Session(s.user_id, s.login, s.nom, s.role_code, s.role_libelle, set(s.permissions) & PERMISSIONS_LECTURE)
+    return Session(s.user_id, s.login, s.nom, s.role_code, s.role_libelle, set())
