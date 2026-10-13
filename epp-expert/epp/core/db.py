@@ -29,13 +29,27 @@ class Database:
 
     # ------------------------------------------------------------------ requêtes
     def execute(self, sql: str, params: Iterable[Any] | dict = ()) -> sqlite3.Cursor:
-        cur = self.conn.execute(sql, params)
+        try:
+            cur = self.conn.execute(sql, params)
+        except sqlite3.Error as e:
+            if self._tx_depth == 0 and self.conn.in_transaction:
+                self.conn.rollback()            # pas de transaction implicite laissée ouverte
+            if _MSG_CLOTUREE in str(e):
+                raise AnneeCloturee() from None
+            raise
         if self._tx_depth == 0:
             self.conn.commit()
         return cur
 
     def executemany(self, sql: str, seq) -> sqlite3.Cursor:
-        cur = self.conn.executemany(sql, seq)
+        try:
+            cur = self.conn.executemany(sql, seq)
+        except sqlite3.Error as e:
+            if self._tx_depth == 0 and self.conn.in_transaction:
+                self.conn.rollback()            # pas de transaction implicite laissée ouverte
+            if _MSG_CLOTUREE in str(e):
+                raise AnneeCloturee() from None
+            raise
         if self._tx_depth == 0:
             self.conn.commit()
         return cur
@@ -120,6 +134,48 @@ _PHOTO_SQL = [
         BEGIN DELETE FROM photo WHERE kind='personnel' AND ref_id=OLD.id; END""",
 ]
 
+# Année clôturée (archivée) : toute écriture dans ses données est refusée par la base elle-même,
+# quel que soit le chemin (interface, import, script).
+_PAR_ANNEE = ["grille_notes", "classe", "evaluation", "jours_classe", "inscription", "affectation",
+              "absence_eleve", "absence_personnel", "texte_rapport"]
+_PAR_INSCRIPTION = ["presence_eval", "note", "decision_fin_annee"]
+_MSG_CLOTUREE = "ANNEE_CLOTUREE"
+
+
+def _archive_triggers() -> list[str]:
+    def cond(x: str, table: str) -> str:
+        if table in _PAR_ANNEE:
+            return f"(SELECT cloturee FROM annee_scolaire WHERE id = {x}.annee_id) = 1"
+        if table in _PAR_INSCRIPTION:
+            return (f"(SELECT a.cloturee FROM inscription i JOIN annee_scolaire a ON a.id = i.annee_id "
+                    f"WHERE i.id = {x}.inscription_id) = 1")
+        return (f"(SELECT a.cloturee FROM grille_notes g JOIN annee_scolaire a ON a.id = g.annee_id "
+                f"WHERE g.id = {x}.grille_id) = 1")       # matiere
+    out = []
+    for table in _PAR_ANNEE + _PAR_INSCRIPTION + ["matiere"]:
+        for op, quand in (("INSERT", cond("NEW", table)), ("DELETE", cond("OLD", table)),
+                          ("UPDATE", f"{cond('OLD', table)} OR {cond('NEW', table)}")):
+            out.append(f"CREATE TRIGGER IF NOT EXISTS archive_{table}_{op.lower()} BEFORE {op} ON {table} "
+                       f"WHEN {quand} BEGIN SELECT RAISE(ABORT, '{_MSG_CLOTUREE}'); END")
+    out.append("CREATE TRIGGER IF NOT EXISTS archive_annee_delete BEFORE DELETE ON annee_scolaire "
+               f"WHEN OLD.cloturee = 1 BEGIN SELECT RAISE(ABORT, '{_MSG_CLOTUREE}'); END")
+    out.append("CREATE TRIGGER IF NOT EXISTS archive_annee_update BEFORE UPDATE ON annee_scolaire "
+               "WHEN OLD.cloturee = 1 AND NEW.cloturee = 1 AND (NEW.libelle IS NOT OLD.libelle OR "
+               "NEW.date_debut IS NOT OLD.date_debut OR NEW.date_fin IS NOT OLD.date_fin OR "
+               "NEW.date_edition IS NOT OLD.date_edition OR NEW.date_ref_age IS NOT OLD.date_ref_age OR "
+               "NEW.nouveaux_cp1 IS NOT OLD.nouveaux_cp1) "
+               f"BEGIN SELECT RAISE(ABORT, '{_MSG_CLOTUREE}'); END")
+    return out
+
+
+class AnneeCloturee(ValueError):
+    """Écriture refusée : l'année scolaire concernée est clôturée (archivée en lecture seule)."""
+
+    def __init__(self):
+        super().__init__("Cette année scolaire est clôturée : ses données sont archivées en lecture seule. "
+                         "Un administrateur peut la rouvrir depuis Paramètres › Années scolaires.")
+
+
 _DECISION_SQL = [
     """CREATE TABLE IF NOT EXISTS decision_fin_annee (
         inscription_id INTEGER PRIMARY KEY REFERENCES inscription(id) ON DELETE CASCADE,
@@ -132,7 +188,7 @@ _DECISION_SQL = [
 
 MIGRATIONS: dict[int, list[str]] = {
     2: _PHOTO_SQL,          # photos des élèves et du personnel
-    3: _DECISION_SQL,       # validation des décisions de fin d'année
+    3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
 }
 
 
@@ -143,6 +199,8 @@ def open_database(path: str | Path | None = None, seed: bool = True) -> Database
     db = Database(path)
     if not existed:
         db.conn.executescript(_schema_sql())
+        for stmt in _archive_triggers():
+            db.conn.execute(stmt)
         db.set_meta("schema_version", SCHEMA_VERSION)
         db.set_meta("cree_le", datetime.now().isoformat(timespec="seconds"))
         db.set_meta("app_version", __version__)
@@ -171,6 +229,9 @@ def migrate(db: Database) -> None:
         )
     if current == SCHEMA_VERSION:
         db.conn.executescript(_schema_sql())  # crée d'éventuelles tables manquantes
+        for stmt in _archive_triggers():
+            db.conn.execute(stmt)
+        db.conn.commit()
         return
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")

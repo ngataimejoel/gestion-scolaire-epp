@@ -120,3 +120,77 @@ def etat(db: Database, annee: Annee) -> list[dict]:
 
 def annee_validee(db: Database, annee: Annee) -> bool:
     return all(e["complete"] or not e["effectif"] for e in etat(db, annee))
+
+
+# ============================================================== passage à l'année suivante
+def libelle_suivant(annee: Annee) -> str:
+    a = int(annee.libelle[:4])
+    return f"{a + 1}-{a + 2}"
+
+
+def apercu_passage(db: Database, annee: Annee) -> dict:
+    """Ce que fera le passage, à montrer avant de demander la confirmation."""
+    lignes = propositions(db, annee)
+    non_valides = [e["classe"] for e in etat(db, annee) if e["effectif"] and not e["complete"]]
+    monte = [r for r in lignes if r["decision"] == "ADMIS" and r["classe_suivante"]]
+    par_classe: dict[str, dict] = {}
+    for r in lignes:
+        if r["decision"] == "ADMIS" and r["classe_suivante"]:
+            cible = r["classe_suivante"]
+        elif r["decision"] == "REDOUBLE":
+            cible = r["classe"]
+        else:
+            continue
+        d = par_classe.setdefault(cible, {"admis": 0, "redoublants": 0})
+        d["redoublants" if r["decision"] == "REDOUBLE" else "admis"] += 1
+    return {
+        "annee": annee.libelle, "annee_suivante": libelle_suivant(annee),
+        "existe_deja": bool(db.scalar("SELECT 1 FROM annee_scolaire WHERE libelle=?", (libelle_suivant(annee),))),
+        "cloturee": annee.cloturee, "classes_non_validees": non_valides, "pret": not non_valides and not annee.cloturee,
+        "montent": len(monte),
+        "redoublent": sum(1 for r in lignes if r["decision"] == "REDOUBLE"),
+        "sortants": sum(1 for r in lignes if r["decision"] == "ADMIS" and not r["classe_suivante"]),
+        "partants": {k: sum(1 for r in lignes if r["decision"] == k) for k in PARTANTS},
+        "effectifs_suivants": {c: par_classe.get(c, {"admis": 0, "redoublants": 0}) for c in annee.codes},
+    }
+
+
+def passer_annee_suivante(db: Database, s: Session, annee: Annee) -> dict:
+    """Clôture l'année après validation complète : sauvegarde, création de l'année suivante (même
+    structure), réinscription selon les décisions validées, archivage de l'année en lecture seule.
+    Tout ou rien : en cas d'erreur, la base reste dans son état d'avant (et la sauvegarde existe)."""
+    from epp.core import backup, seed
+    from epp.domain import repo
+    s.require("fin_annee.valider")
+    s.require("eleves.modifier")
+    ap = apercu_passage(db, annee)
+    if annee.cloturee:
+        raise ValidationError(f"L'année {annee.libelle} est déjà clôturée.")
+    if ap["classes_non_validees"]:
+        raise ValidationError("Validez d'abord les décisions de fin d'année de : "
+                              + ", ".join(ap["classes_non_validees"]) + ".")
+    suivant = ap["annee_suivante"]
+    sauvegarde = backup.sauvegarde_auto(db, f"avant passage {annee.libelle} vers {suivant}", login=s.login)
+    with db.transaction():
+        aid = db.scalar("SELECT id FROM annee_scolaire WHERE libelle=?", (suivant,))
+        if aid is None:
+            aid = seed.create_year(db, suivant, copy_from=annee.id, active=False)
+        dst = repo.load_annee(db, aid)
+        if dst.cloturee:
+            raise ValidationError(f"L'année {suivant} est clôturée.")
+        bilan = repo.reinscrire(db, s, annee, dst, exiger_validation=True)
+        db.execute("UPDATE annee_scolaire SET cloturee=1, active=0 WHERE id=?", (annee.id,))
+        db.execute("UPDATE annee_scolaire SET active=0 WHERE id<>?", (aid,))
+        db.execute("UPDATE annee_scolaire SET active=1 WHERE id=?", (aid,))
+    log(db, s.login, "PASSAGE_ANNEE", f"{annee.libelle} -> {suivant}",
+        f"{bilan} ; sauvegarde {sauvegarde.name}")
+    return {**bilan, "annee_suivante": suivant, "annee_suivante_id": aid, "sauvegarde": sauvegarde}
+
+
+def rouvrir_annee(db: Database, s: Session, annee: Annee) -> None:
+    """Rouvre une année clôturée pour corriger une erreur (administrateur). Les élèves déjà
+    réinscrits dans l'année suivante n'en sont pas retirés."""
+    s.require("parametres.modifier")
+    s.require("fin_annee.valider")
+    db.execute("UPDATE annee_scolaire SET cloturee=0 WHERE id=?", (annee.id,))
+    log(db, s.login, "ANNEE_ROUVERTE", annee.libelle, "")

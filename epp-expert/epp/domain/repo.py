@@ -53,6 +53,7 @@ class Annee:
     date_ref_age: str
     nouveaux_cp1: int
     active: bool
+    cloturee: bool = False                     # année archivée : lecture seule
     classes: list[Classe] = field(default_factory=list)
     grilles: dict[int, Grille] = field(default_factory=dict)
     evaluations: dict[str, dict[int, dict]] = field(default_factory=dict)  # calendrier -> num -> eval
@@ -105,7 +106,7 @@ def load_annee(db: Database, annee_id: int) -> Annee:
     if r is None:
         raise ValidationError("Année scolaire introuvable.")
     a = Annee(r["id"], r["libelle"], r["date_debut"], r["date_fin"], r["date_edition"], r["date_ref_age"],
-              r["nouveaux_cp1"] or 0, bool(r["active"]))
+              r["nouveaux_cp1"] or 0, bool(r["active"]), bool(r["cloturee"]))
     for c in db.query("SELECT * FROM classe WHERE annee_id=? ORDER BY ordre, code", (annee_id,)):
         a.classes.append(Classe(c["id"], c["code"], c["libelle"] or c["code"], c["ordre"], c["niveau_suivant"],
                                 c["seuil"], c["bareme"], c["grille_id"], c["calendrier"], c["regle_mga"]))
