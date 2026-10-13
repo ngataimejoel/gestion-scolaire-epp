@@ -314,3 +314,25 @@ def test_validation_et_passage_d_annee(fenetre, messages):
     assert d.result() == QDialog.Accepted and d.res["annee_suivante"] == "2027-2028"
     p.ctx.recharger_annee(d.res["annee_suivante_id"])
     assert p.ctx.annee.libelle == "2027-2028"
+
+
+def test_tutoriels_video_livres_et_listes_dans_l_aide(fenetre, messages):
+    """Les vidéos fabriquées par outils/tutoriels.py sont embarquées et proposées dans Aide › Tutoriels vidéo."""
+    import shutil
+    import subprocess
+
+    from epp.ui.video import tutoriels
+    vids = tutoriels()
+    assert [v.stem[:2] for v in vids] == ["01", "02", "03", "04", "05", "06"]
+    for v in vids:
+        assert v.suffix == ".mp4" and 50_000 < v.stat().st_size < 2_000_000, v
+    if shutil.which("ffprobe"):        # format lisible par Windows : H.264, 4:2:0
+        for v in vids:
+            r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                "stream=codec_name,pix_fmt", "-of", "csv=p=0", str(v)],
+                               capture_output=True, text=True, check=True)
+            assert r.stdout.strip() == "h264,yuv420p", v
+    p = fenetre.page("aide")
+    p.rafraichir()
+    noms = [p.liste.item(i).text() for i in range(p.liste.count())]
+    assert noms[0] == "01 Premiers pas" and len(noms) == 6

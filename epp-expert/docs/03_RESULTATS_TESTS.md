@@ -4,11 +4,11 @@ Exécution du 13/10/2026 sous Linux (Python 3.13, PySide6 6.12, interface en mod
 classeur réel copié dans `tests/data/` (non publié) :
 
 ```
-python -m pytest -q          →  181 passed
+python -m pytest -q          →  184 passed
 python -m epp --selftest     →  auto-test réussi (7 étapes)
 ```
 
-Sans le classeur réel (cas du dépôt public et de l'intégration continue) : 147 passed, 34 skipped ; les
+Sans le classeur réel (cas du dépôt public et de l'intégration continue) : 150 passed, 34 skipped ; les
 comparaisons avec le classeur sont ignorées et le reste s'exécute sur l'école de démonstration fictive. L'intégration continue Windows
 construit en plus l'exécutable PyInstaller et l'installateur Inno Setup, puis lance `--selftest` sur
 l'exécutable et sur l'application installée.
@@ -29,11 +29,12 @@ l'exécutable et sur l'application installée.
 | test_fin_annee.py | 7 | décisions de fin d'année (admis, redoublants, abandons…), validation par classe, droits |
 | test_passage_annee.py | 5 | passage à l'année suivante, année clôturée en lecture seule, sauvegarde endommagée détectée |
 | test_demo.py | 2 | école de démonstration fictive : tous les modèles sans le classeur réel |
-| test_interface.py | 15 | interface : premier lancement, connexion, mot de passe provisoire, écran d'activation seul quand la licence a expiré, ouverture de tous les écrans, menus selon le rôle, saisie élève et notes, autorisation avec jours fériés, aperçu de rapport, éditeur de modèles, sauvegarde et restauration, calendrier, passage d'année |
+| test_interface.py | 16 | interface : premier lancement, connexion, mot de passe provisoire, écran d'activation seul quand la licence a expiré, ouverture de tous les écrans, menus selon le rôle, saisie élève et notes, autorisation avec jours fériés, aperçu de rapport, éditeur de modèles, sauvegarde et restauration, calendrier, passage d'année, tutoriels vidéo listés dans l'aide |
 
 ## Non couvert automatiquement
 
 - L'impression réelle sur une imprimante (l'aperçu et le PDF sont testés).
-- Les vidéos de démonstration : aucune vidéo n'est fournie ; l'application affiche alors une animation.
+- Les vidéos : les 6 tutoriels (outils/tutoriels.py) sont vérifiés (H.264, chargement par le lecteur Qt) mais pas
+  regardés par un humain sous Windows ; le bandeau d'accueil reste l'animation, aucune vidéo n'étant fournie.
 - Le service d'activation en ligne : pas encore déployé ; les tests l'imitent par un serveur local, et la licence
   reçue est vérifiée par signature, sans Internet, à chaque ouverture.
