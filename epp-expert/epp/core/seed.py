@@ -28,6 +28,10 @@ DEFAULT_PARAMS = {
     "logo": "",                 # ancien réglage (chemin d'un fichier), remplacé par logo_iepp / logo_ecole
     "logo_iepp": "",            # image PNG encodée en base64 (incluse dans les sauvegardes)
     "logo_ecole": "",
+    "bulletin_titre": "{ecole}",                     # bulletin coloré : grand titre de l'en-tête
+    "bulletin_slogan": "Apprendre aujourd'hui, réussir demain",
+    "bulletin_devise": "Une école pour construire l'avenir !",
+    "bulletin_pied": "L'éducation est la clé de la réussite",
     "entete_gauche": ENTETE_GAUCHE_DEFAUT,
     "entete_droite": ENTETE_DROITE_DEFAUT,
     "sauvegarde_auto": "1",

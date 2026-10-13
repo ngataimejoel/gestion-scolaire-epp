@@ -624,7 +624,8 @@ class Builder:
             data = [d for d in data if d.get("statut") == "PRESENT"]
         out = []
         opts = {k: s.get(k) for k in ("photo", "appreciations", "signatures", "observations", "statistiques_classe",
-                                      "titre_bulletin")}
+                                      "titre_bulletin", "style", "mention_officielle", "bilan_felicitations",
+                                      "bilan_suivi") if s.get(k) is not None}
         opts["titre_bulletin"] = self.t(opts.get("titre_bulletin") or "")
         for i, d in enumerate(data):
             if i:

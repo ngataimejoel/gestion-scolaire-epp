@@ -34,6 +34,78 @@ def _stats_classe(valeurs: list[float]) -> dict:
             "classes": len(v)}
 
 
+def _moyenne_annuelle(valeurs: dict[int, float | None], regle: str) -> float | None:
+    """Moyenne annuelle d'une discipline, avec la même règle que la MGA de la classe :
+    STANDARD = (moyenne des compositions + 2 × composition de passage) ÷ 3 ; sinon moyenne simple."""
+    v = {n: x for n, x in valeurs.items() if x is not None}
+    if not v:
+        return None
+    compos = [v[n] for n in (1, 2, 3) if n in v]
+    if regle == "STANDARD" and 4 in v and compos:
+        return calculs.xround((sum(compos) / len(compos) + 2 * v[4]) / 3, 2)
+    return calculs.xround(sum(v.values()) / len(v), 2)
+
+
+def releve_classe(db: Database, annee: Annee, classe_code: str) -> dict:
+    """Relevé de toute l'année d'une classe : disciplines du niveau, évaluations du calendrier de la
+    classe, notes, moyennes et rangs de chaque élève pour chaque évaluation."""
+    cl = annee.classe(classe_code)
+    g = annee.grilles.get(cl.grille_id)
+    evs = annee.evaluations.get(cl.calendrier, {})
+    out = {"periodes": [], "disciplines": [], "echelle": g.echelle if g else cl.bareme, "eleves": {}}
+    if g is None:
+        return out
+    vues: dict[str, dict] = {}
+    for num in sorted(g.matieres):
+        if num not in evs:
+            continue
+        out["periodes"].append({"num": num, "libelle": evs[num].get("libelle") or f"Évaluation {num}",
+                                "date": evs[num].get("date")})
+        mats, lignes = repo.notes_grille(db, annee, g.id, num, cl.code)
+        for m in mats:
+            if m["libelle"] not in vues:
+                vues[m["libelle"]] = {"libelle": m["libelle"], "max": repo.max_note(g, m)}
+        moys = {r["inscription_id"]: r["moyenne"] for r in lignes}
+        rk = calculs.rangs(moys, {r["inscription_id"] for r in lignes if r["statut"] == "PRESENT" and r["present"]})
+        for r in lignes:
+            e = out["eleves"].setdefault(r["inscription_id"], {"notes": {}, "moyennes": {}, "rangs": {},
+                                                               "presents": {}})
+            for m in mats:
+                e["notes"].setdefault(m["libelle"], {})[num] = r["notes"].get(m["id"])
+            e["moyennes"][num] = r["moyenne"] if r["present"] else None
+            e["rangs"][num] = rk.get(r["inscription_id"])
+            e["presents"][num] = bool(r["present"])
+    out["disciplines"] = list(vues.values())
+    for e in out["eleves"].values():
+        e["moyennes_disciplines"] = {lib: _moyenne_annuelle(v, cl.regle_mga) for lib, v in e["notes"].items()}
+    return out
+
+
+def _enseignants(db: Database, annee: Annee) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for p in repo.personnel(db, annee):
+        c = p.get("classe_tenue")
+        if c and c != "-" and c not in out:
+            out[c] = p.get("nom") or ""
+    return out
+
+
+def _completer(db: Database, annee: Annee, bulletins: list[dict]) -> list[dict]:
+    """Ajoute à chaque bulletin le relevé de l'année et le nom de l'enseignant(e) de la classe."""
+    releves: dict[str, dict] = {}
+    profs = _enseignants(db, annee)
+    for b in bulletins:
+        if b["classe"] not in releves:
+            releves[b["classe"]] = releve_classe(db, annee, b["classe"])
+        rel = releves[b["classe"]]
+        e = rel["eleves"].get(b["inscription_id"], {"notes": {}, "moyennes": {}, "rangs": {}, "presents": {},
+                                                     "moyennes_disciplines": {}})
+        b["releve"] = {k: rel[k] for k in ("periodes", "disciplines", "echelle")} | e
+        b["enseignant"] = profs.get(b["classe"], "")
+        b["regle_mga"] = annee.classe(b["classe"]).regle_mga
+    return bulletins
+
+
 def _identite(r: dict) -> dict:
     return {k: r.get(k) for k in ("inscription_id", "eleve_id", "matricule_ecole", "matricule_desps", "nom", "sexe",
                                   "classe", "date_naissance", "age", "redoublant", "statut", "numero")}
@@ -79,7 +151,7 @@ def bulletins_evaluation(db: Database, annee: Annee, num: int, classe_code: str 
                     "Moyenne atteinte" if moy >= cl.seuil else "Moyenne non atteinte"),
             } | st
             out.append(b)
-    return out
+    return _completer(db, annee, out)
 
 
 def bulletins_annuels(db: Database, annee: Annee, classe_code: str | None = None,
@@ -111,4 +183,4 @@ def bulletins_annuels(db: Database, annee: Annee, classe_code: str | None = None
                 "decision": r["decision"], "observation": r["observation"], "seuil": cl.seuil,
                 "bareme": cl.bareme, "classe_suivante": cl.niveau_suivant,
             } | st)
-    return out
+    return _completer(db, annee, out)

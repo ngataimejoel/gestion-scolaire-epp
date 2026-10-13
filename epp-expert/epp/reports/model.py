@@ -113,7 +113,8 @@ def nouvelle_section(type_: str) -> dict:
     elif type_ == "zone_redaction":
         base.update(rapport="LIBRE", cle="", champs=[{"champ": "observations", "titre": "OBSERVATIONS :"}], lignes=4)
     elif type_ == "bulletin":
-        base.update(periode="evaluation", photo=True, appreciations=True, statistiques_classe=True,
+        base.update(periode="evaluation", style="colore", mention_officielle=True, bilan_felicitations=7,
+                    bilan_suivi=4, photo=True, appreciations=True, statistiques_classe=True,
                     observations=True, inclure_sortis=False, titre_bulletin="",
                     signatures=["L'enseignant(e)", "Le Directeur", "Les parents"])
     elif type_ == "signature":

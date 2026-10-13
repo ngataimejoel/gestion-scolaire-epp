@@ -426,6 +426,9 @@ def _rang(r) -> str:
 
 def _bulletin(doc: E.Document, b: E.Bulletin, avail: float) -> list:
     d, o = b.data, b.options
+    if o.get("style", "colore") == "colore":
+        from epp.reports.bulletin_colore import BulletinColore
+        return [BulletinColore(doc, b, (FONT, FONT_B, FONT_I, "EPPSans-BoldItalic"))]
     out = _officiel(doc, avail, force=True)
     annuel = d["type"] == "annuel"
     titre = o.get("titre_bulletin") or ("BULLETIN ANNUEL DE NOTES" if annuel else "BULLETIN DE NOTES")
