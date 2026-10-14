@@ -336,3 +336,30 @@ def test_tutoriels_video_livres_et_listes_dans_l_aide(fenetre, messages):
     p.rafraichir()
     noms = [p.liste.item(i).text() for i in range(p.liste.count())]
     assert noms[0] == "01 Premiers pas" and len(noms) == 6
+
+
+def test_logo_de_l_application_et_bouton_de_connexion_visible(app, demo, messages):
+    """Logo AKWA SCHOOL : icône du programme (toutes tailles), menu, écran de connexion ; le bouton
+    « Se connecter » garde son fond vert (il était blanc sur blanc)."""
+    from PIL import Image
+
+    from epp.core import paths
+    from epp.ui import logo
+    from epp.ui.dialogs.acces import DialogueConnexion
+    from epp.ui.main import FenetrePrincipale
+    from epp.ui.widgets import Contexte
+    ico = Image.open(paths.resource_path("resources", "app.ico"))
+    assert {(16, 16), (32, 32), (48, 48), (256, 256)} <= set(ico.info["sizes"])
+    for nom in ("tuile", "symbole", "logo_complet"):
+        assert not logo.pixmap(nom, 40).isNull()
+    db, annee = demo
+    w = FenetrePrincipale(Contexte(db, system_session(), annee, ESSAI))
+    assert w.logo.pixmap() is not None and not w.logo.pixmap().isNull()
+    w.timer_licence.stop()
+    d = DialogueConnexion(db)
+    d.show()
+    app.processEvents()
+    img = d.b_ok.grab().toImage()
+    c = img.pixelColor(img.width() // 2, 3)
+    assert c.green() < 150 and c.red() < 100, c.name()          # fond vert foncé, texte blanc lisible
+    d.close()

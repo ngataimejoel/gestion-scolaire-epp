@@ -11,7 +11,7 @@ import logging
 import sys
 
 from PySide6.QtCore import QRect, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QKeySequence, QPalette, QPixmap, QShortcut
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
                                QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QStyledItemDelegate, QToolButton,
                                QVBoxLayout, QWidget)
@@ -20,6 +20,7 @@ from epp import APP_NAME, __version__
 from epp.core import backup, licence, security
 from epp.core.db import open_database
 from epp.domain import repo
+from epp.ui import logo as logo_app
 from epp.ui import theme
 from epp.ui.dialogs.acces import (DialogueActivation, DialogueConnexion, DialogueMotDePasse,
                                   DialoguePremierLancement)
@@ -126,6 +127,7 @@ class FenetrePrincipale(QMainWindow):
         tete.setContentsMargins(18, 0, 14, 8)
         self.logo = QLabel()
         self.logo.setFixedSize(40, 40)
+        self.logo.setPixmap(logo_app.pixmap("tuile", 40))      # logo de l'application
         tete.addWidget(self.logo)
         b = QVBoxLayout()
         b.setSpacing(0)
@@ -261,14 +263,6 @@ class FenetrePrincipale(QMainWindow):
     def _maj_entete(self) -> None:
         db, s = self.ctx.db, self.ctx.session
         self.l_ecole.setText(db.get_param("ecole_nom") or "")
-        logo = repo.get_logo(db, "logo_ecole") or repo.get_logo(db, "logo_iepp")
-        pm = QPixmap()
-        if logo and pm.loadFromData(logo):
-            self.logo.setPixmap(pm.scaled(40, 40, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        else:
-            self.logo.setText("EPP")
-            self.logo.setAlignment(Qt.AlignCenter)
-            self.logo.setStyleSheet(f"background: {theme.ACCENT}; color: white; border-radius: 8px; font-weight: 700;")
         self.l_utilisateur.setText(f"{s.nom}\n{s.role_libelle}")
         self.b_compte.setText(f"{s.nom}  ▾")
         a = self.ctx.annee
@@ -391,6 +385,7 @@ def run(argv: list[str]) -> int:
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication.instance() or QApplication(argv)
     app.setApplicationName(APP_NAME)
+    app.setWindowIcon(logo_app.icone())
     app.setApplicationVersion(__version__)
     app.setOrganizationName("GestionScolaireEPP")
     app.setQuitOnLastWindowClosed(False)          # la fenêtre principale décide (verrouillage, déconnexion)

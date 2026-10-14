@@ -6,11 +6,12 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import (QButtonGroup, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLineEdit,
+from PySide6.QtWidgets import (QButtonGroup, QDialog, QFileDialog, QFormLayout, QHBoxLayout, QLabel, QLineEdit,
                                QMessageBox, QRadioButton, QStackedWidget, QVBoxLayout, QWidget)
 
 from epp import APP_NAME, __version__
 from epp.core import licence, security
+from epp.ui import logo as logo_app
 from epp.ui import theme
 from epp.ui.video import BandeauVideo
 from epp.ui.widgets import afficher_erreur, bouton, label, ligne
@@ -48,11 +49,15 @@ class _EcranScinde(QDialog):
         self.bandeau.setMinimumWidth(380)
         h.addWidget(self.bandeau, 5)
         droite = QWidget()
-        droite.setStyleSheet(f"background: {theme.CARTE};")
+        droite.setObjectName("panneauDroit")     # sélecteur : le fond ne doit pas s'appliquer aux boutons
+        droite.setStyleSheet(f"QWidget#panneauDroit {{ background: {theme.CARTE}; }}")
         self.corps = QVBoxLayout(droite)
         self.corps.setContentsMargins(40, 36, 40, 28)
         self.corps.setSpacing(10)
         h.addWidget(droite, 4)
+        img = QLabel()
+        img.setPixmap(logo_app.pixmap("logo_complet", 96))
+        self.corps.addWidget(img, 0, Qt.AlignLeft)
         t = label(APP_NAME, gras=True, taille=14)
         t.setStyleSheet(f"color: {theme.PRIMAIRE_FONCE};")
         self.corps.addWidget(t)

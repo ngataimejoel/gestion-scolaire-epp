@@ -24,6 +24,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 PrivilegesRequiredOverridesAllowed=dialog
 WizardStyle=modern
+SetupIconFile=..\epp\resources\app.ico
 UninstallDisplayIcon={app}\{#AppExe}
 CloseApplications=yes
 
