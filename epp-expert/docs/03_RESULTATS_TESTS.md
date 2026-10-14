@@ -4,11 +4,11 @@ Exécution du 13/10/2026 sous Linux (Python 3.13, PySide6 6.12, interface en mod
 classeur réel copié dans `tests/data/` (non publié) :
 
 ```
-python -m pytest -q          →  184 passed
+python -m pytest -q          →  186 passed
 python -m epp --selftest     →  auto-test réussi (7 étapes)
 ```
 
-Sans le classeur réel (cas du dépôt public et de l'intégration continue) : 150 passed, 34 skipped ; les
+Sans le classeur réel (cas du dépôt public et de l'intégration continue) : 152 passed, 34 skipped ; les
 comparaisons avec le classeur sont ignorées et le reste s'exécute sur l'école de démonstration fictive. L'intégration continue Windows
 construit en plus l'exécutable PyInstaller et l'installateur Inno Setup, puis lance `--selftest` sur
 l'exécutable et sur l'application installée.
@@ -22,7 +22,7 @@ l'exécutable et sur l'application installée.
 | test_templates.py | 10 | gestion des modèles : versions, duplication, renommage, import / export, droits |
 | test_licence.py | 10 | essai de 7 jours, codes à vie et d'un an, licence falsifiée refusée, données inaccessibles mais conservées après l'essai |
 | test_bulletins_photos.py | 8 | bulletins cohérents avec les notes et avec Excel, photos des élèves et du personnel |
-| test_bulletin_colore.py | 5 | bulletin couleur, palette douce lisible en noir et blanc |
+| test_bulletin_colore.py | 8 | bulletin couleur, trimestres, bulletin de composition, version sans aplat lisible en noir et blanc |
 | test_entete_logos.py | 6 | en-têtes et logos modifiables |
 | test_autorisations.py | 7 | demandes d'autorisation d'absence et absences créées automatiquement |
 | test_calendrier.py | 5 | jours fériés, congés, jours de classe exclus des autorisations, migration |

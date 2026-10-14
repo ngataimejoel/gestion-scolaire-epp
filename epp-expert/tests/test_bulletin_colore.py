@@ -147,3 +147,30 @@ def test_couleurs_douces_pour_le_noir_et_blanc(demo, tmp_path):
     for code in ("BULLETIN_ANNUEL", "BUL_VIF"):
         t = _texte(service.generer(db, s, annee, code, {"classe": "CM2"}, tmp_path / f"{code}.pdf"))
         assert "BULLETIN ANNUEL" in t
+
+
+def test_bulletin_de_composition(demo, tmp_path):
+    """Bulletin d'une seule composition : notes et appréciations, total, moyenne et rang de cette composition,
+    quel que soit le réglage des colonnes (trimestres par défaut) ; PDF et Word."""
+    from docx import Document as Docx
+
+    db, annee = demo
+    s = system_session()
+    cl = annee.classe("CM2")
+    num = list(annee.evaluations[cl.calendrier])[1]
+    el = [r for r in repo.inscriptions(db, annee, "CM2") if r["statut"] == "PRESENT"][0]
+    b = bulletins.bulletins_evaluation(db, annee, num, inscription_id=el["inscription_id"])[0]
+    p = {"classe": "CM2", "compo": num, "eleve": el["inscription_id"]}
+    t = " ".join(_texte(service.generer(db, s, annee, "BULLETIN_COMPO", p, tmp_path / "c.pdf")).split())
+    assert "BULLETIN DE COMPOSITION" in t and "Trimestre" not in t and "Bilan de la composition" in t
+    assert "Note obtenue" in t and "Appréciation" in t and "Total des points" in t
+    for n in b["notes"]:
+        if n["note"] is not None:
+            assert f"{n['note']:g}".replace(".", ",") in t and n["appreciation"] in t
+    assert f"{b['rang']}e sur {b['effectif']}" in t
+    w = Docx(service.generer(db, s, annee, "BULLETIN_COMPO", p, tmp_path / "c.docx"))
+    tw = " ".join(x.text or "" for x in w.element.body.iter() if x.tag.endswith("}t"))   # tableaux imbriqués
+    assert "BULLETIN DE COMPOSITION" in tw and "Total des points" in tw
+    pdf = service.generer(db, s, annee, "BULLETIN_COMPO", {"classe": "CM2", "compo": num}, tmp_path / "cl.pdf")
+    assert len(PdfReader(pdf).pages) == len([r for r in repo.inscriptions(db, annee, "CM2")
+                                             if r["statut"] == "PRESENT"])

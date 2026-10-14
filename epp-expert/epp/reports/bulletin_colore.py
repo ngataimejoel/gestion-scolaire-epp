@@ -118,7 +118,19 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
     titre_moy = "Moyenne annuelle" if annuel or courant == dernier else "Moyenne à ce jour"
     entetes = [(p["libelle"], COULEURS_PERIODES[i % len(COULEURS_PERIODES)]) for i, p in enumerate(cols)]
     lignes = []
-    for m in rel["disciplines"]:
+    compo = not annuel and colonnes(params, o) == "composition"
+    if compo:
+        # bulletin d'une composition : la note de chaque discipline et son appréciation, total, moyenne, rang
+        present = d.get("present", True)
+        titre_moy = "Appréciation"
+        cols = [{"num": courant, "libelle": d.get("evaluation") or "Composition"}]
+        entetes = [("Note obtenue", "ciel")]
+        c_visible = lambda num: True                                    # noqa: E731
+        for n in d.get("notes") or []:
+            lignes.append({"libelle": _casse(n["matiere"]), "max": _fmt(n["max"]),
+                           "valeurs": [_fmt(n["note"]) if present else "Abs."],
+                           "moyenne": n.get("appreciation") or "" if present else ""})
+    for m in ([] if compo else rel["disciplines"]):
         vals = []
         for p in cols:
             val = c_notes.get(m["libelle"], {}).get(p["num"])
@@ -129,9 +141,16 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
             vs = {p["num"]: notes.get(m["libelle"], {}).get(p["num"]) for p in periodes if visible(p["num"])}
             moy = _fmt(moyd.get(m["libelle"]) if annuel else _moy_partielle(vs, d.get("regle_mga")))
         lignes.append({"libelle": _casse(m["libelle"]), "max": _fmt(m["max"]), "valeurs": vals, "moyenne": moy})
-    ech = rel.get("echelle") or 10
+    ech = rel.get("echelle") or d.get("echelle") or 10
     totaux = []
-    for k, (lab, vals, fin) in enumerate((
+    if compo:
+        abs_ = None if present else "Abs."
+        totaux = [{"libelle": "Total des points",
+                   "valeurs": [abs_ or f"{_fmt(d.get('total'))} / {_fmt(d.get('total_max'))}"], "fin": ""},
+                  {"libelle": f"Moyenne (/{_fmt(ech)})", "valeurs": [abs_ or _fmt(d.get("moyenne"))], "fin": ""},
+                  {"libelle": "Rang", "valeurs": [_rang(d.get("rang")) if d.get("rang") else "–"],
+                   "fin": f"sur {d.get('effectif')}" if d.get("rang") else ""}]
+    for k, (lab, vals, fin) in enumerate(() if compo else (
             (f"Moyenne générale (/{_fmt(ech)})", {p["num"]: _fmt(c_moys.get(p["num"])) for p in cols},
              _fmt(d.get("mga") if annuel else _moy_partielle(
                  {p["num"]: moys.get(p["num"]) for p in periodes if visible(p["num"])}, d.get("regle_mga")))),
@@ -199,13 +218,14 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
         "pied": E.subst(params.get("bulletin_pied", seed.DEFAULT_PARAMS["bulletin_pied"]) or "", v),
         "logos": [x for x in (E.repo.decode_logo(params.get("logo_ecole")),
                               E.repo.decode_logo(params.get("logo_iepp"))) if x],
-        "nom_bulletin": o.get("titre_bulletin") or ("BULLETIN ANNUEL" if annuel else "BULLETIN DE NOTES"),
+        "nom_bulletin": o.get("titre_bulletin") or ("BULLETIN ANNUEL" if annuel else
+                                                    "BULLETIN DE COMPOSITION" if compo else "BULLETIN DE NOTES"),
         "annee": v.get("annee", ""),
         "eleve": f"{d.get('nom', '')}  ({d.get('matricule_ecole', '')})",
         "naissance": E.fmt(d.get("date_naissance"), "date") or "",
         "age": f"{age} ans" if age not in (None, "") else "",
         "classe": d.get("classe", ""), "enseignant": d.get("enseignant", ""), "ecole": v.get("ecole", ""),
-        "label_periode": "Trimestre :" if trim else "Période :",
+        "label_periode": "Trimestre :" if trim else "Composition :" if compo else "Période :",
         "choix_periode": ([(x, False) for x in ("1er", "2e", "3e")] + [("Année", True)] if trim and annuel
                           else [(x, i + 1 == t_courant) for i, x in enumerate(("1er", "2e", "3e"))] if trim
                           else [("Année complète", True)] if annuel
@@ -214,7 +234,8 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
         "appreciation": app_txt, "bilan_choix": choix,
         "bilan": [("fel", "Félicitations"), ("enc", "Encouragements"), ("prog", "Doit progresser"),
                   ("suivi", "Doit être suivi")],
-        "titre_bilan": "Bilan de l'année" if annuel else "Bilan du trimestre" if trim else "Bilan de la période",
+        "titre_bilan": "Bilan de l'année" if annuel else "Bilan du trimestre" if trim else
+        "Bilan de la composition" if compo else "Bilan de la période",
         "titre_decision": "Décision du conseil des maîtres" if annuel else "Résultat", "decision": dec,
         "signatures": [(lab, noms[i] if i < len(noms) else "") for i, lab in enumerate(sigs)],
         "photo": o.get("photo", True),
@@ -496,6 +517,10 @@ class BulletinColore(Flowable):
         champ(x2, y - 13.5 * mm, "Année scolaire :", K["annee"], wr)
         self._txt(x2, y - 20.5 * mm, K["label_periode"], self.FB, 8.5)
         xx = x2 + stringWidth(K["label_periode"], self.FB, 8.5) + 2.5 * mm
+        tc, ec = 8.0, 3.0 * mm             # police et écart réduits si les cases dépassent vers la photo
+        while tc > 6 and xx + sum(3.6 * mm + stringWidth(l, self.FB, tc) + ec
+                                  for l, _ in K["choix_periode"]) > xp - 1 * mm:
+            tc, ec = tc - 0.25, max(1.2 * mm, ec - 0.3 * mm)
         for lib, coche in K["choix_periode"]:
             c.setStrokeColor(C["marine"])
             c.setFillColor(C["marine"] if coche and T["aplats"] else colors.white)
@@ -506,8 +531,8 @@ class BulletinColore(Flowable):
                 c.line(xx + 0.5 * mm, y - 19.8 * mm, xx + 1.2 * mm, y - 20.6 * mm)
                 c.line(xx + 1.2 * mm, y - 20.6 * mm, xx + 2.4 * mm, y - 18.8 * mm)
                 c.setLineWidth(1)
-            self._txt(xx + 3.6 * mm, y - 20.6 * mm, lib, self.FB if coche else self.F, 8, "texte")
-            xx += 3.6 * mm + stringWidth(lib, self.FB, 8) + 3 * mm
+            self._txt(xx + 3.6 * mm, y - 20.6 * mm, lib, self.FB if coche else self.F, tc, "texte")
+            xx += 3.6 * mm + stringWidth(lib, self.FB, tc) + ec
         y -= hi + 3.5 * mm
 
         # tableau des disciplines
@@ -554,7 +579,8 @@ class BulletinColore(Flowable):
             for j, txt in enumerate(m["valeurs"]):
                 if txt is not None:
                     self._txt((xs[2 + j] + xs[3 + j]) / 2, base, txt, self.F, 10, "texte", "center")
-            self._txt((xs[-2] + xs[-1]) / 2, base, m["moyenne"], self.FB, 10, "marine", "center")
+            self._txt((xs[-2] + xs[-1]) / 2, base, m["moyenne"], self.FB, 10, "marine", "center",
+                      maxw=xs[-1] - xs[-2] - 2 * mm)
             yy -= rh
         # moyenne générale et rang
         if not T["aplats"] and K["totaux"]:     # sans aplat : un trait plus marqué les sépare des disciplines
@@ -568,7 +594,8 @@ class BulletinColore(Flowable):
             self._txt(xs[1] + 2.5 * mm, base, t["libelle"], self.FB, 10.5, "marine", maxw=w_disc - 3 * mm)
             for j, txt in enumerate(t["valeurs"]):
                 if txt is not None:
-                    self._txt((xs[2 + j] + xs[3 + j]) / 2, base, txt, self.FB, 10.5, "marine", "center")
+                    self._txt((xs[2 + j] + xs[3 + j]) / 2, base, txt, self.FB, 10.5, "marine", "center",
+                              maxw=xs[3 + j] - xs[2 + j] - 2 * mm)
             self._txt((xs[-2] + xs[-1]) / 2, base, t["fin"], self.FB, 10.5, "marine", "center")
             yy -= rh
         bas_tab = yy
@@ -714,7 +741,10 @@ class BulletinColore(Flowable):
 
 
 def colonnes(params: dict | None, options: dict | None = None) -> str:
-    """« trimestres » (par défaut, comme le modèle de l'école) ou « evaluations » (une colonne par évaluation)."""
+    """« trimestres » (par défaut, comme le modèle de l'école) ou « evaluations » (une colonne par évaluation) ;
+    « composition » : bulletin d'une seule composition, choisi par le modèle (Bulletins de composition)."""
+    if ((options or {}).get("colonnes") or "").lower() == "composition":
+        return "composition"
     v = ((params or {}).get("bulletin_colonnes") or (options or {}).get("colonnes") or "trimestres").lower()
     return "evaluations" if v.startswith("eval") else "trimestres"
 

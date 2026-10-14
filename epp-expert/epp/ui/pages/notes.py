@@ -174,8 +174,12 @@ class PageNotes(Page):
     def __init__(self, ctx):
         super().__init__(ctx)
         self.actions.addWidget(bouton("Feuille de notes", lambda: self._imprimer("FEUILLE_NOTES", "Feuille de notes")))
-        self.actions.addWidget(bouton("Bulletins de la classe", lambda: self._imprimer("BULLETIN_EVAL", "Bulletins"),
-                                      "primaire"))
+        self.actions.addWidget(bouton("Bulletins de la composition",
+                                      lambda: self._imprimer("BULLETIN_COMPO", "Bulletins de composition")))
+        from epp.reports.bulletin_colore import colonnes
+        trim = colonnes(repo.etablissement(ctx.db)) == "trimestres"
+        self.actions.addWidget(bouton("Bulletins du trimestre" if trim else "Bulletins de la classe",
+                                      lambda: self._imprimer("BULLETIN_EVAL", "Bulletins"), "primaire"))
         self.classe = QComboBox()
         self.eval = QComboBox()
         self.classe.activated.connect(lambda _: self._remplir_evals())

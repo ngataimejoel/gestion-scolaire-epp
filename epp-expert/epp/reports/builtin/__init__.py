@@ -285,6 +285,8 @@ def _bulletin(periode):
 
 BULLETIN_EVAL = _bulletin("evaluation")
 BULLETIN_ANNUEL = _bulletin("annuel")
+BULLETIN_COMPO = _bulletin("evaluation")
+BULLETIN_COMPO["sections"][0]["colonnes"] = "composition"      # une seule composition, quel que soit le réglage
 
 # ---------------------------------------------------------------- exemples demandés
 EX_LISTE_CLASSE = _modele(
@@ -420,6 +422,8 @@ TEMPLATES = [
      TABLEAU_DE_BORD),
     ("BULLETIN_EVAL", "Bulletins d'évaluation", "Bulletins",
      "Notes par matière, moyenne, rang et appréciation ; un élève, une classe ou toute l'école.", BULLETIN_EVAL),
+    ("BULLETIN_COMPO", "Bulletins de composition", "Bulletins",
+     "Une composition : note et appréciation par discipline, total, moyenne et rang.", BULLETIN_COMPO),
     ("BULLETIN_ANNUEL", "Bulletins annuels", "Bulletins",
      "Moyennes des évaluations, MGA, rang, décision et observation de fin d'année.", BULLETIN_ANNUEL),
     ("DECISIONS_FIN_ANNEE", "Décisions de fin d'année", "Fin d'année",
