@@ -113,6 +113,9 @@ jobs:
     needs: windows
     if: startsWith(github.ref, 'refs/tags/expert-v')
     runs-on: ubuntu-latest
+    concurrency:                 # étiquette et version publiée déclenchent chacune une exécution : l'une après l'autre
+      group: publier-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     defaults:
