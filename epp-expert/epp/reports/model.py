@@ -26,6 +26,7 @@ SECTION_TYPES = {
     "tableau": "Tableau de données",
     "tableau_croise": "Tableau statistique (classes × sexe)",
     "repartition": "Répartition (comptage par valeur)",
+    "repartition_ages": "Élèves par âge, niveau et sexe",
     "classement": "Meilleurs élèves par classe",
     "cles_valeurs": "Indicateurs (clé / valeur)",
     "graphique": "Graphique en barres",
@@ -63,7 +64,8 @@ VARIABLES = {
     "{ecole}": "Nom de l'établissement", "{code_ecole}": "Code de l'établissement", "{annee}": "Année scolaire",
     "{directeur}": "Nom du directeur", "{localite}": "Localité", "{iepp}": "Inspection (IEPP)",
     "{dren}": "Direction régionale", "{ministere}": "Ministère", "{secteur}": "Secteur pédagogique",
-    "{date_edition}": "Date d'édition des états", "{date_jour}": "Date du jour", "{classe}": "Classe choisie",
+    "{date_edition}": "Date d'édition des états", "{date_ref_age}": "Date de référence de l'âge",
+    "{date_jour}": "Date du jour", "{classe}": "Classe choisie",
     "{mois}": "Mois choisi", "{mois_annee}": "Mois et année", "{compo}": "N° de l'évaluation",
     "{compo_libelle}": "Libellé de l'évaluation", "{compo_date}": "Date de l'évaluation",
     "{jours_classe}": "Jours de classe du mois", "{effectif}": "Effectif total",
@@ -102,6 +104,8 @@ def nouvelle_section(type_: str) -> dict:
                     total=True, libelles={}, classes_extra=[])
     elif type_ == "repartition":
         base.update(source="eleves", champ="classe", filtres=[], pourcentage=True)
+    elif type_ == "repartition_ages":
+        base.update(extrait="tous", sexes=["M", "F", "T"])
     elif type_ == "classement":
         base.update(top=3)
     elif type_ == "cles_valeurs":

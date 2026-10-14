@@ -90,6 +90,44 @@ def confirmer(parent, titre: str, texte: str, ok: str = "Confirmer", danger: boo
     return box.clickedButton() is b_ok
 
 
+def mot_de_passe_admin(parent, db, s, texte: str, motif: str) -> str | None:
+    """Demande le mot de passe d'un administrateur ; renvoie son identifiant si le mot de passe est juste."""
+    from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLineEdit, QVBoxLayout
+    from epp.core import security
+    d = QDialog(parent)
+    d.setWindowTitle("Mot de passe administrateur")
+    v = QVBoxLayout(d)
+    v.addWidget(label(texte, wrap=True))
+    champ = QLineEdit()
+    champ.setEchoMode(QLineEdit.Password)
+    champ.setPlaceholderText("Mot de passe d'un administrateur")
+    v.addWidget(champ)
+    erreur = label("")
+    erreur.setStyleSheet(f"color: {theme.DANGER};")
+    v.addWidget(erreur)
+    bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+    bb.button(QDialogButtonBox.Ok).setText("Valider")
+    bb.button(QDialogButtonBox.Cancel).setText("Annuler")
+    v.addWidget(bb)
+    resultat: list[str] = []
+
+    def valider():
+        login = security.verifier_admin(db, s, champ.text(), motif)
+        if login:
+            resultat.append(login)
+            d.accept()
+        else:
+            erreur.setText("Mot de passe incorrect.")
+            champ.selectAll()
+            champ.setFocus()
+
+    bb.accepted.connect(valider)
+    bb.rejected.connect(d.reject)
+    d.setMinimumWidth(380)
+    d.exec()
+    return resultat[0] if resultat else None
+
+
 def info(parent, titre: str, texte: str) -> None:
     QMessageBox.information(parent, titre, texte)
 

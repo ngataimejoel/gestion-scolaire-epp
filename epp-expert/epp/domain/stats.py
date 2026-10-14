@@ -192,6 +192,40 @@ def compute(db: Database, annee: Annee, compo: int | None = None, mois: int | No
     return st
 
 
+EXTRAITS = {"tous": "Tous les élèves", "avec": "Avec extrait de naissance", "sans": "Sans extrait de naissance"}
+AGE_INCONNU = "Non renseigné"
+
+
+def repartition_ages(db: Database, annee: Annee, extrait: str = "tous") -> dict:
+    """Élèves inscrits par âge (à la date de référence de l'année), par niveau et par sexe.
+
+    extrait : « tous », « avec » (extrait de naissance = OUI) ou « sans » (NON ou non renseigné).
+    Renvoie {"classes", "ages" (libellés, du plus jeune au plus âgé), "n": {(âge, classe, sexe): nombre}}
+    avec les totaux sous la classe « TOTAL », l'âge « TOTAL » et le sexe « T »."""
+    if extrait not in EXTRAITS:
+        raise ValueError(f"Extrait : {', '.join(EXTRAITS)}.")
+    classes = list(annee.codes)
+    n: dict[tuple, int] = {}
+    vus = set()
+    for r in repo.inscriptions(db, annee):
+        a = r.get("extrait") == "OUI"
+        if (extrait == "avec" and not a) or (extrait == "sans" and a) or r["classe"] not in classes:
+            continue
+        age = r.get("age")
+        cle_age = age if isinstance(age, int) else AGE_INCONNU
+        vus.add(cle_age)
+        sx = r.get("sexe") if r.get("sexe") in ("M", "F") else None
+        for ag in (cle_age, "TOTAL"):
+            for cl in (r["classe"], "TOTAL"):
+                for x in ([sx] if sx else []) + ["T"]:
+                    n[(ag, cl, x)] = n.get((ag, cl, x), 0) + 1
+    connus = sorted(v for v in vus if isinstance(v, int))
+    ages = list(range(connus[0], connus[-1] + 1)) if connus else []
+    if AGE_INCONNU in vus:
+        ages.append(AGE_INCONNU)
+    return {"classes": classes, "ages": ages, "n": n, "extrait": extrait}
+
+
 def classement(db: Database, annee: Annee, compo: int, top: int = 3) -> dict[str, list[dict]]:
     """Trois meilleurs par niveau (RAPPORT DE COMPOSITION) ; ex æquo : premier inscrit d'abord."""
     moys = resultats.moyennes_par_evaluation(db, annee)

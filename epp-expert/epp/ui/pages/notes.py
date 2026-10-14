@@ -3,12 +3,12 @@ from __future__ import annotations
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QBrush, QColor, QFont
-from PySide6.QtWidgets import QAbstractItemView, QComboBox, QHeaderView, QTableView
+from PySide6.QtWidgets import QAbstractItemDelegate, QAbstractItemView, QComboBox, QHeaderView, QTableView
 
 from epp.domain import repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
-from epp.ui.widgets import Carte, afficher_erreur, bouton, confirmer, label, ligne
+from epp.ui.widgets import Carte, afficher_erreur, bouton, confirmer, label, ligne, mot_de_passe_admin
 
 FIXES = [("numero", "N°"), ("matricule_ecole", "Matricule"), ("nom", "Nom et prénoms"), ("present", "Présent")]
 
@@ -17,6 +17,16 @@ def _fmt(v) -> str:
     if v is None:
         return ""
     return (f"{v:.2f}" if isinstance(v, float) and not float(v).is_integer() else f"{v:g}").replace(".", ",")
+
+
+def _nombre(texte: str):
+    """Valeur saisie (virgule ou point) ; None si vide, le texte tel quel s'il n'est pas un nombre."""
+    if not texte:
+        return None
+    try:
+        return float(texte.replace(",", "."))
+    except ValueError:
+        return texte
 
 
 def _coupe(t: str, n: int = 12) -> str:
@@ -139,10 +149,18 @@ class ModeleNotes(QAbstractTableModel):
                                                      "seront effacées et sa moyenne vaudra 0. Continuer ?",
                         "Noter absent", danger=True):
                     return False
+                if not present and r["notes"] and not p.autoriser_correction(f"effacer les notes de {r['nom']}"):
+                    return False
                 repo.set_presence(p.db, p.s, r["inscription_id"], self.eval_num, present, self.grille.id)
             elif k == "note" and role == Qt.EditRole:
                 texte = str(valeur).strip()
+                avant, apres = r["notes"].get(x["id"]), _nombre(texte)
+                corrige = avant is not None and apres != avant and not isinstance(apres, str)
+                if corrige and not p.autoriser_correction(f"corriger la note de {x['libelle']} de {r['nom']}"):
+                    return False
                 repo.set_note(p.db, p.s, p.annee, r["inscription_id"], x["id"], texte or None)
+                if corrige:
+                    p.journaliser_correction(r, x, avant, texte)
             else:
                 return False
         except Exception as e:      # noqa: BLE001
@@ -154,15 +172,52 @@ class ModeleNotes(QAbstractTableModel):
 
 
 class VueNotes(QTableView):
-    """Après validation d'une note, la cellule suivante (élève suivant) est sélectionnée."""
+    """Entrée valide la note et descend à l'élève suivant ; Tab (Maj+Tab) passe à la matière suivante
+    (précédente), puis à l'élève suivant (précédent) en bout de ligne, et ouvre la saisie de cette note."""
+
+    def _voisine(self, i, pas: int):
+        m = self.model()
+        cols = [c for c in range(m.columnCount()) if m._col(c)[0] == "note"]
+        if not cols:
+            return None
+        r, c = i.row(), i.column()
+        if c not in cols:
+            c = cols[0] - 1 if pas > 0 else cols[-1] + 1
+        while True:
+            suiv = [x for x in cols if (x > c if pas > 0 else x < c)]
+            if suiv:
+                c = suiv[0] if pas > 0 else suiv[-1]
+            else:
+                r += pas
+                if not 0 <= r < m.rowCount():
+                    return None
+                c = cols[0] if pas > 0 else cols[-1]
+            j = m.index(r, c)
+            if m.flags(j) & Qt.ItemIsEditable:
+                return j
 
     def closeEditor(self, editor, hint):
-        super().closeEditor(editor, QAbstractItemView.NoHint)
-        if hint in (QAbstractItemView.EditNextItem, QAbstractItemView.SubmitModelCache):
-            i = self.currentIndex()
+        H = QAbstractItemDelegate.EndEditHint
+        super().closeEditor(editor, H.NoHint)
+        i = self.currentIndex()
+        if hint == H.SubmitModelCache:
             suivant = self.model().index(i.row() + 1, i.column())
             if suivant.isValid():
                 self.setCurrentIndex(suivant)
+        elif hint in (H.EditNextItem, H.EditPreviousItem):
+            j = self._voisine(i, 1 if hint == H.EditNextItem else -1)
+            if j is not None:
+                self.setCurrentIndex(j)
+                self.edit(j)
+
+    def moveCursor(self, action, modifiers):
+        """Tab hors saisie : même parcours, de note en note."""
+        A = QAbstractItemView.CursorAction
+        if action in (A.MoveNext, A.MovePrevious) and self.model().grille:
+            j = self._voisine(self.currentIndex(), 1 if action == A.MoveNext else -1)
+            if j is not None:
+                return j
+        return super().moveCursor(action, modifiers)
 
 
 class PageNotes(Page):
@@ -185,6 +240,7 @@ class PageNotes(Page):
         self.classe.activated.connect(lambda _: self._remplir_evals())
         self.eval.activated.connect(lambda _: self._charger())
         self.info = label("", discret=True)
+        self._correction = None
         self.corps.addLayout(ligne(label("Classe"), self.classe, label("Évaluation"), self.eval, self.info, None))
         c = Carte()
         self.vue = VueNotes()
@@ -198,8 +254,10 @@ class PageNotes(Page):
         self.vue.setSelectionMode(QAbstractItemView.SingleSelection)
         self.vue.horizontalHeader().setMinimumHeight(60)
         c.lay.addWidget(self.vue, 1)
-        c.lay.addWidget(label("Tapez la note puis Entrée pour passer à l'élève suivant. Décochez « Présent » pour un "
-                              "élève absent à l'évaluation (sa moyenne vaut alors 0). Virgule ou point acceptés.",
+        c.lay.addWidget(label("Tapez la note puis Entrée pour passer à l'élève suivant, ou Tab pour passer à la "
+                              "matière suivante (Maj+Tab pour revenir). Décochez « Présent » pour un élève absent à "
+                              "l'évaluation (sa moyenne vaut alors 0). Virgule ou point acceptés. Corriger une note "
+                              "déjà saisie demande le mot de passe d'un administrateur.",
                               discret=True, wrap=True))
         self.corps.addWidget(c, 1)
 
@@ -232,6 +290,8 @@ class PageNotes(Page):
             self.info.setText("Aucune classe" if not c else "Aucune grille de notes pour cette classe")
             return
         g = self.annee.grilles[c.grille_id]
+        if self._correction != self._cle_correction():
+            self._correction = None            # autre classe, évaluation ou utilisateur : redemander
         editable = self.modifiable() and self.peut("notes.modifier")
         self.modele.charger(g, self.eval.currentData(), c.code, editable)
         h = self.vue.horizontalHeader()
@@ -248,6 +308,28 @@ class PageNotes(Page):
         n = len(self.modele.lignes)
         self.info.setText(f"{n} élève(s) · grille {g.libelle} ({mode}) · moyenne sur {g.echelle:g}"
                           + ("" if editable else " · lecture seule"))
+
+    def autoriser_correction(self, quoi: str) -> bool:
+        """Corriger ou effacer une note déjà saisie : mot de passe d'un administrateur, demandé une fois
+        pour la classe et l'évaluation affichées."""
+        cle = self._cle_correction()
+        if self._correction == cle:
+            return True
+        login = mot_de_passe_admin(self, self.db, self.s,
+                                   f"Pour {quoi}, saisissez le mot de passe d'un administrateur. Il ne sera plus "
+                                   f"demandé pour les corrections de cette classe et de cette évaluation.",
+                                   f"correction de notes {cle[1]} évaluation {cle[2]}")
+        if login:
+            self._correction = cle
+        return bool(login)
+
+    def _cle_correction(self):
+        return (self.s.login, self.classe.currentData(), self.eval.currentData())
+
+    def journaliser_correction(self, r, mat, avant, texte):
+        from epp.core import security
+        security.log(self.db, self.s.login, "NOTE_CORRIGEE", "note",
+                     f"{r['nom']} ({r['matricule_ecole']}) {mat['libelle']} : {_fmt(avant)} -> {texte or 'effacée'}")
 
     def _imprimer(self, code, nom):
         from epp.ui.dialogs.export import exporter_rapport

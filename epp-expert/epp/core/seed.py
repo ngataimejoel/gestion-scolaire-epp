@@ -57,7 +57,7 @@ DEFAULT_LISTS = {
                  "INSTITUTEUR STAGIAIRE", "GARDIEN", "CANTINIERE"],
     "NATURE_ABSENCE": ["RETARD", "ABSENCE"],
     "MOTIF_ABSENCE": ["Maladie", "Sans motif", "Pluie / route coupée", "Deuil familial", "Voyage",
-                      "Travaux champêtres", "Convocation IEPP", "Formation", "Autre"],
+                      "Opération bancaire", "Congé de maternité", "Convocation IEPP", "Formation", "Autre"],
     "SITUATION_MATRIMONIALE": ["CELIBATAIRE", "MARIE(E)", "DIVORCE(E)", "VEUF(VE)"],
     "CATEGORIE_RAPPORT": ["Officiel", "Élèves", "Effectifs", "Résultats", "Personnel", "Absences",
                           "Statistiques", "Autre"],

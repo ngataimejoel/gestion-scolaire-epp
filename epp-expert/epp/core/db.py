@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class Database:
@@ -243,11 +243,25 @@ _CONGE_SQL = [
     "CREATE INDEX IF NOT EXISTS idx_conge_annee ON conge(annee_id, date_debut)",
 ]
 
+def _motifs_absence_v6(conn: sqlite3.Connection) -> None:
+    """Motifs d'absence : « Travaux champêtres » retiré, « Opération bancaire » et « Congé de maternité »
+    ajoutés avant « Autre » (les absences déjà saisies gardent leur motif)."""
+    if not conn.execute("SELECT 1 FROM liste_valeur WHERE liste='MOTIF_ABSENCE'").fetchone():
+        return
+    conn.execute("DELETE FROM liste_valeur WHERE liste='MOTIF_ABSENCE' AND valeur='Travaux champêtres'")
+    for v in ("Opération bancaire", "Congé de maternité"):
+        conn.execute("INSERT OR IGNORE INTO liste_valeur(liste, valeur, ordre) VALUES('MOTIF_ABSENCE', ?, "
+                     "(SELECT COALESCE(MAX(ordre), 0) + 1 FROM liste_valeur WHERE liste='MOTIF_ABSENCE'))", (v,))
+    conn.execute("UPDATE liste_valeur SET ordre=(SELECT MAX(ordre) + 1 FROM liste_valeur WHERE liste='MOTIF_ABSENCE') "
+                 "WHERE liste='MOTIF_ABSENCE' AND valeur='Autre'")
+
+
 MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexion)
     2: _PHOTO_SQL,          # photos des élèves et du personnel
     3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
     4: _AUTORISATION_SQL + _archive_triggers(),   # demandes d'autorisation d'absence liées aux absences
     5: _CONGE_SQL + _archive_triggers(),          # jours fériés et vacances (non comptés comme jours de classe)
+    6: [_motifs_absence_v6],                      # nouveaux motifs d'autorisation d'absence
 }
 
 

@@ -69,6 +69,12 @@ def exporter_rapport(page, code: str, params: dict, nom: str) -> Path | None:
                        formats_autorises(ctx))
 
 
+def orientation_page(taille):
+    """Orientation d'impression d'une page du document : paysage si elle est plus large que haute."""
+    from PySide6.QtGui import QPageLayout
+    return QPageLayout.Landscape if taille.width() > taille.height() else QPageLayout.Portrait
+
+
 def imprimer_pdf(parent, chemin: Path) -> None:
     """Impression d'un PDF via la boîte d'impression du système (pages rendues à la résolution de l'imprimante)."""
     from PySide6.QtPdf import QPdfDocument
@@ -81,19 +87,32 @@ def imprimer_pdf(parent, chemin: Path) -> None:
     imp = QPrinter(QPrinter.HighResolution)
     imp.setDocName(chemin.stem)
     imp.setFromTo(1, doc.pageCount())
+    imp.setPageOrientation(orientation_page(doc.pagePointSize(0)))
     dlg = QPrintDialog(imp, parent)
     dlg.setOption(QPrintDialog.PrintPageRange, True)
     if dlg.exec() != QDialog.Accepted:
         return
     debut, fin = (imp.fromPage() or 1), (imp.toPage() or doc.pageCount())
+    QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+    try:
+        ok = imprimer_pages(imp, doc, debut, fin)
+    finally:
+        QGuiApplication.restoreOverrideCursor()
+    if not ok:
+        QMessageBox.warning(parent, "Impression", "L'imprimante n'est pas disponible.")
+
+
+def imprimer_pages(imp, doc, debut: int, fin: int) -> bool:
+    """Envoie les pages debut..fin (numérotées à partir de 1) à l'imprimante, chacune dans l'orientation
+    de la page du document (paysage ou portrait), centrée et agrandie à la zone imprimable."""
+    imp.setPageOrientation(orientation_page(doc.pagePointSize(debut - 1)))
     p = QPainter()
     if not p.begin(imp):
-        QMessageBox.warning(parent, "Impression", "L'imprimante n'est pas disponible.")
-        return
-    QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        return False
     try:
         for i in range(debut - 1, fin):
             if i > debut - 1:
+                imp.setPageOrientation(orientation_page(doc.pagePointSize(i)))
                 imp.newPage()
             zone = imp.pageLayout().paintRectPixels(imp.resolution())
             taille_pt = doc.pagePointSize(i)
@@ -102,7 +121,7 @@ def imprimer_pdf(parent, chemin: Path) -> None:
             p.drawImage(QPointF((zone.width() - img.width()) / 2, 0), img)
     finally:
         p.end()
-        QGuiApplication.restoreOverrideCursor()
+    return True
 
 
 class Apercu(QWidget):

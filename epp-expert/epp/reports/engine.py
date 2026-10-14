@@ -211,12 +211,14 @@ def subst(text: str, variables: dict) -> str:
 def variables(db: Database, annee: Annee, params: dict) -> dict:
     e = repo.etablissement(db)
     ed = calculs.to_date(annee.date_edition)
+    ra = calculs.to_date(annee.date_ref_age)
     v = {
         "ecole": e.get("ecole_nom", ""), "code_ecole": e.get("ecole_code", ""), "annee": annee.libelle,
         "directeur": e.get("directeur", ""), "localite": e.get("localite", ""), "iepp": e.get("iepp", ""),
         "dren": e.get("dren", ""), "ministere": e.get("ministere", ""), "secteur": e.get("secteur", ""),
         "pays": e.get("pays", ""), "devise_pays": e.get("devise_pays", ""),
-        "date_edition": ed.strftime("%d/%m/%Y") if ed else "", "date_jour": date.today().strftime("%d/%m/%Y"),
+        "date_edition": ed.strftime("%d/%m/%Y") if ed else "", "date_ref_age": ra.strftime("%d/%m/%Y") if ra else "",
+        "date_jour": date.today().strftime("%d/%m/%Y"),
         "classe": params.get("classe") or "", "compo": params.get("compo") or "",
         "monnaie": e.get("monnaie", "FCFA"),
     }
@@ -568,6 +570,25 @@ class Builder:
             types.append("pourcent")
         return [Table(self.t(s.get("titre", "")), [head], out, types, ["gauche"] + ["droite"] * (len(types) - 1),
                       [None] * len(types))]
+
+    # ------------------------------------------------------------------ âges
+    def repartition_ages(self, s: dict) -> list:
+        """Élèves par âge (lignes), par niveau et par sexe (colonnes), avec ou sans extrait de naissance."""
+        r = stats.repartition_ages(self.db, self.annee, s.get("extrait") or "tous")
+        sexes = s.get("sexes") or ["M", "F", "T"]
+        sx_lib = {"M": "G", "F": "F", "T": "T"}
+        groupes = r["classes"] + ["TOTAL"]
+        header = [[HeaderCell("ÂGE", rowspan=2)] + [HeaderCell(g, colspan=len(sexes)) for g in groupes],
+                  [HeaderCell(sx_lib[x]) for _ in groupes for x in sexes]]
+        rows = []
+        for ag in r["ages"] + ["TOTAL"]:
+            lib = ag if isinstance(ag, str) else f"{ag} ans"
+            rows.append(Row([lib] + [r["n"].get((ag, g, x), 0) for g in groupes for x in sexes],
+                            "total" if ag == "TOTAL" else "data"))
+        types = ["texte"] + ["entier"] * (len(groupes) * len(sexes))
+        titre = self.t(s.get("titre") or "") or stats.EXTRAITS[r["extrait"]]
+        return [Table(titre, header, rows, types, ["gauche"] + ["centre"] * (len(types) - 1),
+                      [None] * len(types), first_col_header=True)]
 
     # ------------------------------------------------------------------ classement
     def classement(self, s: dict) -> list:

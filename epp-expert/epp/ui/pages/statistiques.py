@@ -1,7 +1,7 @@
 """Statistiques : indicateurs par classe et par sexe (année, composition ou mois)."""
 from __future__ import annotations
 
-from PySide6.QtWidgets import QComboBox, QSplitter
+from PySide6.QtWidgets import QComboBox, QLabel, QSplitter
 
 from epp.domain import stats
 from epp.ui.pages.absences import mois_de_l_annee
@@ -28,15 +28,22 @@ class PageStatistiques(Page):
         self.sexe = QComboBox()
         for k, t in (("T", "Garçons et filles"), ("M", "Garçons"), ("F", "Filles")):
             self.sexe.addItem(t, k)
+        self.extrait = QComboBox()
+        for k, t in stats.EXTRAITS.items():
+            self.extrait.addItem(t, k)
         self.periode.activated.connect(lambda _: self._calculer())
         self.sexe.activated.connect(lambda _: self._calculer())
-        self.corps.addLayout(ligne(label("Période"), self.periode, label("Élèves"), self.sexe, None))
+        self.extrait.activated.connect(lambda _: self._calculer())
+        self.l_sexe, self.l_extrait = label("Élèves"), label("Extrait")
+        self.corps.addLayout(ligne(label("Période"), self.periode, self.l_sexe, self.sexe, self.l_extrait,
+                                   self.extrait, None))
         split = QSplitter()
         c1 = Carte()
         self.table = Tableau([Col("libelle", "Indicateur")])
         c1.lay.addWidget(self.table, 1)
         split.addWidget(c1)
         c2 = Carte("Par classe")
+        self.titre_graph = c2.findChild(QLabel, "titreCarte")
         self.graph = Barres()
         c2.lay.addWidget(self.graph, 1)
         split.addWidget(c2)
@@ -47,6 +54,7 @@ class PageStatistiques(Page):
         p = self.periode.currentData()
         self.periode.clear()
         self.periode.addItem("Année scolaire", ("annee", None))
+        self.periode.addItem("Âges par niveau et par sexe", ("ages", None))
         for n in self.annee.eval_nums():
             self.periode.addItem(self.annee.libelle_evaluation("STD", n), ("compo", n))
         for m, t in mois_de_l_annee(self.annee):
@@ -58,6 +66,14 @@ class PageStatistiques(Page):
 
     def _calculer(self):
         kind, val = self.periode.currentData() or ("annee", None)
+        ages = kind == "ages"
+        for w in (self.l_sexe, self.sexe):
+            w.setVisible(not ages)
+        for w in (self.l_extrait, self.extrait):
+            w.setVisible(ages)
+        self.titre_graph.setText("Par âge (toute l'école)" if ages else "Par classe")
+        if ages:
+            return self._calculer_ages()
         sx = self.sexe.currentData()
         st = stats.compute(self.db, self.annee, compo=val if kind == "compo" else None,
                            mois=val if kind == "mois" else None)
@@ -86,10 +102,34 @@ class PageStatistiques(Page):
         self.graph.set_donnees(st.classes, [(stats.METRIQUES[cle][0], [st.val(c, sx, cle) or 0 for c in st.classes])],
                                pourcent=True)
 
+    def _calculer_ages(self):
+        r = stats.repartition_ages(self.db, self.annee, self.extrait.currentData() or "tous")
+        groupes = r["classes"] + ["TOTAL"]
+        cols = [Col("age", "Âge", largeur=110)]
+        for g in groupes:
+            for x, t in (("M", "G"), ("F", "F"), ("T", "T")):
+                cols.append(Col(f"{g}_{x}", f"{g} {t}" if g != "TOTAL" else f"Total {t}", "texte", 58))
+        lignes = []
+        for ag in r["ages"] + ["TOTAL"]:
+            d = {"age": ag if isinstance(ag, str) else f"{ag} ans"}
+            for g in groupes:
+                for x in ("M", "F", "T"):
+                    d[f"{g}_{x}"] = str(r["n"].get((ag, g, x), 0))
+            lignes.append(d)
+        self.table.modele.colonnes = cols
+        self.table.modele.set_lignes(lignes)
+        for i, c in enumerate(cols):
+            self.table.setColumnWidth(i, c.largeur or 80)
+        libs = [a if isinstance(a, str) else f"{a} ans" for a in r["ages"]]
+        self.graph.set_donnees(libs, [("Garçons", [r["n"].get((a, "TOTAL", "M"), 0) for a in r["ages"]]),
+                                      ("Filles", [r["n"].get((a, "TOTAL", "F"), 0) for a in r["ages"]])])
+
     def _imprimer(self):
         from epp.ui.dialogs.export import exporter_rapport
         kind, val = self.periode.currentData() or ("annee", None)
-        if kind == "compo":
+        if kind == "ages":
+            exporter_rapport(self, "AGES", {}, "Élèves par âge, niveau et sexe")
+        elif kind == "compo":
             exporter_rapport(self, "COMPOSITION", {"compo": val}, f"Rapport de composition {val}")
         elif kind == "mois":
             exporter_rapport(self, "MENSUEL", {"mois": val}, f"Rapport mensuel {val}")

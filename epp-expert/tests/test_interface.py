@@ -197,7 +197,8 @@ def test_nouvel_eleve(fenetre, messages):
     assert d2.f_id.widgets["nom"].property("erreur") is True
 
 
-def test_saisie_des_notes(fenetre, messages):
+def test_saisie_des_notes(fenetre, messages, monkeypatch):
+    monkeypatch.setattr("epp.ui.pages.notes.mot_de_passe_admin", lambda *a, **k: "admin")  # corrections
     p = fenetre.page("notes")
     m = p.modele
     col = 4                                     # première matière

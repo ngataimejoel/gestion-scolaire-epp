@@ -52,9 +52,11 @@ def moyenne_evaluation(notes: Sequence[tuple[float | None, float]], mode: str, e
     mode BAREME (NOTES CE1 à CM2) :
         total   =SI(absent;0;SI(NB=0;"";SOMME(notes)))
         moyenne =SI(absent;0;SI(NB=0;"";ARRONDI(SOMME(notes)/SOMMEPROD(ESTNUM(notes)*barème)*échelle;2)))
+    Le classeur n'affiche pas de total en CP ; l'application donne la somme des notes pondérées
+    par leur coefficient (demande de l'utilisateur, 14/10/2026), la moyenne reste celle du classeur.
     """
     if not present:
-        return (0.0 if mode == "BAREME" else None), 0.0
+        return 0.0, 0.0
     saisies = [(n, w) for n, w in notes if n is not None]
     if not saisies:
         return None, None
@@ -62,7 +64,8 @@ def moyenne_evaluation(notes: Sequence[tuple[float | None, float]], mode: str, e
         den = sum(w for _, w in saisies)
         if den == 0:
             return None, None
-        return None, xround(sum(n * w for n, w in saisies) / den, 2)
+        pondere = sum(n * w for n, w in saisies)
+        return xround(pondere, 2), xround(pondere / den, 2)
     total = sum(n for n, _ in saisies)
     den = sum(w for _, w in saisies)
     if den == 0:

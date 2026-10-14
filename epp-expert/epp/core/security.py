@@ -193,6 +193,19 @@ def admin_count(db: Database) -> int:
         "WHERE r.code='ADMIN' AND u.actif=1", default=0)
 
 
+def verifier_admin(db: Database, s: Session, password: str, motif: str = "") -> str | None:
+    """Mot de passe d'un administrateur actif (opération protégée) : renvoie son identifiant, ou None.
+
+    Chaque tentative est inscrite au journal, réussie ou non."""
+    for r in db.query("SELECT u.login, u.hash FROM utilisateur u JOIN role r ON r.id=u.role_id "
+                      "WHERE r.code='ADMIN' AND u.actif=1 ORDER BY u.login"):
+        if password and verify_password(password, r["hash"]):
+            log(db, s.login, "AUTORISATION_ADMIN", "utilisateur", f"{r['login']} : {motif}")
+            return r["login"]
+    log(db, s.login, "AUTORISATION_ADMIN_ECHEC", "utilisateur", motif)
+    return None
+
+
 def log(db: Database, utilisateur: str, action: str, objet: str = "", details: str = "") -> None:
     db.execute("INSERT INTO journal(utilisateur, action, objet, details) VALUES(?,?,?,?)",
                (utilisateur, action, objet, details))

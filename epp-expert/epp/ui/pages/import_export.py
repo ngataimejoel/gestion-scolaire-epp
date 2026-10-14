@@ -14,7 +14,7 @@ from epp.reports import service
 from epp.ui.dialogs.export import enregistrer, formats_autorises
 from epp.ui.pages.base import Page
 from epp.ui.widgets import (Carte, Col, Tableau, afficher_erreur, bouton, confirmer, info, label, ligne,
-                            ouvrir_fichier, protege)
+                            mot_de_passe_admin, ouvrir_fichier, protege)
 
 ACTIONS = {"creer": "Création", "modifier": "Mise à jour", "inscrire": "Inscription", "ignorer": "Ignorée"}
 
@@ -79,6 +79,10 @@ class DialogueAnalyse(QDialog):
     @protege
     def _importer(self):
         p = self.page
+        if self.an.corrections and not mot_de_passe_admin(
+                self, p.db, p.s, f"Cet import corrige {self.an.corrections} note(s) déjà saisie(s). Saisissez le mot "
+                                 "de passe d'un administrateur pour continuer.", "import de notes avec corrections"):
+            return
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             b = modeles_excel.appliquer(p.db, p.s, p.annee, self.an)

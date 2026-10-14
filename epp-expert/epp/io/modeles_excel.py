@@ -332,6 +332,11 @@ class Analyse:
     lignes: list[Ligne] = field(default_factory=list)
     erreurs_fichier: list[str] = field(default_factory=list)
 
+    @property
+    def corrections(self) -> int:
+        """Notes déjà saisies que l'import remplacerait (mot de passe administrateur exigé)."""
+        return sum(l.cible.get("corrections", 0) for l in self.lignes if l.valide)
+
     def compte(self) -> dict:
         c = {"creer": 0, "modifier": 0, "inscrire": 0, "ignorer": 0, "erreurs": 0}
         for l in self.lignes:
@@ -597,6 +602,9 @@ def _an_classes(db, annee, an):
 def _an_notes(db, annee, an):
     for code in {l.cible["classe"] for l in an.lignes}:
         ins = {r["matricule_ecole"]: r for r in repo.inscriptions(db, annee, code)}
+        cl = annee.classe(code)
+        deja = {r["inscription_id"]: r["notes"] for r in
+                repo.notes_grille(db, annee, cl.grille_id, an.evaluation, code)[1]} if cl and cl.grille_id in annee.grilles else {}
         vus = {}
         for l in (x for x in an.lignes if x.cible["classe"] == code):
             d = l.donnees
@@ -619,6 +627,13 @@ def _an_notes(db, annee, an):
                 l.avertissements.append("Aucune note saisie.")
             else:
                 l.action = "modifier"
+                avant = deja.get(l.cible["inscription_id"], {})
+                n = len(avant) if absent else sum(1 for k, v in notes.items()
+                                                  if avant.get(int(k[2:])) not in (None, v))
+                if n:
+                    l.cible["corrections"] = n
+                    l.avertissements.append(f"{n} note(s) déjà saisie(s) corrigée(s) : mot de passe "
+                                            "administrateur demandé.")
 
 
 def _an_absences(db, annee, an):

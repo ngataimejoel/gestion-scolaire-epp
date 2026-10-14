@@ -317,6 +317,16 @@ EX_ENSEIGNANTS = _modele(
          "renumeroter": True},
         SIGNATURE])
 
+AGES = _modele(
+    "RÉPARTITION DES ÉLÈVES PAR ÂGE, NIVEAU ET SEXE", sous_titre="Âge au {date_ref_age} – année scolaire {annee}",
+    orientation="paysage", sections=[
+        {"type": "repartition_ages", "titre": "ENSEMBLE DES ÉLÈVES", "extrait": "tous"},
+        {"type": "saut_page"},
+        {"type": "repartition_ages", "titre": "ÉLÈVES AVEC EXTRAIT DE NAISSANCE", "extrait": "avec"},
+        {"type": "saut_page"},
+        {"type": "repartition_ages", "titre": "ÉLÈVES SANS EXTRAIT DE NAISSANCE", "extrait": "sans"},
+        SIGNATURE])
+
 EX_STAT_ANNUEL = _modele(
     "RAPPORT STATISTIQUE ANNUEL", sections=[
         {"type": "cles_valeurs", "titre": "Indicateurs de l'année", "source": "tableau_de_bord", "elements": [
@@ -418,6 +428,8 @@ TEMPLATES = [
     ("AUTORISATIONS", "Registre des autorisations d'absence", OFFICIEL,
      "Demandes d'autorisation d'absence des élèves et du personnel, avec la décision du directeur.", AUTORISATIONS),
     ("FEUILLE_NOTES", "Feuille de notes", OFFICIEL, "Notes d'une classe pour une évaluation (NOTES).", FEUILLE_NOTES),
+    ("AGES", "Élèves par âge, niveau et sexe", OFFICIEL,
+     "Âges par niveau et par sexe : ensemble des élèves, avec extrait et sans extrait de naissance.", AGES),
     ("TABLEAU_DE_BORD", "Tableau de bord", OFFICIEL, "Indicateurs, tableau par classe, alertes et graphiques.",
      TABLEAU_DE_BORD),
     ("BULLETIN_EVAL", "Bulletins d'évaluation", "Bulletins",
