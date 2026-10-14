@@ -13,4 +13,4 @@ Get-Content selftest.txt
 $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
 if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
 & $iscc packaging\installer.iss
-Write-Host "Installateur : dist\GestionScolaireEPP-Setup-*.exe"
+Write-Host "Installateur : dist\AkwaSchool-Setup-*.exe"

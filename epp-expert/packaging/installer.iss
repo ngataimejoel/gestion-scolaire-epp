@@ -1,7 +1,7 @@
 ; Inno Setup 6 : ISCC.exe packaging\installer.iss  (après PyInstaller)
 ; Les données de l'école (%LOCALAPPDATA%\GestionScolaireEPP) ne sont JAMAIS dans le dossier
 ; d'installation : une mise à jour ou une désinstallation les conserve, sauf demande explicite.
-#define AppName "GESTION SCOLAIRE EPP EXPERT"
+#define AppName "AKWA SCHOOL"
 #ifndef AppVersion
   #define AppVersion "1.0.0"
 #endif
@@ -15,8 +15,9 @@ AppPublisher=NGATTA
 DefaultDirName={autopf}\GestionScolaireEPP
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
+UsePreviousGroup=no
 OutputDir=..\dist
-OutputBaseFilename=GestionScolaireEPP-Setup-{#AppVersion}
+OutputBaseFilename=AkwaSchool-Setup-{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
@@ -36,6 +37,11 @@ Name: "desktopicon"; Description: "Créer un raccourci sur le Bureau"; GroupDesc
 
 [Files]
 Source: "..\dist\GestionScolaireEPP\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+
+[InstallDelete]
+; raccourcis de l'ancien nom (GESTION SCOLAIRE EPP EXPERT), remplacés par AKWA SCHOOL lors d'une mise à jour
+Type: files; Name: "{autodesktop}\GESTION SCOLAIRE EPP EXPERT.lnk"
+Type: filesandordirs; Name: "{autoprograms}\GESTION SCOLAIRE EPP EXPERT"
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExe}"

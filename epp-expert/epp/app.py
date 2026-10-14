@@ -1,4 +1,4 @@
-"""Point d'entrée de GESTION SCOLAIRE EPP EXPERT.
+"""Point d'entrée d'AKWA SCHOOL – Gestion scolaire EPP.
 
     GestionScolaireEPP.exe              lance l'interface
     GestionScolaireEPP.exe --selftest   vérifie l'installation sans interface (code de sortie 0 = OK)

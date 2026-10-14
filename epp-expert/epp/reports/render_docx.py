@@ -18,6 +18,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Mm, Pt, RGBColor
 
+from epp import APP_NAME
 from epp.reports import engine as E
 
 POLICE = "Arial"
@@ -238,7 +239,7 @@ class _Rendu:
         cp.title = doc.titre or doc.nom
         cp.author = doc.variables.get("ecole", "")
         cp.subject = doc.sous_titre or ""
-        cp.comments = "GESTION SCOLAIRE EPP EXPERT"
+        cp.comments = APP_NAME
         self._premier = True        # le premier paragraphe vide du document est réutilisé
 
     # ------------------------------------------------------------------ pied de page

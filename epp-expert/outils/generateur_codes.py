@@ -1,4 +1,4 @@
-"""Générateur de codes d'activation de GESTION SCOLAIRE EPP EXPERT (outil du fournisseur).
+"""Générateur de codes d'activation d'AKWA SCHOOL (outil du fournisseur).
 
 Cet outil n'est PAS livré aux écoles : il sert au fournisseur à créer des codes « 1 an » ou
 « à vie », à suivre leur utilisation, à libérer un code (changement d'ordinateur) ou à l'annuler.

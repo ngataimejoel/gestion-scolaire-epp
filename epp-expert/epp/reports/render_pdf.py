@@ -28,6 +28,7 @@ from reportlab.platypus import (Image, KeepTogether, PageBreak as RLPageBreak, P
 from reportlab.lib.utils import ImageReader
 from xml.sax.saxutils import escape
 
+from epp import APP_NAME
 from epp.core.paths import resource_path
 from epp.reports import engine as E
 
@@ -719,7 +720,7 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
         out = str(out)
     tpl = SimpleDocTemplate(out, pagesize=size, leftMargin=MARGE_G, rightMargin=MARGE_D, topMargin=MARGE_H,
                             bottomMargin=MARGE_B, title=doc.titre or doc.nom, author=v.get("ecole", ""),
-                            subject=doc.sous_titre, creator="GESTION SCOLAIRE EPP EXPERT")
+                            subject=doc.sous_titre, creator=APP_NAME)
     tpl.build(story or [Spacer(1, 1)], canvasmaker=lambda *a, **k: _NumberedCanvas(*a, footer=footer, **k))
 
 

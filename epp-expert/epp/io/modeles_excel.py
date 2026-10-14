@@ -24,6 +24,7 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
+from epp import APP_NAME
 from epp.core.db import Database
 from epp.core.security import Session, log
 from epp.domain import calculs, repo
@@ -276,7 +277,7 @@ def creer_modele(db: Database, annee: Annee, kind: str, chemin: str | Path, avec
         _feuille(wb, db, annee, TYPES[kind][0], colonnes(kind),
                  _lignes_export(db, annee, kind) if avec_donnees else [], listes_ws, listes_idx)
     aide = wb.create_sheet("Aide")
-    textes = [f"Modèle « {TYPES[kind][1]} » – GESTION SCOLAIRE EPP EXPERT – année {annee.libelle}", "",
+    textes = [f"Modèle « {TYPES[kind][1]} » – {APP_NAME} – année {annee.libelle}", "",
               "• Les colonnes marquées * sont obligatoires ; les listes déroulantes donnent les valeurs admises.",
               "• Les dates s'écrivent jj/mm/aaaa.",
               "• Ne renommez pas les feuilles et ne supprimez pas la feuille cachée _epp.",

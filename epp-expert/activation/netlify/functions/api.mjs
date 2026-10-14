@@ -1,4 +1,4 @@
-// Service d'activation de GESTION SCOLAIRE EPP EXPERT (Netlify Functions + Netlify Blobs).
+// Service d'activation d'AKWA SCHOOL (Netlify Functions + Netlify Blobs).
 // Variables d'environnement du site (jamais dans le dépôt) :
 //   EPP_LICENCE_CLE_PRIVEE : clé privée Ed25519 (PKCS8 DER en base64)
 //   EPP_ADMIN_TOKEN        : jeton du générateur de codes (au moins 32 caractères)

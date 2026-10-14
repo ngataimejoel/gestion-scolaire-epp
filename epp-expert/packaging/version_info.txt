@@ -4,11 +4,11 @@ VSVersionInfo(
   kids=[
     StringFileInfo([StringTable('040C04B0', [
       StringStruct('CompanyName', 'NGATTA'),
-      StringStruct('FileDescription', 'GESTION SCOLAIRE EPP EXPERT'),
+      StringStruct('FileDescription', 'AKWA SCHOOL - Gestion scolaire EPP'),
       StringStruct('FileVersion', '1.0.0'),
       StringStruct('InternalName', 'GestionScolaireEPP'),
       StringStruct('OriginalFilename', 'GestionScolaireEPP.exe'),
-      StringStruct('ProductName', 'GESTION SCOLAIRE EPP EXPERT'),
+      StringStruct('ProductName', 'AKWA SCHOOL'),
       StringStruct('ProductVersion', '1.0.0')])]),
     VarFileInfo([VarStruct('Translation', [1036, 1200])])
   ]

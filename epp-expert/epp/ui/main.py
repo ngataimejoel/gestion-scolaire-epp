@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLa
                                QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QStyledItemDelegate, QToolButton,
                                QVBoxLayout, QWidget)
 
-from epp import APP_NAME, __version__
+from epp import APP_MARQUE, APP_NAME, __version__
 from epp.core import backup, licence, security
 from epp.core.db import open_database
 from epp.domain import repo
@@ -131,7 +131,7 @@ class FenetrePrincipale(QMainWindow):
         tete.addWidget(self.logo)
         b = QVBoxLayout()
         b.setSpacing(0)
-        m = QLabel("EPP EXPERT")
+        m = QLabel(APP_MARQUE)
         m.setObjectName("marque")
         self.l_ecole = QLabel("")
         self.l_ecole.setObjectName("marqueSous")

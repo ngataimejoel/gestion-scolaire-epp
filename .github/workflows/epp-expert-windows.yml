@@ -69,7 +69,7 @@ jobs:
 
       - name: Installation silencieuse, auto-test, mise à jour, désinstallation
         run: |
-          $setup = (Get-ChildItem dist\GestionScolaireEPP-Setup-*.exe).FullName
+          $setup = (Get-ChildItem dist\AkwaSchool-Setup-*.exe).FullName
           $dir = "$env:RUNNER_TEMP\EPPInstall"
           $data = "$env:LOCALAPPDATA\GestionScolaireEPP"
           # 1. installation
@@ -77,6 +77,8 @@ jobs:
           if ($p.ExitCode -ne 0) { throw "installation en échec" }
           if (-not (Test-Path "$dir\GestionScolaireEPP.exe")) { throw "exécutable absent après installation" }
           if (Test-Path "$dir\*.sqlite") { throw "la base ne doit pas être dans le dossier d'installation" }
+          $menu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\AKWA SCHOOL\AKWA SCHOOL.lnk"
+          if (-not (Test-Path $menu)) { throw "raccourci AKWA SCHOOL absent du menu Démarrer" }
           $p = Start-Process "$dir\GestionScolaireEPP.exe" -ArgumentList "--selftest","--rapport","$pwd\selftest_installe.txt" -Wait -PassThru
           Get-Content selftest_installe.txt
           if ($p.ExitCode -ne 0) { throw "auto-test après installation en échec" }
@@ -96,8 +98,8 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: GestionScolaireEPP-Expert-Setup
+          name: AkwaSchool-Setup
           path: |
-            epp-expert/dist/GestionScolaireEPP-Setup-*.exe
+            epp-expert/dist/AkwaSchool-Setup-*.exe
             epp-expert/selftest_*.txt
           if-no-files-found: error
