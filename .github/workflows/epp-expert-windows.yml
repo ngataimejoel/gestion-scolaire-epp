@@ -103,3 +103,37 @@ jobs:
             epp-expert/dist/AkwaSchool-Setup-*.exe
             epp-expert/selftest_*.txt
           if-no-files-found: error
+
+  # Étiquette expert-vX.Y.Z : l'installateur testé ci-dessus est publié en version publique (téléchargeable
+  # sans compte GitHub), sous son nom versionné et sous le nom fixe AkwaSchool-Setup.exe (lien « latest »).
+  publier:
+    needs: windows
+    if: startsWith(github.ref, 'refs/tags/expert-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: AkwaSchool-Setup
+          path: setup
+      - name: Publier la version
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          exe=$(ls setup/dist/AkwaSchool-Setup-*.exe 2>/dev/null || ls setup/AkwaSchool-Setup-*.exe)
+          cp "$exe" AkwaSchool-Setup.exe
+          version="${TAG#expert-v}"
+          cat > notes.md <<NOTES
+          AKWA SCHOOL – Gestion scolaire EPP, version ${version}, pour Windows 10 et 11.
+
+          Téléchargez **AkwaSchool-Setup.exe** ci-dessous, puis lancez-le. Si l'application est déjà installée,
+          ce même fichier la met à jour : les données de l'école sont conservées.
+          NOTES
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "AKWA SCHOOL ${version}" \
+            --notes-file notes.md --latest AkwaSchool-Setup.exe "$exe"
