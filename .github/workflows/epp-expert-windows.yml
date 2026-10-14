@@ -8,6 +8,8 @@ on:
   pull_request:
     paths: ["epp-expert/**", ".github/workflows/epp-expert-windows.yml"]
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -104,8 +106,9 @@ jobs:
             epp-expert/selftest_*.txt
           if-no-files-found: error
 
-  # Étiquette expert-vX.Y.Z : l'installateur testé ci-dessus est publié en version publique (téléchargeable
-  # sans compte GitHub), sous son nom versionné et sous le nom fixe AkwaSchool-Setup.exe (lien « latest »).
+  # Étiquette expert-vX.Y.Z (poussée, ou créée en publiant une version sur la page GitHub) : l'installateur
+  # testé ci-dessus est publié en version publique (téléchargeable sans compte GitHub), sous son nom
+  # versionné et sous le nom fixe AkwaSchool-Setup.exe (lien « latest »).
   publier:
     needs: windows
     if: startsWith(github.ref, 'refs/tags/expert-v')
@@ -135,5 +138,11 @@ jobs:
           Téléchargez **AkwaSchool-Setup.exe** ci-dessous, puis lancez-le. Si l'application est déjà installée,
           ce même fichier la met à jour : les données de l'école sont conservées.
           NOTES
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "AKWA SCHOOL ${version}" \
-            --notes-file notes.md --latest AkwaSchool-Setup.exe "$exe"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            # version créée depuis la page GitHub (Releases › Draft a new release) : on y joint l'installateur
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber AkwaSchool-Setup.exe "$exe"
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md --latest
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "AKWA SCHOOL ${version}" \
+              --notes-file notes.md --latest AkwaSchool-Setup.exe "$exe"
+          fi
