@@ -963,6 +963,8 @@ class BulletinWord:
         _largeurs(t, [largeur])
         h = t.cell(0, 0)
         _ombre(h, fond_titre)
+        if fond_titre.lstrip("#").upper() == "FFFFFF":       # sans aplat : un filet sépare le titre
+            _bordures_cellule(h, bottom=(4, bord))
         _ecrire(h, titre, taille_titre, gras=True, couleur=coul_titre)
         _hauteur(t.rows[0], 6.5)
         corps = t.cell(1, 0)
@@ -990,7 +992,7 @@ class BulletinWord:
         self._cadre(g, gw, "Appréciation générale", self.T["app_texte"].lstrip("#"), self.T["app_fond"], C["vert"],
                     corps)
         _para(g, "", 1, apres=3)
-        self._cadre(g, gw, "Observations des parents", C["marine"], C["ligne_a"], C["bord"],
+        self._cadre(g, gw, "Observations des parents", C["marine"], self.T["obs_fond"], C["bord"],
                     [(pts, dict(taille=8, couleur=C["gris"]))] * 5, 10)
         dcell = t.cell(0, 2)
         _ecrire(dcell, "", 1, valign="haut")
@@ -999,18 +1001,23 @@ class BulletinWord:
         lw = rw * 0.52
         _largeurs(bil, [lw, rw - lw])
         tete = bil.cell(0, 0).merge(bil.cell(0, 1))
-        _ombre(tete, C["jaune_clair"])
+        _ombre(tete, self.T["bilan_fond"])
+        if not self.T["aplats"]:
+            _bordures_cellule(tete, bottom=(4, C["jaune"]))
         _ecrire(tete, K["titre_bilan"], 11, gras=True, couleur=C["marine"])
         _hauteur(bil.rows[0], 7)
         items = bil.cell(1, 0)
         _ecrire(items, valign="haut")
         _bordures_cellule(items, right=(4, C["bord"]))
         icones = {"fel": ("✔", "vert"), "enc": ("★", "orange"), "prog": ("◉", "bleu_moyen"), "suivi": ("▲", "rouge")}
+        contours = {"fel": "○", "enc": "☆", "prog": "○", "suivi": "△"}      # choix non retenus, sans aplat
         for i, (k, lab) in enumerate(K["bilan"]):
             p = items.paragraphs[0] if i == 0 else items.add_paragraph()
             _format_para(p, 4, 2)
             actif = K["bilan_choix"] == k
             sym, coul = icones[k]
+            if not (actif or self.T["aplats"]):
+                sym = contours[k]
             _run(p, sym + "  ", 11, gras=True, couleur=C[coul] if actif else C["gris"], police="Segoe UI Symbol")
             _run(p, lab, 10, gras=actif, couleur=C["marine"] if actif else C["gris_txt"])
         dec = bil.cell(1, 1)
@@ -1018,9 +1025,9 @@ class BulletinWord:
                 valign="haut").paragraph_format.space_before = Pt(4)
         boite = dec.add_table(1, 1)
         boite.alignment = WD_TABLE_ALIGNMENT.CENTER
-        _bordures(boite, None)
+        _bordures(boite, None if self.T["aplats"] else 4, C["bord"])
         _largeurs(boite, [rw - lw - 5])
-        _ombre(boite.cell(0, 0), C["ligne_a"])
+        _ombre(boite.cell(0, 0), self.T["decision_fond"])
         _ecrire(boite.cell(0, 0), K["decision"], 11, gras=True, couleur=C["bleu_moyen"],
                 align=WD_ALIGN_PARAGRAPH.CENTER)
         _hauteur(boite.rows[0], 13)

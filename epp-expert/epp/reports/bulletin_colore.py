@@ -41,20 +41,23 @@ def _clair(hexa: str, k: float) -> str:
 def teintes(palette: str = "douce") -> dict:
     """Couleurs de mise en page du bulletin (PDF et Word).
 
-    « douce » (par défaut) : fonds très clairs et textes foncés, lisible et peu chargé en encre, y compris
-    imprimé en noir et blanc ; chaque évaluation garde sa couleur sur un filet au-dessus de sa colonne.
+    « douce » (par défaut) : aucun aplat, fonds blancs, textes foncés et dessins au trait : lisible et économe
+    en encre, y compris imprimé en noir et blanc ; chaque colonne garde sa couleur sur un filet fin.
     « vive » : aplats de couleur et textes blancs (impression couleur)."""
     hexa = {k: "#" + v.hexval()[2:].upper() for k, v in C.items()}
     if palette == "vive":
         return {"tete": {k: (v, "#FFFFFF", None) for k, v in hexa.items()},
                 "ligne_a": hexa["ligne_a"], "ligne_b": hexa["ligne_b"], "pied_tab": hexa["pied_tab"],
                 "identite": hexa["fond"], "bande_fond": hexa["bleu"], "bande_bord": None, "bande_texte": "#FFFFFF",
-                "app_fond": hexa["vert"], "app_texte": "#FFFFFF", "separateur": "#FFFFFF", "pied": "plein"}
-    return {"tete": {k: (_clair(v, 0.86), hexa["marine"], v) for k, v in hexa.items()},
-            "ligne_a": "#F7FAFD", "ligne_b": "#FFFFFF", "pied_tab": "#EDF2F8",
-            "identite": "#FFFFFF", "bande_fond": "#FFFFFF", "bande_bord": hexa["bleu"], "bande_texte": hexa["bleu"],
-            "app_fond": _clair(hexa["vert"], 0.86), "app_texte": hexa["vert_fonce"], "separateur": hexa["bord"],
-            "pied": "leger"}
+                "app_fond": hexa["vert"], "app_texte": "#FFFFFF", "separateur": "#FFFFFF", "pied": "plein",
+                "obs_fond": hexa["ligne_a"], "bilan_fond": hexa["jaune_clair"], "decision_fond": hexa["ligne_a"],
+                "aplats": True}
+    blanc = "#FFFFFF"
+    return {"tete": {k: (blanc, hexa["marine"], v) for k, v in hexa.items()},
+            "ligne_a": blanc, "ligne_b": blanc, "pied_tab": blanc,
+            "identite": blanc, "bande_fond": blanc, "bande_bord": hexa["bleu"], "bande_texte": hexa["bleu"],
+            "app_fond": blanc, "app_texte": hexa["vert_fonce"], "separateur": hexa["bord"],
+            "pied": "leger", "obs_fond": blanc, "bilan_fond": blanc, "decision_fond": blanc, "aplats": False}
 
 
 def _fmt(v, dec=2) -> str:
@@ -264,10 +267,14 @@ class BulletinColore(Flowable):
         self.canv.drawImage(ir, x + (w - iw * k) / 2, y + (h - ih * k) / 2, iw * k, ih * k, mask="auto")
         return True
 
-    def _embleme(self, x, y, s):
-        """Emblème par défaut (livre ouvert et élève) quand aucun logo n'est enregistré."""
+    def _embleme(self, x, y, s, plein=True):
+        """Emblème par défaut (livre ouvert et élève) quand aucun logo n'est enregistré ; au trait sans aplat
+        quand plein est faux (impression économe en encre)."""
         c = self.canv
         c.saveState()
+        if not plein:
+            c.setLineWidth(max(1.0, s * 0.03))
+            c.setLineJoin(1)
         for sens, coul in ((-1, "bleu_moyen"), (1, "bleu_moyen")):
             p = c.beginPath()
             cx = x + s / 2
@@ -277,7 +284,8 @@ class BulletinColore(Flowable):
             p.curveTo(cx + sens * s * 0.38, y + s * 0.62, cx + sens * s * 0.2, y + s * 0.62, cx, y + s * 0.5)
             p.close()
             c.setFillColor(C[coul])
-            c.drawPath(p, fill=1, stroke=0)
+            c.setStrokeColor(C[coul])
+            c.drawPath(p, fill=1 if plein else 0, stroke=0 if plein else 1)
             c.setFillColor(C["jaune"])
             q = c.beginPath()
             q.moveTo(cx, y + s * 0.5)
@@ -285,11 +293,12 @@ class BulletinColore(Flowable):
             q.lineTo(cx + sens * s * 0.44, y + s * 0.28)
             q.curveTo(cx + sens * s * 0.3, y + s * 0.34, cx + sens * s * 0.16, y + s * 0.34, cx, y + s * 0.24)
             q.close()
-            c.drawPath(q, fill=1, stroke=0)
+            if plein:
+                c.drawPath(q, fill=1, stroke=0)
         c.setFillColor(C["marine"])
-        c.circle(x + s * 0.5, y + s * 0.78, s * 0.08, fill=1, stroke=0)
         c.setStrokeColor(C["marine"])
-        c.setLineWidth(s * 0.07)
+        c.circle(x + s * 0.5, y + s * 0.78, s * 0.08, fill=1 if plein else 0, stroke=0 if plein else 1)
+        c.setLineWidth(s * 0.07 if plein else max(1.0, s * 0.035))
         c.setLineCap(1)
         c.line(x + s * 0.3, y + s * 0.62, x + s * 0.5, y + s * 0.66)
         c.line(x + s * 0.5, y + s * 0.66, x + s * 0.72, y + s * 0.86)
@@ -307,11 +316,25 @@ class BulletinColore(Flowable):
         p.close()
         self.canv.drawPath(p, fill=1, stroke=0)
 
-    def _icone(self, kind, cx, cy, r, actif):
+    def _icone(self, kind, cx, cy, r, actif, plein=True):
         c = self.canv
         coul = {"fel": "vert", "enc": "orange", "prog": "bleu_moyen", "suivi": "rouge"}[kind]
         col = C[coul] if actif else C["gris"]
         c.saveState()
+        if not (actif or plein):          # choix non retenu : simple contour, sans encre en aplat
+            c.setStrokeColor(col)
+            c.setLineWidth(0.8)
+            if kind == "suivi":
+                p = c.beginPath()
+                p.moveTo(cx, cy + r)
+                p.lineTo(cx + r, cy - r * 0.8)
+                p.lineTo(cx - r, cy - r * 0.8)
+                p.close()
+                c.drawPath(p, fill=0, stroke=1)
+            else:
+                c.circle(cx, cy, r * 0.9, fill=0, stroke=1)
+            c.restoreState()
+            return
         c.setFillColor(col)
         c.setStrokeColor(colors.white)
         if kind == "suivi":
@@ -359,8 +382,13 @@ class BulletinColore(Flowable):
         p.arcTo(x + w - 2 * r, top - 2 * r, x + w, top, 90, -90)
         p.lineTo(x + w, top - h_titre)
         p.close()
-        c.setFillColor(fond_titre)
-        c.drawPath(p, fill=1, stroke=0)
+        if fond_titre.hexval().upper() == "0XFFFFFF":       # sans aplat : un filet sépare le titre
+            c.setStrokeColor(bord)
+            c.setLineWidth(0.6)
+            c.line(x, top - h_titre, x + w, top - h_titre)
+        else:
+            c.setFillColor(fond_titre)
+            c.drawPath(p, fill=1, stroke=0)
         c.restoreState()
         self._txt(x + 4 * mm, top - h_titre + 2.1 * mm, titre, self.FB, taille, coul_titre, maxw=w - 8 * mm)
 
@@ -381,7 +409,7 @@ class BulletinColore(Flowable):
         hh = 33 * mm
         logos = K["logos"]
         if not (logos and self._image(logos[0], 0, y - hh + 2 * mm, 30 * mm, 29 * mm)):
-            self._embleme(0, y - hh + 2 * mm, 30 * mm)
+            self._embleme(0, y - hh + 2 * mm, 30 * mm, K["couleurs"]["aplats"])
         xc0, xc1 = 34 * mm, W - 44 * mm
         cx = (xc0 + xc1) / 2
         self._txt(cx, y - 9 * mm, K["titre"], self.FB, 24, "marine", "center", maxw=xc1 - xc0)
@@ -470,10 +498,10 @@ class BulletinColore(Flowable):
         xx = x2 + stringWidth(K["label_periode"], self.FB, 8.5) + 2.5 * mm
         for lib, coche in K["choix_periode"]:
             c.setStrokeColor(C["marine"])
-            c.setFillColor(C["marine"] if coche else colors.white)
+            c.setFillColor(C["marine"] if coche and T["aplats"] else colors.white)
             c.rect(xx, y - 21.1 * mm, 2.8 * mm, 2.8 * mm, fill=1, stroke=1)
             if coche:
-                c.setStrokeColor(colors.white)
+                c.setStrokeColor(colors.white if T["aplats"] else C["marine"])
                 c.setLineWidth(1)
                 c.line(xx + 0.5 * mm, y - 19.8 * mm, xx + 1.2 * mm, y - 20.6 * mm)
                 c.line(xx + 1.2 * mm, y - 20.6 * mm, xx + 2.4 * mm, y - 18.8 * mm)
@@ -506,7 +534,7 @@ class BulletinColore(Flowable):
             c.rect(x0, top - hh_t, x1 - x0, hh_t, fill=1, stroke=0)
             if trait:                      # filet de la couleur de l'évaluation
                 c.setFillColor(colors.HexColor(trait))
-                c.rect(x0, top - 1.3 * mm, x1 - x0, 1.3 * mm, fill=1, stroke=0)
+                c.rect(x0, top - 0.8 * mm, x1 - x0, 0.8 * mm, fill=1, stroke=0)
             lignes = simpleSplit(lab, self.FB, 9.5, x1 - x0 - 2 * mm)[:2]
             for k, l in enumerate(lignes):
                 yy = top - hh_t / 2 - 1.2 * mm + (len(lignes) - 1) * 1.9 * mm - k * 3.8 * mm
@@ -529,6 +557,10 @@ class BulletinColore(Flowable):
             self._txt((xs[-2] + xs[-1]) / 2, base, m["moyenne"], self.FB, 10, "marine", "center")
             yy -= rh
         # moyenne générale et rang
+        if not T["aplats"] and K["totaux"]:     # sans aplat : un trait plus marqué les sépare des disciplines
+            c.setStrokeColor(C["bleu_moyen"])
+            c.setLineWidth(1)
+            c.line(0, yy, W, yy)
         for t in K["totaux"]:
             c.setFillColor(colors.HexColor(T["pied_tab"]))
             c.rect(0, yy - rh, W, rh, fill=1, stroke=0)
@@ -576,7 +608,7 @@ class BulletinColore(Flowable):
             ly -= 5.5 * mm
         y2 = y - ha - 3 * mm
         ho = max(20 * mm, h_bas - ha - 3 * mm)
-        self._cadre(0, y2 - ho, gw, ho, "Observations des parents", "marine", C["ligne_a"], C["bord"],
+        self._cadre(0, y2 - ho, gw, ho, "Observations des parents", "marine", colors.HexColor(T["obs_fond"]), C["bord"],
                     h_titre=6.5 * mm, taille=10)
         ly = y2 - 6.5 * mm - 5.5 * mm
         while ly > y2 - ho + 2.5 * mm:
@@ -586,12 +618,12 @@ class BulletinColore(Flowable):
         hb = max(36 * mm, h_bas * 0.6)
         pas = (hb - 9 * mm) / 4.2
         self._cadre(xr, y - hb, rw, hb, K["titre_bilan"], "marine",
-                    C["jaune_clair"], C["jaune"], taille=11)
+                    colors.HexColor(T["bilan_fond"]), C["jaune"], taille=11)
         choix, items = K["bilan_choix"], K["bilan"]
         lw_b = rw * 0.52
         for i, (k, lab) in enumerate(items):
             iy = y - 7 * mm - pas * 0.75 - i * pas
-            self._icone(k, xr + 6 * mm, iy + 1.2 * mm, 2.3 * mm, choix == k)
+            self._icone(k, xr + 6 * mm, iy + 1.2 * mm, 2.3 * mm, choix == k, T["aplats"])
             self._txt(xr + 10.5 * mm, iy, lab, self.FB if choix == k else self.F, 10,
                       "marine" if choix == k else "gris_txt")
         c.setStrokeColor(C["bord"])
@@ -600,9 +632,11 @@ class BulletinColore(Flowable):
         titre_dec = K["titre_decision"]
         for k, l in enumerate(simpleSplit(titre_dec, self.FB, 9, dw)[:2]):
             self._txt(dx0 + dw / 2, y - 12.5 * mm - k * 3.8 * mm, l, self.FB, 9, "marine", "center")
-        c.setFillColor(C["ligne_a"])
+        c.setFillColor(colors.HexColor(T["decision_fond"]))
+        c.setStrokeColor(C["bord"])
+        c.setLineWidth(0.8)
         hd = hb - 22 * mm
-        c.roundRect(dx0, y - hb + 3 * mm, dw, hd, 2.5 * mm, fill=1, stroke=0)
+        c.roundRect(dx0, y - hb + 3 * mm, dw, hd, 2.5 * mm, fill=1, stroke=0 if T["aplats"] else 1)
         dec = K["decision"]
         for k, l in enumerate(simpleSplit(dec, self.FB, 11, dw - 3 * mm)[:2]):
             self._txt(dx0 + dw / 2, y - hb + 3 * mm + hd / 2 + 0.8 * mm - k * 4.5 * mm, l, self.FB, 11, "bleu_moyen",
@@ -656,11 +690,14 @@ class BulletinColore(Flowable):
                 x = W / 2 + s * (tw / 2 + 3 * mm)
                 c.line(x, h * 0.33, x + s * 6 * mm, h * 0.33)
         # pile de livres et toque
+        c.setLineWidth(0.8)
         for i, coul in enumerate(("vert", "rouge", "orange", "bleu_moyen")):
-            c.setFillColor(colors.HexColor(_clair("#" + C[coul].hexval()[2:], 0.55)) if leger else C[coul])
+            c.setFillColor(C[coul])
+            c.setStrokeColor(C[coul])
             c.roundRect(3 * mm + (i % 2) * 1.2 * mm, 1.5 * mm + i * 2.6 * mm, 20 * mm, 2.4 * mm, 0.6 * mm,
-                        fill=1, stroke=0)
-        c.setFillColor(colors.HexColor(_clair("#" + C["jaune"].hexval()[2:], 0.45)) if leger else C["jaune"])
+                        fill=0 if leger else 1, stroke=1 if leger else 0)
+        c.setFillColor(C["jaune"])
+        c.setStrokeColor(C["jaune"])
         x, y0 = W - 16 * mm, h * 0.45
         p = c.beginPath()
         p.moveTo(x - 8 * mm, y0)
@@ -668,8 +705,8 @@ class BulletinColore(Flowable):
         p.lineTo(x + 8 * mm, y0)
         p.lineTo(x, y0 - 3.5 * mm)
         p.close()
-        c.drawPath(p, fill=1, stroke=0)
-        c.rect(x - 4.5 * mm, y0 - 5.5 * mm, 9 * mm, 3.5 * mm, fill=1, stroke=0)
+        c.drawPath(p, fill=0 if leger else 1, stroke=1 if leger else 0)
+        c.rect(x - 4.5 * mm, y0 - 5.5 * mm, 9 * mm, 3.5 * mm, fill=0 if leger else 1, stroke=1 if leger else 0)
         c.setStrokeColor(C["jaune"])
         c.setLineWidth(0.8)
         c.line(x + 6 * mm, y0 + 0.5 * mm, x + 6 * mm, y0 - 5 * mm)

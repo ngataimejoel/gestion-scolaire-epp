@@ -121,7 +121,7 @@ def test_style_classique_toujours_disponible(demo, tmp_path):
 
 
 def test_couleurs_douces_pour_le_noir_et_blanc(demo, tmp_path):
-    """Par défaut, fonds très clairs et textes foncés (lisible en noir et blanc) ; palette vive au choix."""
+    """Par défaut, aucun aplat et des textes foncés (lisible en noir et blanc) ; palette vive au choix."""
     from epp.reports.bulletin_colore import teintes
 
     def lum(h):
@@ -132,8 +132,10 @@ def test_couleurs_douces_pour_le_noir_et_blanc(demo, tmp_path):
     douce = teintes("douce")
     for fond, texte, _ in douce["tete"].values():
         assert lum(fond) > 0.85 and lum(texte) < 0.35            # contraste suffisant sans couleur
-    for k in ("ligne_a", "ligne_b", "pied_tab", "identite", "bande_fond", "app_fond"):
-        assert lum(douce[k]) > 0.85
+    for k in ("ligne_a", "ligne_b", "pied_tab", "identite", "bande_fond", "app_fond", "obs_fond", "bilan_fond",
+              "decision_fond"):
+        assert douce[k] == "#FFFFFF"                              # aucun aplat : économe en encre
+    assert all(fond == "#FFFFFF" for fond, _, _ in douce["tete"].values()) and not douce["aplats"]
     assert lum(teintes("vive")["bande_fond"]) < 0.5               # l'ancienne version reste disponible
     db, annee = demo
     s = system_session()
