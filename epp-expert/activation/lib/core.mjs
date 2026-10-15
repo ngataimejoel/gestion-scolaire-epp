@@ -20,7 +20,9 @@ export class ErreurActivation extends Error {
 }
 
 export function normaliserCode(code) {
-  const brut = String(code || "").toUpperCase().replace(/[^0-9A-Z]/g, "").replace(/^EPP/, "");
+  const s = String(code || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+  // préfixe « EPP » retiré seulement s'il est en plus des 16 caractères : un code peut lui-même commencer par EPP
+  const brut = s.length === 19 && s.startsWith("EPP") ? s.slice(3) : s;
   if (brut.length !== 16 || [...brut].some((c) => !ALPHABET.includes(c))) return null;
   return `EPP-${brut.slice(0, 4)}-${brut.slice(4, 8)}-${brut.slice(8, 12)}-${brut.slice(12, 16)}`;
 }

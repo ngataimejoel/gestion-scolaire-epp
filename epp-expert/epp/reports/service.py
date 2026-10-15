@@ -74,6 +74,7 @@ def generer(db: Database, s: Session, annee: Annee, ref: int | str, params: dict
 def assembler(docs: list) -> "engine.Document":
     """Plusieurs documents à la suite (un saut de page entre chacun)."""
     base = docs[0]
+    base.une_page = all(getattr(d, "une_page", False) for d in docs)   # « une page » seulement si tous le sont
     for d in docs[1:]:
         base.blocks.append(engine.PageBreak())
         base.blocks.extend(d.blocks)

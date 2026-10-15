@@ -23,8 +23,9 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas as rl_canvas
-from reportlab.platypus import (Image, KeepTogether, PageBreak as RLPageBreak, Paragraph as RLParagraph,
-                                SimpleDocTemplate, Spacer, Table as RLTable, TableStyle)
+from reportlab.platypus import (Image, KeepInFrame, KeepTogether, PageBreak as RLPageBreak,
+                                Paragraph as RLParagraph, SimpleDocTemplate, Spacer, Table as RLTable, TableStyle)
+from reportlab.platypus.flowables import _listWrapOn
 from reportlab.lib.utils import ImageReader
 from xml.sax.saxutils import escape
 
@@ -133,7 +134,7 @@ def _words(text: str) -> list[str]:
 
 
 def _widths(texts_by_col: list[list[str]], head_by_col: list[list[str]], fixed: list[float | None],
-            avail: float, fs: float):
+            avail: float, fs: float, gras: list[bool] | None = None):
     """Largeurs naturelles (sans retour à la ligne) et minimales (plus long mot)."""
     pad = 6
     nat, minw, body = [], [], []
@@ -145,8 +146,9 @@ def _widths(texts_by_col: list[list[str]], head_by_col: list[list[str]], fixed: 
             body.append(fixed[i] * mm)
             continue
         cells = col or [""]
-        n = max((pdfmetrics.stringWidth(t, FONT, fs) for t in cells), default=0)
-        w = max((pdfmetrics.stringWidth(word, FONT, fs) for t in cells for word in _words(t)), default=0)
+        fnt = FONT_B if gras and gras[i] else FONT
+        n = max((pdfmetrics.stringWidth(t, fnt, fs) for t in cells), default=0)
+        w = max((pdfmetrics.stringWidth(word, fnt, fs) for t in cells for word in _words(t)), default=0)
         hw = max((pdfmetrics.stringWidth(word, FONT_B, fs) for t in head_by_col[i] for word in t.split()), default=0)
         hn = max((pdfmetrics.stringWidth(t, FONT_B, fs) for t in head_by_col[i]), default=0)
         body.append(max(n, hw) + pad)
@@ -223,12 +225,13 @@ def _table(t: E.Table, avail: float, monnaie: str) -> list:
     texts_by_col = [[r[i] for r, row in zip(body_txt, t.rows) if row.kind != "group"] for i in range(ncols)]
     head_by_col = [[hgrid[r][i] for r in range(len(hgrid)) if not any(
         sp[0][0] <= i <= sp[1][0] and sp[0][1] == r and sp[1][0] > sp[0][0] for sp in spans)] for i in range(ncols)]
-    widths, fs = None, 9.0
-    # passe 1 : réduire la police (jusqu'à 7 pt) pour éviter tout retour à la ligne dans les données ;
-    # passe 2 : accepter les retours à la ligne entre les mots (jusqu'à 6 pt).
-    for no_wrap, sizes in ((True, (9, 8.5, 8, 7.5, 7)), (False, (9, 8.5, 8, 7.5, 7, 6.5, 6))):
+    widths, fs = None, 9.5
+    noms = [bool(t.noms[i]) if i < len(t.noms) else False for i in range(ncols)]
+    # passe 1 : réduire la police (jusqu'à 7,5 pt) pour éviter tout retour à la ligne dans les données ;
+    # passe 2 : accepter les retours à la ligne entre les mots (jusqu'à 6,5 pt). Les noms sont en gras.
+    for no_wrap, sizes in ((True, (9.5, 9, 8.5, 8, 7.5)), (False, (9.5, 9, 8.5, 8, 7.5, 7, 6.5))):
         for fs in sizes:
-            nat, minw = _widths(texts_by_col, head_by_col, t.widths, avail, fs)
+            nat, minw = _widths(texts_by_col, head_by_col, t.widths, avail, fs, noms)
             _span_needs(nat, minw, hgrid, spans, fs)
             if no_wrap:
                 body = [max(m, b) for m, b in zip(minw, _fit3.body)]
@@ -241,7 +244,7 @@ def _table(t: E.Table, avail: float, monnaie: str) -> list:
             break
     word_wrap = None
     if not widths:  # dernier recours : coupure des mots
-        nat, minw = _widths(texts_by_col, head_by_col, t.widths, avail, fs)
+        nat, minw = _widths(texts_by_col, head_by_col, t.widths, avail, fs, noms)
         widths = [w * avail / sum(minw) for w in minw]
         word_wrap = "CJK"
     hs = _style(fs, bold=True, align=TA_CENTER, color=colors.white)
@@ -254,7 +257,7 @@ def _table(t: E.Table, avail: float, monnaie: str) -> list:
             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#808080")),
             ("BACKGROUND", (0, 0), (-1, base - 1), BLEU),
             ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 1.5),
+            ("TOPPADDING", (0, 0), (-1, -1), 1.5), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
             ("LEFTPADDING", (0, 0), (-1, -1), 2.5), ("RIGHTPADDING", (0, 0), (-1, -1), 2.5),
         ]
         for sp in spans:
@@ -265,7 +268,8 @@ def _table(t: E.Table, avail: float, monnaie: str) -> list:
             bold = row.kind in ("subtotal", "total")
             cells = []
             for i, x in enumerate(txt):
-                st = _style(fs, bold=bold or (t.first_col_header and i == 0), align=ALIGN.get(t.aligns[i], TA_LEFT))
+                st = _style(fs, bold=bold or noms[i] or (t.first_col_header and i == 0),
+                            align=TA_LEFT if noms[i] else ALIGN.get(t.aligns[i], TA_LEFT))
                 if word_wrap:
                     st.wordWrap = word_wrap
                 cells.append(_p(x, st))
@@ -393,11 +397,12 @@ def _zone(b: E.TextZone, avail: float) -> list:
 
 def _signature(b: E.Signature, avail: float) -> list:
     left = _p(b.lieu_date, _style(9))
-    right = [_p(b.fonction, _style(9, bold=True, align=TA_CENTER)), Spacer(1, 16 * mm),
-             _p(b.nom, _style(9, bold=True, align=TA_CENTER))]
-    tbl = RLTable([[left, right]], colWidths=[avail * 0.55, avail * 0.45])
+    # espace large pour la signature et le cachet du directeur
+    right = [_p(b.fonction, _style(10, bold=True, align=TA_CENTER)), Spacer(1, 32 * mm),
+             _p(b.nom, _style(10, bold=True, align=TA_CENTER))]
+    tbl = RLTable([[left, right]], colWidths=[avail * 0.5, avail * 0.5])
     tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
-    return [Spacer(1, 4 * mm), KeepTogether([tbl])]
+    return [Spacer(1, 6 * mm), KeepTogether([tbl])]
 
 
 def _rang(r) -> str:
@@ -540,7 +545,7 @@ def _bulletin(doc: E.Document, b: E.Bulletin, avail: float) -> list:
         n = len(sig)
         lieu = f"Fait à {doc.variables.get('localite', '')}, le {doc.variables.get('date_edition', '')}"
         st = RLTable([[_p(x, _style(9, bold=True, align=TA_CENTER)) for x in sig], [""] * n],
-                     colWidths=[avail / n] * n, rowHeights=[None, 18 * mm])
+                     colWidths=[avail / n] * n, rowHeights=[None, 32 * mm])
         st.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
         out += [_p(lieu, _style(9)), Spacer(1, 2 * mm), st]
     return [KeepTogether(out)]
@@ -594,7 +599,7 @@ def _lettre(b: E.Lettre, avail: float) -> list:
         tete = [_p(x, _style(7.5, bold=True, align=TA_CENTER, color=BLEU)) for x, _ in b.signatures]
         cases = [[_p(l, _style(7.5, bold=k == 0, align=TA_CENTER, leading=10)) if l else Spacer(1, 6 * mm)
                   for k, l in enumerate(ls)] for _, ls in b.signatures]
-        t = RLTable([tete, cases], colWidths=[w / n] * n, rowHeights=[9 * mm, 34 * mm])
+        t = RLTable([tete, cases], colWidths=[w / n] * n, rowHeights=[9 * mm, 42 * mm])
         t.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#9FB6CD")),
                                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#F2F6FA")),
                                ("VALIGN", (0, 0), (-1, 0), "MIDDLE"), ("VALIGN", (0, 1), (-1, 1), "MIDDLE")]))
@@ -608,7 +613,67 @@ PSTYLE = {"normal": dict(size=9), "titre2": dict(size=10, bold=True, color=BLEU)
           "encadre": dict(size=9)}
 
 
-def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
+ECHELLE_MIN = 0.4          # en dessous, le texte serait illisible : la partie garde sa taille normale
+PADDING_CADRE = 6          # marges intérieures du cadre de SimpleDocTemplate (points)
+
+
+class _UnePage(KeepInFrame):
+    """Cadre réduit à l'échelle ; la largeur utile est celle des tableaux (marges intérieures du cadre comprises)."""
+
+    def wrap(self, aw, ah):
+        return super().wrap(max(aw, self.maxWidth), max(ah, self.maxHeight))
+
+
+def _aplatir(fl: list) -> list:
+    """Retire les KeepTogether (leur hauteur fictive empêcherait toute mesure) : dans un cadre d'une page,
+    rien n'est coupé de toute façon."""
+    out = []
+    for f in fl:
+        out += _aplatir(list(f._content)) if isinstance(f, KeepTogether) else [f]
+    return out
+
+
+def _sur_une_page(story: list, larg: float, haut: float) -> tuple[list, list[float]]:
+    """Chaque partie du document (entre deux sauts de page) est réduite pour tenir sur une seule page,
+    comme l'impression « une page A4 » du prototype ; renvoie la nouvelle liste et l'échelle de chaque partie."""
+    parties, cur = [], []
+    for f in story:
+        if isinstance(f, RLPageBreak):
+            parties.append(cur)
+            cur = []
+        else:
+            cur.append(f)
+    parties.append(cur)
+    out, echelles = [], []
+    for i, p in enumerate(parties):
+        if i:
+            out.append(RLPageBreak())
+        contenu = _aplatir(p)
+        while contenu and isinstance(contenu[-1], Spacer):
+            contenu.pop()
+        if not contenu:
+            continue
+        _, h = _listWrapOn(contenu, larg, None)
+        k = min(1.0, haut / h) if h > 0 else 1.0
+        if k >= 1.0 - 1e-6:
+            out += p                       # tient déjà sur la page : rendu habituel
+            echelles.append(1.0)
+        elif k < ECHELLE_MIN:
+            out += p                       # beaucoup trop long : plusieurs pages en taille normale
+            echelles.append(1.0)
+        else:
+            out.append(_UnePage(larg, haut, contenu, mode="shrink"))
+            echelles.append(round(k, 3))
+    return out, echelles
+
+
+def mise_a_l_echelle(doc: E.Document) -> list[float]:
+    """Échelle appliquée à chaque page d'un document « une_page » (1.0 = taille normale) ; liste vide si le
+    document n'est pas concerné. Utile à l'interface pour afficher « réduit à 82 % »."""
+    return render(doc, io.BytesIO()) or []
+
+
+def render(doc: E.Document, out: str | Path | io.BytesIO) -> list[float] | None:
     _register_fonts()
     size = landscape(A4) if doc.orientation == "paysage" else A4
     avail = size[0] - MARGE_G - MARGE_D
@@ -684,6 +749,11 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
     story.extend(carry)
     while story and isinstance(story[-1], (RLPageBreak, Spacer)):
         story.pop()
+    echelles = None
+    # une seule page A4 par partie (rapports officiels), sauf pour les documents « une page par élève »
+    if getattr(doc, "une_page", False) and not any(isinstance(b, (E.Bulletin, E.FicheScolaire, E.Lettre))
+                                                   for b in doc.blocks):
+        story, echelles = _sur_une_page(story, avail, size[1] - MARGE_H - MARGE_B - 2 * PADDING_CADRE - 2)
 
     pied = doc.pied or {}
     v = doc.variables
@@ -707,6 +777,7 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
                             bottomMargin=MARGE_B, title=doc.titre or doc.nom, author=v.get("ecole", ""),
                             subject=doc.sous_titre, creator=APP_NAME)
     tpl.build(story or [Spacer(1, 1)], canvasmaker=lambda *a, **k: _NumberedCanvas(*a, footer=footer, **k))
+    return echelles
 
 
 def render_bytes(doc: E.Document) -> bytes:

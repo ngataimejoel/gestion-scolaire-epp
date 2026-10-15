@@ -650,7 +650,7 @@ class BulletinColore(Flowable):
             self._pointilles(4 * mm, gw - 4 * mm, ly)
             ly -= 5.2 * mm
 
-        hb = max(36 * mm, h_bas * 0.6)
+        hb = max(34 * mm, h_bas * 0.5)      # le reste va aux signatures et au cachet du directeur
         pas = (hb - 9 * mm) / 4.2
         self._cadre(xr, y - hb, rw, hb, K["titre_bilan"], "marine",
                     colors.HexColor(T["bilan_fond"]), C["jaune"], taille=11)

@@ -24,10 +24,13 @@ def _col(champ, titre=None, **kw):
 
 
 def _modele(titre, sous_titre="Année scolaire {annee}", orientation="portrait", parametres=(), sections=(),
-            repeter_par="", pied="{ecole} – {annee}"):
+            repeter_par="", pied="{ecole} – {annee}", une_page=False):
+    page = {"taille": "A4", "orientation": orientation}
+    if une_page:
+        page["une_page"] = True     # rapport officiel : réduit pour tenir sur une seule page A4 (prototype)
     return {
         "format": 1,
-        "page": {"taille": "A4", "orientation": orientation},
+        "page": page,
         "entete": {"officiel": True, "logo": True, "texte": ""},
         "titre": titre, "sous_titre": sous_titre,
         "pied": {"texte": pied, "numerotation": True, "date_edition": True},
@@ -61,7 +64,7 @@ ETAT_CLASSE = _modele(
         SIGNATURE])
 
 EFFECTIFS = _modele(
-    "TABLEAU DES EFFECTIFS DES ÉLÈVES", orientation="paysage",
+    "TABLEAU DES EFFECTIFS DES ÉLÈVES", orientation="paysage", une_page=True,
     sections=[
         {"type": "tableau_croise", "titre": "", "lignes": "classes", "classes": "toutes",
          "metriques": ["inscrits", "ivoiriens", "etrangers", "orphelins", "avec_extrait", "sans_extrait",
@@ -71,7 +74,7 @@ EFFECTIFS = _modele(
         SIGNATURE])
 
 SYNTHESE = _modele(
-    "TABLEAU DE SYNTHÈSE DE FIN D'ANNÉE", orientation="paysage",
+    "TABLEAU DE SYNTHÈSE DE FIN D'ANNÉE", orientation="paysage", une_page=True,
     sections=[
         {"type": "tableau_croise", "titre": "", "lignes": "classes", "classes": "toutes", "titre_lignes": "COURS",
          "metriques": ["inscrits", {"metrique": "presents", "titre": "EFFECTIF PRÉSENT"}, "abandons",
@@ -90,7 +93,7 @@ SYNTHESE = _modele(
 
 RESULTATS = _modele(
     "RÉSULTATS DES COMPOSITIONS", sous_titre="Classes de CP1 à CM1 – année scolaire {annee}", orientation="paysage",
-    parametres=["classe"],
+    parametres=["classe"], une_page=True,
     sections=[{"type": "tableau", "titre": "", "source": "resultats", "colonnes": [
         _col("numero"), _col("matricule_ecole"), _col("nom"), _col("sexe"), _col("classe"), _col("statut"),
         _col("moy1", "Moy. 1re compo."), _col("moy2", "Moy. 2e compo."), _col("moy3", "Moy. 3e compo."),
@@ -106,6 +109,7 @@ RESULTATS = _modele(
 
 RESULTATS_CM2 = _modele(
     "RÉSULTATS DES COMPOSITIONS CM2", sous_titre="Classe de CM2 – année scolaire {annee}", orientation="paysage",
+    une_page=True,
     sections=[{"type": "tableau", "titre": "", "source": "resultats", "colonnes": [
         _col("numero"), _col("matricule_ecole"), _col("nom"), _col("sexe"), _col("statut"),
         _col("moy1", "Moy. 1re compo. (/20)"), _col("moy2", "Moy. 2e compo. (/20)"),
@@ -114,12 +118,21 @@ RESULTATS_CM2 = _modele(
         _col("observation")],
         "filtres": [{"champ": "regle_mga", "op": "=", "valeur": "MOYENNE4"}], "tri": [], "regroupement": "",
         "agregats": {}, "renumeroter": True},
+        # récapitulatif du prototype : présents, admis en 6ème (garçons / filles) et taux d'admission
+        {"type": "tableau_croise", "titre": "RÉCAPITULATIF", "lignes": "metriques", "classes": "niveau:CM2",
+         "metriques": [{"metrique": "inscrits", "titre": "INSCRITS"}, {"metrique": "presents", "titre": "PRÉSENTS"},
+                       {"metrique": "admis", "titre": "ADMIS EN 6ème"},
+                       {"metrique": "taux_admission", "titre": "TAUX D'ADMISSION (%)"}],
+         "sexes": ["M", "F", "T"], "total": True},
         {"type": "texte", "style": "note", "texte":
             "Décision : ADMIS (entrée en 6ème) si MGA ≥ seuil CM2 ; MGA = moyenne des 4 évaluations, calculée "
-            "seulement si les 4 moyennes existent."}])
+            "seulement si les 4 moyennes existent."},
+        {"type": "zone_redaction", "titre": "", "rapport": "CM2", "cle": "",
+         "champs": [{"champ": "observations", "titre": "OBSERVATIONS :", "lignes": 3}]},
+        SIGNATURE])
 
 COMPOSITION = _modele(
-    "RAPPORT DE COMPOSITION", sous_titre="{compo_libelle} – {compo_date}", orientation="paysage",
+    "RAPPORT DE COMPOSITION", sous_titre="{compo_libelle} – {compo_date}", orientation="paysage", une_page=True,
     parametres=["compo"],
     sections=[
         {"type": "tableau_croise", "titre": "", "lignes": "metriques", "classes": "toutes",
@@ -129,13 +142,13 @@ COMPOSITION = _modele(
                        {"metrique": "compo_admis", "titre": "ADMIS"},
                        {"metrique": "compo_taux", "titre": "TAUX D'ADMIS (%)"}],
          "sexes": ["M", "F", "T"], "total": True},
-        {"type": "classement", "titre": "LISTE DES TROIS MEILLEURS PAR NIVEAU", "top": 3},
+        {"type": "classement", "titre": "LISTE DES TROIS MEILLEURS PAR NIVEAU", "top": 3, "par": "niveau"},
         {"type": "zone_redaction", "titre": "", "rapport": "COMPOSITION", "cle": "{compo}",
          "champs": [{"champ": "observations", "titre": "OBSERVATIONS DU DIRECTEUR :", "lignes": 5}]},
         SIGNATURE])
 
 RENTREE = _modele(
-    "RAPPORT DE RENTRÉE – EFFECTIFS ET PERSONNEL", orientation="paysage",
+    "RAPPORT DE RENTRÉE – EFFECTIFS ET PERSONNEL", orientation="paysage", une_page=True,
     sections=[
         {"type": "tableau", "titre": "1. LISTE DES ENSEIGNANTS", "source": "personnel", "colonnes": [
             _col("numero"), _col("nom"), _col("matricule"), _col("fonction"), _col("genre"),

@@ -9,7 +9,7 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QCheckBox, QComboBox, QDialog, QFileDialog, QGridLayout, QVBoxLayout
 
 from epp.core import paths
-from epp.io import import_excel, modeles_excel
+from epp.io import import_eleves19, import_excel, modeles_excel
 from epp.reports import service
 from epp.ui.dialogs.export import enregistrer, formats_autorises
 from epp.ui.pages.base import Page
@@ -94,6 +94,53 @@ class DialogueAnalyse(QDialog):
         self.accept()
 
 
+ETATS19 = {"ok": "Import", "reinscription": "Réinscription", "doublon": "Doublon ignoré", "erreur": "Refusée"}
+
+
+class DialogueEleves19(QDialog):
+    """Aperçu de l'import du fichier national des élèves (ELEVES 19) avant tout enregistrement."""
+
+    def __init__(self, page: Page, bilan: dict, fichier: Path):
+        super().__init__(page)
+        self.page, self.bilan, self.fichier = page, bilan, fichier
+        self.setWindowTitle(f"Fichier national – {Path(fichier).name}")
+        self.resize(980, 620)
+        v = QVBoxLayout(self)
+        v.addWidget(label(f"{bilan['lignes']} élève(s) dans le fichier · année {page.annee.libelle}", gras=True,
+                          taille=11))
+        v.addWidget(label(f"{bilan['a_importer']} à inscrire, {bilan['a_reinscrire']} à réinscrire, "
+                          f"{bilan['doublons']} doublon(s) ignoré(s), {bilan['erreurs']} ligne(s) refusée(s).",
+                          wrap=True))
+        for e in bilan.get("avertissements") or []:
+            l = label("⚠ " + e, wrap=True)
+            l.setStyleSheet("color: #9F5C06;")
+            v.addWidget(l)
+        self.table = Tableau([Col("ligne", "Ligne", "nombre", 54), Col("etat_lib", "Action", largeur=130),
+                              Col("matricule", "Matricule", largeur=110), Col("nom", "Nom et prénoms", largeur=230),
+                              Col("classe", "Classe", largeur=80), Col("motif", "Motif")])
+        self.table.set_lignes([dict(d, etat_lib=ETATS19.get(d["etat"], d["etat"]),
+                                    _couleur={"erreur": "#BF3A33", "doublon": "#9F5C06"}.get(d["etat"]))
+                               for d in bilan["details"]])
+        v.addWidget(self.table, 1)
+        v.addWidget(label("Seules les lignes valides sont enregistrées, en une seule fois, après une sauvegarde "
+                          "automatique. Aucune classe n'est créée : un niveau sans classe est refusé.",
+                          discret=True, wrap=True))
+        self.b_ok = bouton("Importer les élèves", self._importer, "primaire")
+        self.b_ok.setEnabled(bool(bilan["a_importer"] or bilan["a_reinscrire"]))
+        v.addLayout(ligne(None, bouton("Annuler", self.reject), self.b_ok))
+
+    @protege
+    def _importer(self):
+        p = self.page
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            b = import_eleves19.importer(p.db, p.s, p.annee, self.fichier)
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+        info(self, "Import terminé", import_eleves19.resume(b))
+        self.accept()
+
+
 class PageImportExport(Page):
     titre = "Import / Export"
     sous_titre = "Modèles Excel, exports PDF et Word, classeur d'origine"
@@ -130,6 +177,16 @@ class PageImportExport(Page):
         c2.lay.addStretch(1)
         grille.addWidget(c2, 0, 1)
 
+        c4 = Carte("Fichier national des élèves (ELEVES 19)")
+        c4.lay.addWidget(label("Fichier à 22 colonnes de la plateforme nationale (.xls, .xlsx ou .csv). L'aperçu "
+                               "montre les inscriptions, réinscriptions, doublons et erreurs avant tout "
+                               "enregistrement.", discret=True, wrap=True))
+        self.b_n_modele = bouton("Modèle vierge…", self._n_modele)
+        self.b_n_export = bouton("Exporter au format national…", self._n_export)
+        self.b_n_import = bouton("Importer le fichier national…", self._n_import, "primaire")
+        c4.lay.addLayout(ligne(self.b_n_modele, self.b_n_export, None, self.b_n_import))
+        grille.addWidget(c4, 1, 0, 1, 2)
+
         c3 = Carte("Classeur GESTION SCOLAIRE EPP d'origine")
         c3.lay.addWidget(label("Reprend une année complète depuis le classeur Excel (.xlsm) : paramètres, classes, "
                                "élèves, notes, personnel et absences. Le classeur est seulement lu : il n'est jamais "
@@ -138,7 +195,7 @@ class PageImportExport(Page):
         c3.lay.addWidget(self.remplacer)
         self.b_classeur = bouton("Importer le classeur…", self._classeur)
         c3.lay.addLayout(ligne(self.b_classeur, None))
-        grille.addWidget(c3, 1, 0, 1, 2)
+        grille.addWidget(c3, 2, 0, 1, 2)
         self.corps.addLayout(grille)
         self.corps.addStretch(1)
 
@@ -160,6 +217,8 @@ class PageImportExport(Page):
         self.b_classeur.setEnabled(self.peut("import.excel"))
         self.b_rempli.setEnabled(self.peut("export.excel"))
         self.b_liste.setEnabled(self.peut("rapports.generer") or self.peut("export.excel"))
+        self.b_n_import.setEnabled(imp)
+        self.b_n_export.setEnabled(self.peut("export.excel"))
 
     def _num(self):
         return self.eval.currentData() if self.type.currentData() == "notes" else None
@@ -197,6 +256,27 @@ class PageImportExport(Page):
         finally:
             QGuiApplication.restoreOverrideCursor()
         if DialogueAnalyse(self, an, Path(ch)).exec():
+            self.ctx.modifie("*")
+
+    def _n_modele(self):
+        enregistrer(self, "Modèle ELEVES 19", lambda ch, f: import_eleves19.modele(ch, self.db), ["xlsx"])
+
+    def _n_export(self):
+        enregistrer(self, f"ELEVES {self.annee.libelle}",
+                    lambda ch, f: import_eleves19.exporter(self.db, self.s, self.annee, ch), ["xlsx", "csv"])
+
+    @protege
+    def _n_import(self):
+        ch, _ = QFileDialog.getOpenFileName(self, "Fichier national des élèves", str(Path.home()),
+                                            "Fichiers élèves (*.xls *.xlsx *.csv);;Tous les fichiers (*)")
+        if not ch:
+            return
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            bilan = import_eleves19.analyser(self.db, self.annee, ch)
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+        if DialogueEleves19(self, bilan, Path(ch)).exec():
             self.ctx.modifie("*")
 
     @protege

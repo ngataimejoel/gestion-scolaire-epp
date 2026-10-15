@@ -10,60 +10,28 @@ import importlib
 import logging
 import sys
 
-from PySide6.QtCore import QRect, QSize, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QKeySequence, QPalette, QShortcut
-from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                               QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QStyledItemDelegate,
-                               QTabWidget, QToolButton, QVBoxLayout, QWidget)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QColor, QKeySequence, QPalette, QShortcut
+from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QMainWindow, QMenu, QMessageBox,
+                               QScrollArea, QStackedWidget, QTabWidget, QToolButton, QVBoxLayout, QWidget)
 
-from epp import APP_MARQUE, APP_NAME, __version__
+from epp import APP_NAME, __version__
 from epp.core import backup, licence, security
 from epp.core.db import open_database
 from epp.domain import repo
 from epp.ui import logo as logo_app
 from epp.ui import theme
+from epp.ui.navigation import (PAGES, VOLETS, BarreLaterale, Recherche, Tiroir, info_page, info_volet,  # noqa: F401
+                               volet_de)
 from epp.ui.dialogs.acces import (DialogueActivation, DialogueConnexion, DialogueMotDePasse,
                                   DialoguePremierLancement)
-from epp.ui.widgets import Contexte, afficher_erreur, bouton, label
+from epp.ui.widgets import Contexte, afficher_erreur, bouton
 
 log = logging.getLogger(__name__)
 
-# clé, libellé, raccourci, classe de la page, droit nécessaire pour la voir
-PAGES = [
-    ("tableau", "Tableau de bord", "Ctrl+1", "tableau_bord:PageTableauBord", "eleves.lire"),
-    ("eleves", "Élèves", "Ctrl+2", "eleves:PageEleves", "eleves.lire"),
-    ("inscriptions", "Inscriptions", "Ctrl+3", "inscriptions:PageInscriptions", "eleves.lire"),
-    ("classes", "Classes et effectifs", "Ctrl+4", "classes:PageClasses", "eleves.lire"),
-    ("personnel", "Personnel", "Ctrl+5", "personnel:PagePersonnel", "personnel.lire"),
-    ("notes", "Notes", "Ctrl+6", "notes:PageNotes", "notes.lire"),
-    ("resultats", "Résultats et fin d'année", "Ctrl+7", "resultats:PageResultats", "notes.lire"),
-    ("absences", "Absences et autorisations", "Ctrl+8", "absences:PageAbsences", "absences.lire"),
-    ("statistiques", "Statistiques", "Ctrl+9", "statistiques:PageStatistiques", "eleves.lire"),
-    ("rapports", "Rapports", "", "rapports:PageRapports", "rapports.generer"),
-    ("import_export", "Import / Export", "", "import_export:PageImportExport", None),
-    ("parametres", "Paramètres", "", "parametres:PageParametres", None),
-    ("sauvegarde", "Sauvegarde", "", "sauvegarde:PageSauvegarde", "sauvegarde.creer"),
-    ("aide", "Aide et tutoriels", "F1", "aide:PageAide", None),
-]
-
-# Une seule entrée du menu pour les rapports et l'administration : chaque page y est un volet (onglet).
+# Rapports et administration : un volet, dont chaque page est un onglet
 ADMINISTRATION = "administration"
-ADMIN_LIBELLE = "Rapports et administration"
-ADMIN_RACCOURCI = "Ctrl+0"
-ADMIN_VOLETS = ["rapports", "parametres", "import_export", "sauvegarde"]
-
-
-def menu_entrees() -> list[tuple[str, str, str]]:
-    """Entrées du menu latéral (clé, libellé, raccourci) : les volets d'administration sont réunis."""
-    out = []
-    for cle, lib, rac, _, _ in PAGES:
-        if cle in ADMIN_VOLETS:
-            if not any(e[0] == ADMINISTRATION for e in out):
-                out.append((ADMINISTRATION, ADMIN_LIBELLE, ADMIN_RACCOURCI))
-            continue
-        out.append((cle, lib, rac))
-    return out
-
+ADMIN_VOLETS = info_volet(ADMINISTRATION)[4]
 
 VERIF_LICENCE_MS = 15 * 60 * 1000
 
@@ -73,28 +41,10 @@ def classe_page(chemin: str):
     return getattr(importlib.import_module(f"epp.ui.pages.{mod}"), cls)
 
 
-class _DelegueMenu(QStyledItemDelegate):
-    """Entrée du menu avec le raccourci clavier aligné à droite."""
-
-    def paint(self, p, opt, idx):
-        super().paint(p, opt, idx)
-        rac = idx.data(Qt.UserRole + 1)
-        if rac:
-            p.save()
-            p.setPen(QColor("#8FB5A5"))
-            f = QFont(opt.font)
-            f.setPointSizeF(max(7.5, f.pointSizeF() - 1.5))
-            p.setFont(f)
-            r = QRect(opt.rect.adjusted(0, 0, -20, 0))
-            p.drawText(r, Qt.AlignRight | Qt.AlignVCenter, rac)
-            p.restore()
-
-    def sizeHint(self, opt, idx):
-        s = super().sizeHint(opt, idx)
-        return QSize(s.width(), max(s.height(), 34))
-
-
 class FenetrePrincipale(QMainWindow):
+    """Barre latérale (six volets), barre du haut (fil d'Ariane, recherche, année, compte), volets à onglets,
+    fiche de l'élève dans un panneau à droite."""
+
     def __init__(self, ctx: Contexte):
         super().__init__()
         self.ctx = ctx
@@ -104,14 +54,20 @@ class FenetrePrincipale(QMainWindow):
         self.setMinimumSize(1080, 660)
         self.pages: dict[str, QWidget] = {}
         self.zones: dict[str, QScrollArea] = {}
-        self.onglets_admin: QTabWidget | None = None     # volets Rapports, Paramètres, Import / Export, Sauvegarde
-        self._hotes_admin: dict[str, QWidget] = {}
+        self.volets: dict[str, QTabWidget] = {}      # volets à plusieurs onglets, créés à la première ouverture
+        self._hotes: dict[str, QWidget] = {}
+        self._dernier: dict[str, str] = {}           # dernier onglet ouvert de chaque volet
+        self.volet_courant: str | None = None
+        self.page_courante: str | None = None
         central = QWidget()
         self.setCentralWidget(central)
         h = QHBoxLayout(central)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(0)
-        h.addWidget(self._barre_laterale())
+        self.barre = BarreLaterale()
+        self.barre.choisi.connect(self.aller)
+        self.logo = self.barre.logo
+        h.addWidget(self.barre)
         droite = QVBoxLayout()
         droite.setSpacing(0)
         droite.addWidget(self._barre_haute())
@@ -119,95 +75,61 @@ class FenetrePrincipale(QMainWindow):
         self.bandeau_archive = self._bandeau("bandeauArchive")
         droite.addWidget(self.bandeau_essai)
         droite.addWidget(self.bandeau_archive)
+        self.contenu = QWidget()
+        self.contenu.setObjectName("contenu")
+        cv = QVBoxLayout(self.contenu)
+        cv.setContentsMargins(0, 0, 0, 0)
         self.pile = QStackedWidget()
-        droite.addWidget(self.pile, 1)
+        cv.addWidget(self.pile)
+        droite.addWidget(self.contenu, 1)
         h.addLayout(droite, 1)
-        for cle, _, rac in menu_entrees():
+        self.tiroir = Tiroir(self.contenu, self)
+        self.recherche.panneau.setParent(central)
+        self.recherche.panneau.hide()
+        for cle, _, rac, _, _ in VOLETS:
             if rac:
                 QShortcut(QKeySequence(rac), self, activated=lambda c=cle: self.aller(c))
+        QShortcut(QKeySequence("Ctrl+K"), self, activated=self._focus_recherche)
+        QShortcut(QKeySequence("Escape"), self, activated=self._echap)
         ctx.annee_changee.connect(self._maj_entete)
         ctx.donnees_modifiees.connect(lambda q: q == "annees" and self._remplir_annees())
+        ctx.donnees_modifiees.connect(lambda q: q == "parametres" and self._maj_entete())
         self._remplir_annees()
         self._maj_licence()
         self._maj_entete()
         self._maj_menu()
-        self.aller("tableau")
+        self.aller("accueil")
         self.timer_licence = QTimer(self)
         self.timer_licence.timeout.connect(self.verifier_licence)
         self.timer_licence.start(VERIF_LICENCE_MS)
 
     # ------------------------------------------------------------------ construction
-    def _barre_laterale(self) -> QWidget:
-        w = QFrame()
-        w.setObjectName("sidebar")
-        w.setFixedWidth(250)
-        v = QVBoxLayout(w)
-        v.setContentsMargins(0, 18, 0, 14)
-        v.setSpacing(4)
-        tete = QHBoxLayout()
-        tete.setContentsMargins(18, 0, 14, 8)
-        self.logo = QLabel()
-        self.logo.setFixedSize(40, 40)
-        self.logo.setPixmap(logo_app.pixmap("tuile", 40))      # logo de l'application
-        tete.addWidget(self.logo)
-        b = QVBoxLayout()
-        b.setSpacing(0)
-        m = QLabel(APP_MARQUE)
-        m.setObjectName("marque")
-        self.l_ecole = QLabel("")
-        self.l_ecole.setObjectName("marqueSous")
-        self.l_ecole.setWordWrap(True)
-        b.addWidget(m)
-        b.addWidget(self.l_ecole)
-        tete.addLayout(b, 1)
-        v.addLayout(tete)
-        self.menu = QListWidget()
-        self.menu.setObjectName("menu")
-        self.menu.setItemDelegate(_DelegueMenu(self.menu))
-        self.menu.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.menu.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._items: dict[str, QListWidgetItem] = {}
-        for cle, lib, rac in menu_entrees():
-            it = QListWidgetItem(lib)
-            self._items[cle] = it
-            it.setData(Qt.UserRole, cle)
-            it.setData(Qt.UserRole + 1, rac)
-            if rac:
-                it.setToolTip(f"{lib} ({rac})")
-            self.menu.addItem(it)
-        self.menu.currentItemChanged.connect(
-            lambda it, _: it is not None and self.aller(it.data(Qt.UserRole)))
-        v.addWidget(self.menu, 1)
-        self.l_utilisateur = QLabel("")
-        self.l_utilisateur.setObjectName("sidebarPied")
-        self.l_utilisateur.setContentsMargins(18, 6, 12, 0)
-        self.l_utilisateur.setWordWrap(True)
-        v.addWidget(self.l_utilisateur)
-        pied = QLabel(f"Version {__version__} · hors ligne")
-        pied.setObjectName("sidebarPied")
-        pied.setContentsMargins(18, 0, 12, 0)
-        v.addWidget(pied)
-        return w
-
     def _barre_haute(self) -> QWidget:
         w = QFrame()
         w.setObjectName("barre")
-        w.setFixedHeight(54)
+        w.setFixedHeight(58)
         h = QHBoxLayout(w)
-        h.setContentsMargins(20, 6, 16, 6)
-        h.addWidget(label("Année scolaire", discret=True))
+        h.setContentsMargins(22, 8, 16, 8)
+        h.setSpacing(10)
+        self.fil = QLabel("")
+        self.fil.setObjectName("fil")
+        h.addWidget(self.fil)
+        h.addStretch(1)
+        self.recherche = Recherche(self._resultats_recherche, self)
+        self.recherche.setToolTip("Recherche globale (Ctrl + K)")
+        self.recherche.active.connect(self._ouvrir_resultat)
+        h.addWidget(self.recherche)
         self.annees = QComboBox()
-        self.annees.setMinimumWidth(190)
+        self.annees.setMinimumWidth(170)
+        self.annees.setToolTip("Année scolaire affichée")
         self.annees.activated.connect(self._choisir_annee)
         h.addWidget(self.annees)
-        h.addStretch(1)
         self.badge = QLabel("")
         self.badge.setObjectName("badgeLicence")
         h.addWidget(self.badge)
         self.b_compte = QToolButton()
+        self.b_compte.setObjectName("compte")
         self.b_compte.setPopupMode(QToolButton.InstantPopup)
-        self.b_compte.setStyleSheet("QToolButton { border: 1px solid #C9C7BD; border-radius: 6px; padding: 5px 10px; "
-                                    "background: white; } QToolButton::menu-indicator { image: none; }")
         menu = QMenu(self.b_compte)
         menu.addAction("Changer mon mot de passe", self._mot_de_passe)
         menu.addAction("Licence et activation", self._licence)
@@ -231,98 +153,163 @@ class FenetrePrincipale(QMainWindow):
         f.hide()
         return f
 
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if self.tiroir.isVisible():
+            self.tiroir.placer()
+        if self.recherche.panneau.isVisible():
+            self.recherche.placer()
+
     # ------------------------------------------------------------------ navigation
     def _permis(self, cle: str) -> bool:
-        perm = next((p[4] for p in PAGES if p[0] == cle), None)
-        return not perm or self.ctx.peut(perm)
+        p = info_page(cle)
+        return bool(p) and (not p[4] or self.ctx.peut(p[4]))
+
+    def _volet_permis(self, cle: str) -> bool:
+        v = info_volet(cle)
+        return bool(v) and any(self._permis(p) for p in v[4])
 
     def _maj_menu(self) -> None:
-        for cle, it in self._items.items():
-            visible = any(self._permis(k) for k in ADMIN_VOLETS) if cle == ADMINISTRATION else self._permis(cle)
-            it.setHidden(not visible)
-        if self.onglets_admin is not None:
-            for i, k in enumerate(ADMIN_VOLETS):
-                self.onglets_admin.setTabVisible(i, self._permis(k))
+        for cle, *_ in VOLETS:
+            self.barre.groupes[cle].setHidden(not self._volet_permis(cle))
+        for cle, b in self.barre.sous.items():
+            b.setHidden(not self._permis(cle))
+        for cle, t in self.volets.items():
+            for i, p in enumerate(info_volet(cle)[4]):
+                t.setTabVisible(i, self._permis(p))
 
-    def _administration(self) -> QTabWidget:
-        """Section « Rapports et administration » : un onglet (volet) par page, créée à la première ouverture."""
-        if self.onglets_admin is None:
+    @property
+    def onglets_admin(self) -> QTabWidget | None:
+        return self.volets.get(ADMINISTRATION)
+
+    def _volet(self, cle: str) -> QTabWidget:
+        """Volet à plusieurs onglets : un onglet par page, la page étant créée à sa première ouverture."""
+        if cle not in self.volets:
             t = QTabWidget()
-            t.setObjectName("ongletsAdmin")
+            t.setObjectName("ongletsAdmin" if cle == ADMINISTRATION else "volet")
             t.setDocumentMode(True)
             t.blockSignals(True)
-            for k in ADMIN_VOLETS:
+            pages = info_volet(cle)[4]
+            for k in pages:
                 hote = QWidget()
                 lay = QVBoxLayout(hote)
                 lay.setContentsMargins(0, 0, 0, 0)
-                t.addTab(hote, next(p[1] for p in PAGES if p[0] == k))
-                self._hotes_admin[k] = hote
+                t.addTab(hote, info_page(k)[1])
+                self._hotes[k] = hote
             t.blockSignals(False)
-            t.currentChanged.connect(lambda i: 0 <= i < len(ADMIN_VOLETS) and self.aller(ADMIN_VOLETS[i]))
+            t.currentChanged.connect(lambda i, ps=pages: 0 <= i < len(ps) and self.aller(ps[i]))
             self.pile.addWidget(t)
-            self.onglets_admin = t
+            self.volets[cle] = t
             self._maj_menu()
-        return self.onglets_admin
+        return self.volets[cle]
+
+    def _creer_page(self, cle: str) -> bool:
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            page = classe_page(info_page(cle)[3])(self.ctx)
+        except Exception as e:     # noqa: BLE001
+            QApplication.restoreOverrideCursor()
+            afficher_erreur(self, e, "Ouverture de la page impossible")
+            return False
+        QApplication.restoreOverrideCursor()
+        page.fenetre = self
+        self.pages[cle] = page
+        zone = QScrollArea()        # petits écrans (1366 × 768) : la page défile au lieu d'être coupée
+        zone.setWidgetResizable(True)
+        zone.setFrameShape(QFrame.NoFrame)
+        zone.setWidget(page)
+        self.zones[cle] = zone
+        v = volet_de(cle)
+        if len(v[4]) > 1:
+            self._volet(v[0])
+            self._hotes[cle].layout().addWidget(zone)
+        else:
+            self.pile.addWidget(zone)
+        return True
 
     def aller(self, cle: str) -> None:
-        if cle == ADMINISTRATION:
-            t = self.onglets_admin
-            courant = ADMIN_VOLETS[t.currentIndex()] if t is not None and t.currentIndex() >= 0 else None
-            cle = courant if courant and self._permis(courant) else \
-                next((k for k in ADMIN_VOLETS if self._permis(k)), "")
+        """Ouvre une page (clé de PAGES) ou un volet (clé de VOLETS : son dernier onglet ouvert)."""
+        if not info_page(cle):
+            v = info_volet(cle)
+            if not v:
+                return
+            dernier = self._dernier.get(cle)
+            cle = dernier if dernier and self._permis(dernier) else next((p for p in v[4] if self._permis(p)), "")
             if not cle:
                 return
-        if not any(p[0] == cle for p in PAGES) or not self._permis(cle):
+        if not self._permis(cle):
             return
-        volet = cle in ADMIN_VOLETS
-        cle_menu = ADMINISTRATION if volet else cle
-        if cle not in self.pages:
-            i = next(k for k, p in enumerate(PAGES) if p[0] == cle)
-            QApplication.setOverrideCursor(Qt.WaitCursor)
-            try:
-                page = classe_page(PAGES[i][3])(self.ctx)
-            except Exception as e:     # noqa: BLE001
-                QApplication.restoreOverrideCursor()
-                afficher_erreur(self, e, "Ouverture de la page impossible")
-                return
-            QApplication.restoreOverrideCursor()
-            page.fenetre = self
-            self.pages[cle] = page
-            zone = QScrollArea()        # petits écrans (1366 × 768) : la page défile au lieu d'être coupée
-            zone.setWidgetResizable(True)
-            zone.setFrameShape(QFrame.NoFrame)
-            zone.setWidget(page)
-            self.zones[cle] = zone
-            if volet:
-                self._administration()
-                self._hotes_admin[cle].layout().addWidget(zone)
-            else:
-                self.pile.addWidget(zone)
-        if volet:
-            t = self._administration()
+        v = volet_de(cle)
+        if cle not in self.pages and not self._creer_page(cle):
+            return
+        if len(v[4]) > 1:
+            t = self._volet(v[0])
             t.blockSignals(True)
-            t.setCurrentIndex(ADMIN_VOLETS.index(cle))
+            t.setCurrentIndex(v[4].index(cle))
             t.blockSignals(False)
             self.pile.setCurrentWidget(t)
         else:
             self.pile.setCurrentWidget(self.zones[cle])
-        it = self._items[cle_menu]
-        if self.menu.currentItem() is not it:
-            self.menu.blockSignals(True)
-            self.menu.setCurrentItem(it)
-            self.menu.blockSignals(False)
+        self._dernier[v[0]] = cle
+        self.volet_courant, self.page_courante = v[0], cle
+        self.barre.marquer(v[0], cle)
+        self.fil.setText(f"<b>{v[1]}</b>" if len(v[4]) == 1 else
+                         f"{v[1]}  ›  <b>{info_page(cle)[1]}</b>")
+        self.tiroir.hide()
 
     def page_affichee(self) -> QWidget | None:
-        """Page actuellement à l'écran (y compris dans un volet de Rapports et administration)."""
-        w = self.pile.currentWidget()
-        if w is self.onglets_admin and w is not None:
-            k = ADMIN_VOLETS[w.currentIndex()]
-            return self.pages.get(k)
-        return w.widget() if isinstance(w, QScrollArea) else None
+        """Page actuellement à l'écran (y compris dans un onglet de volet)."""
+        return self.pages.get(self.page_courante) if self.page_courante else None
 
     def page(self, cle: str):
         self.aller(cle)
         return self.pages.get(cle)
+
+    # ------------------------------------------------------------------ recherche et fiche
+    def _focus_recherche(self):
+        self.recherche.setFocus()
+        self.recherche.selectAll()
+
+    def _echap(self):
+        if self.recherche.panneau.isVisible():
+            self.recherche.panneau.hide()
+        elif self.tiroir.isVisible():
+            self.tiroir.hide()
+
+    def _resultats_recherche(self, texte: str) -> list[dict]:
+        from epp.domain import accueil
+        t = texte.strip().lower()
+        out = []
+        for cle, lib, _, _, perm in PAGES:
+            v = volet_de(cle)
+            if self._permis(cle) and (t in lib.lower() or t in v[1].lower()):
+                out.append({"type": "ecran", "titre": lib, "cle": cle,
+                            "detail": f"Écran · {v[1]}" if len(v[4]) > 1 else "Écran"})
+        try:
+            if self.ctx.peut("eleves.lire") or self.ctx.peut("personnel.lire"):
+                for r in accueil.rechercher(self.ctx.db, self.ctx.annee, texte):
+                    if self.ctx.peut("eleves.lire" if r["type"] == "eleve" else "personnel.lire"):
+                        out.append(r)
+        except Exception:      # noqa: BLE001 - la recherche ne doit jamais bloquer la saisie
+            log.exception("Recherche impossible")
+        return out[:14]
+
+    def _ouvrir_resultat(self, r: dict) -> None:
+        if r["type"] == "ecran":
+            self.aller(r["cle"])
+        elif r["type"] == "eleve":
+            self.ouvrir_fiche(r["inscription_id"])
+        elif r["type"] == "personnel":
+            p = self.page("personnel")
+            if p is not None and hasattr(p, "table"):
+                p.table.selectionner(lambda x: x.get("id") == r["id"])
+
+    def ouvrir_fiche(self, inscription_id: int) -> None:
+        """Fiche de l'élève dans le panneau de droite (recherche, tableau de bord)."""
+        try:
+            self.tiroir.ouvrir(inscription_id)
+        except Exception as e:     # noqa: BLE001
+            afficher_erreur(self, e, "Fiche de l'élève")
 
     # ------------------------------------------------------------------ en-tête
     def _remplir_annees(self) -> None:
@@ -342,10 +329,13 @@ class FenetrePrincipale(QMainWindow):
 
     def _maj_entete(self) -> None:
         db, s = self.ctx.db, self.ctx.session
-        self.l_ecole.setText(db.get_param("ecole_nom") or "")
-        self.l_utilisateur.setText(f"{s.nom}\n{s.role_libelle}")
-        self.b_compte.setText(f"{s.nom}  ▾")
+        b = self.barre
+        b.l_ecole.setText(db.get_param("ecole_nom") or "École à renseigner")
         a = self.ctx.annee
+        b.l_details.setText(" · ".join(x for x in (db.get_param("iepp") or "",
+                                                     f"Année {a.libelle}" if a else "") if x))
+        b.l_utilisateur.setText(f"{s.nom} · {s.role_libelle}")
+        self.b_compte.setText(f"{s.nom}  ▾")
         self._remplir_annees()
         if a and a.cloturee:
             self.bandeau_archive.texte.setText(
@@ -358,7 +348,7 @@ class FenetrePrincipale(QMainWindow):
         e = self.ctx.licence or licence.etat()
         if e.statut == "essai":
             self.badge.setText(f"Essai : {e.jours_restants} j")
-            self.badge.setStyleSheet(f"background: #FDF0DF; color: {theme.ALERTE};")
+            self.badge.setStyleSheet(f"background: #F6ECDD; color: {theme.ALERTE};")
             self.bandeau_essai.texte.setText(
                 f"Version d'essai : {e.jours_restants} jour(s) restant(s). À la fin de l'essai, l'application et "
                 "les données ne sont plus accessibles tant qu'un code d'activation n'est pas saisi.")
@@ -366,7 +356,7 @@ class FenetrePrincipale(QMainWindow):
         else:
             self.badge.setText("Licence à vie" if e.type == "vie" else
                                f"Licence jusqu'au {e.expire_le:%d/%m/%Y}" if e.expire_le else "Licence active")
-            self.badge.setStyleSheet(f"background: #E3F1E9; color: {theme.SUCCES};")
+            self.badge.setStyleSheet(f"background: #E1F0E8; color: {theme.SUCCES};")
             self.bandeau_essai.hide()
 
     # ------------------------------------------------------------------ actions du compte
@@ -422,12 +412,12 @@ def appliquer_theme(app: QApplication) -> None:
     app.setStyle("Fusion")
     pal = app.palette()
     pal.setColor(QPalette.Window, QColor(theme.FOND))
-    pal.setColor(QPalette.Base, QColor("white"))
+    pal.setColor(QPalette.Base, QColor(theme.CARTE))
     pal.setColor(QPalette.Text, QColor(theme.TEXTE))
     pal.setColor(QPalette.WindowText, QColor(theme.TEXTE))
-    pal.setColor(QPalette.Highlight, QColor("#D8EBE1"))
+    pal.setColor(QPalette.Highlight, QColor("#D9EADF"))
     pal.setColor(QPalette.HighlightedText, QColor(theme.TEXTE))
-    pal.setColor(QPalette.Button, QColor("white"))
+    pal.setColor(QPalette.Button, QColor(theme.CARTE))
     pal.setColor(QPalette.ButtonText, QColor(theme.TEXTE))
     app.setPalette(pal)
     app.setStyleSheet(theme.QSS)
@@ -470,6 +460,8 @@ def run(argv: list[str]) -> int:
     app.setOrganizationName("GestionScolaireEPP")
     app.setQuitOnLastWindowClosed(False)          # la fenêtre principale décide (verrouillage, déconnexion)
     appliquer_theme(app)
+    from epp.ui import animations
+    app._survol = animations.installer(app)
     try:
         db = open_database()
     except Exception as e:     # noqa: BLE001

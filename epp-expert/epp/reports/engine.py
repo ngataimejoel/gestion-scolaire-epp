@@ -43,6 +43,14 @@ class Table:
     widths: list[float | None]           # mm, None = automatique
     first_col_header: bool = False       # 1re colonne en gras (tableaux croisés)
     page_break_groups: bool = False
+    noms: list[bool] = field(default_factory=list)   # colonnes « nom et prénoms » : à gauche, en gras, lisibles
+
+
+CHAMPS_NOMS = {"nom", "nom_prenoms", "pere_nom", "mere_nom", "tuteur_nom", "eleve", "enseignant", "personne"}
+
+
+def est_colonne_nom(champ: str) -> bool:
+    return champ in CHAMPS_NOMS or champ.endswith("_nom")
 
 
 @dataclass
@@ -131,6 +139,7 @@ class Document:
     pied: dict
     blocks: list = field(default_factory=list)
     variables: dict = field(default_factory=dict)
+    une_page: bool = False      # PDF : contenu réduit pour tenir sur une seule page (une par saut de page)
 
 
 def entete_officiel(doc: Document) -> tuple[list[str], list[str], list[bytes]]:
@@ -222,6 +231,7 @@ def variables(db: Database, annee: Annee, params: dict) -> dict:
     ra = calculs.to_date(annee.date_ref_age)
     v = {
         "ecole": e.get("ecole_nom", ""), "code_ecole": e.get("ecole_code", ""), "annee": annee.libelle,
+        "code_dren": e.get("code_dren", ""), "code_iepp": e.get("code_iepp", ""),
         "directeur": e.get("directeur", ""), "localite": e.get("localite", ""), "iepp": e.get("iepp", ""),
         "dren": e.get("dren", ""), "ministere": e.get("ministere", ""), "secteur": e.get("secteur", ""),
         "pays": e.get("pays", ""), "devise_pays": e.get("devise_pays", ""),
@@ -394,7 +404,7 @@ class Builder:
                 typ = f.type if f else "texte"
             types.append(typ)
             al = c.get("alignement") or "auto"
-            aligns.append(default_align(typ) if al == "auto" else al)
+            aligns.append("gauche" if est_colonne_nom(c["champ"]) else default_align(typ) if al == "auto" else al)
             heads.append(HeaderCell(self.t(c.get("titre") or (f.libelle if f else c["champ"]))))
             widths.append(c.get("largeur") or None)
         aggs = {k: v for k, v in (s.get("agregats") or {}).items() if v}
@@ -451,7 +461,8 @@ class Builder:
             blocks.append(Paragraph("Aucune donnée ne correspond aux critères choisis.", "note"))
             return [b for b in blocks if b]
         return [Table(self.t(s.get("titre", "")), [heads], out_rows, types, aligns, widths,
-                      page_break_groups=bool(s.get("saut_page_groupe")))]
+                      page_break_groups=bool(s.get("saut_page_groupe")),
+                      noms=[est_colonne_nom(c["champ"]) for c in cols])]
 
     # ------------------------------------------------------------------ tableau croisé
     def _metric_specs(self, s):
@@ -489,8 +500,13 @@ class Builder:
         st = self.ctx.stats()
         specs = self._metric_specs(s)
         sx_lib = {"M": "G", "F": "F", "T": "T"}
-        if s.get("classes") == "parametre" and self.params.get("classe"):
+        choix = s.get("classes")
+        if choix == "parametre" and self.params.get("classe"):
             classes = [self.params["classe"]]
+        elif isinstance(choix, str) and choix.startswith("niveau:"):
+            # classes d'un niveau (« niveau:CM2 » : CM2, ou CM2 A et CM2 B)
+            from epp.domain.fiche_scolaire import niveau
+            classes = [c for c in st.classes if niveau(c) == choix.split(":", 1)[1].strip().upper()]
         else:
             classes = list(st.classes)
         total = s.get("total", True) and len(classes) > 1
@@ -602,21 +618,28 @@ class Builder:
     def classement(self, s: dict) -> list:
         compo = int(self.params.get("compo") or 1)
         top = int(s.get("top") or 3)
-        cl = stats.classement(self.db, self.annee, compo, top)
+        par_niveau = s.get("par") == "niveau"
+        cl = stats.classement(self.db, self.annee, compo, top, par_niveau=par_niveau)
         rangs = ["PREMIER", "DEUXIÈME", "TROISIÈME", "QUATRIÈME", "CINQUIÈME"] + [f"{i}e" for i in range(6, 21)]
         header = [[HeaderCell("NIVEAU", rowspan=2)] + [HeaderCell(rangs[i], colspan=2) for i in range(top)],
                   [h for _ in range(top) for h in (HeaderCell("NOM & PRÉNOMS"), HeaderCell("MOY"))]]
         rows = []
-        for code in self.annee.codes:
+        from epp.domain.fiche_scolaire import niveau
+        for code in (list(cl) if par_niveau else self.annee.codes):
             cells = [code]
             lst = cl.get(code, [])
+            plusieurs = par_niveau and sum(niveau(c) == code for c in self.annee.codes) > 1
             for i in range(top):
-                cells += [lst[i]["nom"], lst[i]["moyenne"]] if i < len(lst) else ["", None]
+                if i < len(lst):
+                    nom = lst[i]["nom"] + (f" ({lst[i]['classe']})" if plusieurs else "")
+                    cells += [nom, lst[i]["moyenne"]]
+                else:
+                    cells += ["", None]
             rows.append(Row(cells))
         types = ["texte"] + ["texte", "decimal"] * top
         aligns = ["centre"] + ["gauche", "centre"] * top
         return [Table(self.t(s.get("titre", "")), header, rows, types, aligns, [None] * len(types),
-                      first_col_header=True)]
+                      first_col_header=True, noms=[False] + [True, False] * top)]
 
     # ------------------------------------------------------------------ indicateurs
     def cles_valeurs(self, s: dict) -> list:
@@ -733,6 +756,7 @@ class Builder:
                 doc.blocks += getattr(self, s["type"])(s)
         doc.titre = self.t(d.get("titre", ""))
         doc.sous_titre = self.t(d.get("sous_titre", ""))
+        doc.une_page = bool(d["page"].get("une_page"))
         doc.variables = self.vars
         return doc
 

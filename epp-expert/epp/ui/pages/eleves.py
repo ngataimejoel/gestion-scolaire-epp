@@ -8,11 +8,11 @@ from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QHBoxLayout, QLabel, QLineEdit, QSplitter,
                                QTabWidget, QTextBrowser, QVBoxLayout, QWidget)
 
-from epp.domain import calculs, repo
+from epp.domain import calculs, referentiels, repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
 from epp.ui.widgets import (Carte, Col, Formulaire, Tableau, afficher_erreur, bouton, confirmer, info, label,
-                            ligne, protege, valider_suppression)
+                            ligne, protege, valider_modification, valider_suppression)
 
 GROUPES_SANGUINS = ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
 STATUTS = [("", "Tous les statuts"), ("PRESENT", "Présents"), ("ABANDON", "Abandons"), ("TRANSFERE", "Transférés")]
@@ -64,6 +64,15 @@ class DialogueEleve(QDialog):
         self.setWindowTitle("Modifier l'élève" if ligne_ else "Nouvel élève")
         self.resize(760, 520)
         v = QVBoxLayout(self)
+        # les matricules d'abord, avant les informations de l'élève
+        self.f_mat = Formulaire([
+            ("matricule_ecole", "Matricule école", "texte"),
+            ("matricule_desps", "Matricule DESPS", "texte", "10 caractères, ex. 12345678A")], colonnes=2)
+        self.f_mat.widgets["matricule_ecole"].setReadOnly(True)
+        self.f_mat.widgets["matricule_ecole"].setPlaceholderText("attribué automatiquement")
+        bloc = Carte("Matricules")
+        bloc.lay.addWidget(self.f_mat)
+        v.addWidget(bloc)
         tete = QHBoxLayout()
         self.photo = Photo()
         pv = QVBoxLayout()
@@ -76,13 +85,14 @@ class DialogueEleve(QDialog):
         tete.addWidget(self.onglets, 1)
         v.addLayout(tete, 1)
         nat = repo.liste(self.db, "NATIONALITE")
+        nat += [x for _, x in referentiels.nationalites() if x not in nat]      # liste officielle complète
+        sp = [""] + sorted({x for _, x in referentiels.sous_prefectures()})
         self.f_id = Formulaire([
             ("nom", "Nom et prénoms *", "texte"), ("sexe", "Sexe *", "sexe"),
-            ("date_naissance", "Date de naissance", "date"), ("matricule_desps", "Matricule DESPS", "texte",
-                                                               "10 caractères, ex. 12345678A"),
+            ("date_naissance", "Date de naissance", "date"),
             ("nationalite", "Nationalité", "liste_libre", nat), ("observations", "Observations", "multiligne")])
         self.f_ec = Formulaire([
-            ("localite", "Lieu de naissance", "texte"), ("sous_prefecture", "Sous-préfecture", "texte"),
+            ("localite", "Lieu de naissance", "texte"), ("sous_prefecture", "Sous-préfecture", "liste_libre", sp),
             ("extrait", "Extrait de naissance", "oui_non"), ("acte_num", "N° de l'acte", "texte"),
             ("acte_date", "Date de l'acte", "date"), ("centre_etat_civil", "Centre d'état civil", "texte"),
             ("orphelin", "Orphelin", "oui_non"), ("orphelin_de", "Orphelin de", "liste",
@@ -96,13 +106,11 @@ class DialogueEleve(QDialog):
         self.f_par = Formulaire(par, colonnes=2)
         classes = [(c.code, f"{c.code} – {c.libelle}") for c in self.annee.classes]
         self.f_sco = Formulaire([
-            ("classe", "Classe *", "liste", classes), ("matricule_ecole", "Matricule école", "texte"),
+            ("classe", "Classe *", "liste", classes),
             ("redoublant", "Redoublant", "liste", [("NON", "NON"), ("OUI", "OUI")]),
             ("statut", "Statut", "liste", STATUTS[1:]),
             ("date_inscription", "Date d'inscription", "date"),
             ("observations_inscription", "Observations (année)", "multiligne")])
-        self.f_sco.widgets["matricule_ecole"].setReadOnly(True)
-        self.f_sco.widgets["matricule_ecole"].setPlaceholderText("attribué automatiquement")
         for f, t in ((self.f_id, "Identité"), (self.f_ec, "État civil"), (self.f_par, "Parents"),
                      (self.f_sco, "Scolarité")):
             w = QWidget()
@@ -110,7 +118,7 @@ class DialogueEleve(QDialog):
             l.addWidget(f)
             l.addStretch(1)
             self.onglets.addTab(w, t)
-        self.forms = [self.f_id, self.f_ec, self.f_par, self.f_sco]
+        self.forms = [self.f_mat, self.f_id, self.f_ec, self.f_par, self.f_sco]
         if ligne_:
             data = dict(ligne_)
             for f in self.forms:
@@ -124,6 +132,9 @@ class DialogueEleve(QDialog):
                            "statut": "PRESENT", "nationalite": nat[0] if nat else "",
                            "classe": page.filtre_classe() or (self.annee.codes[0] if self.annee.codes else None)})
             self.f_sco.widgets["date_inscription"].set_date(__import__("datetime").date.today())
+        if ligne_:
+            v.addWidget(label("Fiche déjà enregistrée : toute modification est validée par le mot de passe d'un "
+                              "administrateur.", discret=True, wrap=True))
         v.addWidget(label("* champ obligatoire", discret=True))
         v.addLayout(ligne(None, bouton("Annuler", self.reject), bouton("Enregistrer", self._enregistrer, "primaire")))
 
@@ -141,16 +152,15 @@ class DialogueEleve(QDialog):
         self.photo.set_donnees(self.photo_data)
 
     def _retirer_photo(self):
-        if self.photo_data and not self.photo_modifiee and self.ligne and not valider_suppression(
-                self, self.db, self.page.s, f"photo de {self.ligne['nom']}"):
-            return
+        # élève déjà enregistré : le mot de passe administrateur est demandé à l'enregistrement
         self.photo_data, self.photo_modifiee = None, True
         self.photo.vider()
 
     def marquer_erreur(self, champ):
         for i, f in enumerate(self.forms):
             if champ in f.widgets:
-                self.onglets.setCurrentIndex(i)
+                if f is not self.f_mat:
+                    self.onglets.setCurrentIndex(i - 1)
                 f.marquer_erreur(champ)
                 return
 
@@ -160,9 +170,13 @@ class DialogueEleve(QDialog):
         data = {}
         for f in self.forms:
             data.update(f.valeurs())
-        if self.ligne and repo.changement_efface_notes(db, a, self.ligne["inscription_id"], data["classe"]) \
-                and not valider_suppression(self, db, s, f"notes de {self.ligne['nom']} (changement de classe)"):
-            return
+        if self.ligne:
+            repo.validate_eleve(data, a)            # erreurs de saisie signalées avant le mot de passe
+            quoi = f"fiche de l'élève {self.ligne['nom']} ({self.ligne['matricule_ecole']})"
+            if repo.changement_efface_notes(db, a, self.ligne["inscription_id"], data["classe"]):
+                quoi += ", changement de classe : les notes déjà saisies seront retirées"
+            if not valider_modification(self, db, s, quoi):
+                return
         with db.transaction():
             eid = repo.save_eleve(db, s, self.ligne["eleve_id"] if self.ligne else None, data, a)
             if self.ligne:
@@ -199,9 +213,11 @@ class DialogueChangerClasse(QDialog):
     @protege
     def _ok(self):
         r = self.r
+        quoi = f"classe de l'élève {r['nom']} ({r['matricule_ecole']}) : {r['classe']} vers {self.classe.currentData()}"
         if repo.changement_efface_notes(self.page.db, self.page.annee, r["inscription_id"],
-                                        self.classe.currentData()) and not valider_suppression(
-                self, self.page.db, self.page.s, f"notes de {r['nom']} (changement de classe)"):
+                                        self.classe.currentData()):
+            quoi += ", les notes déjà saisies seront retirées"
+        if not valider_modification(self, self.page.db, self.page.s, quoi):
             return
         repo.update_inscription(self.page.db, self.page.s, r["inscription_id"], self.page.annee,
                                 self.classe.currentData(), r["redoublant"], r["statut"],
@@ -331,9 +347,10 @@ class PageEleves(Page):
                             f"{'Fille' if r['sexe'] == 'F' else 'Garçon'}"
                             + (f" · {r['age']} ans" if r.get("age") is not None else ""))
         self.f_photo.set_donnees(repo.get_photo(self.db, "eleve", r["eleve_id"]))
-        self.f_textes[0].setHtml(_html([("Nom et prénoms", r["nom"]), ("Sexe", r["sexe"]),
-                                        ("Date de naissance", _d(r["date_naissance"])), ("Âge", r.get("age")),
+        self.f_textes[0].setHtml(_html([("Matricule école", r["matricule_ecole"]),
                                         ("Matricule DESPS", r.get("matricule_desps")),
+                                        ("Nom et prénoms", r["nom"]), ("Sexe", r["sexe"]),
+                                        ("Date de naissance", _d(r["date_naissance"])), ("Âge", r.get("age")),
                                         ("Nationalité", r.get("nationalite")),
                                         ("Observations", r.get("observations"))]))
         self.f_textes[1].setHtml(_html([("Lieu de naissance", r.get("localite")),

@@ -107,7 +107,7 @@ class FicheWord:
         parents = d.get("parents") or []
         t = w.add_table(6, 3)
         _bordures(t, None)
-        _largeurs(t, [avail / 3] * 3)
+        _largeurs(t, [avail * 0.27, avail * 0.27, avail * 0.46])     # case du directeur large : cachet
         for j, par in enumerate(parents[:3]):
             p = _ecrire(t.cell(0, j), align=C)
             r = _run(p, par["titre"], 10.5, gras=True)
@@ -156,7 +156,7 @@ class FicheWord:
         # signatures
         t = w.add_table(1, 3)
         _bordures(t, None)
-        _largeurs(t, [avail / 3] * 3)
+        _largeurs(t, [avail * 0.27, avail * 0.27, avail * 0.46])     # case du directeur large : cachet
         noms = ["", d.get("enseignant") or "", d.get("directeur") or v.get("directeur", "")]
         for j, titre in enumerate(("Le Parent / Tuteur", "L'Enseignant(e)", "Le Directeur de l'école")):
             cell = t.cell(0, j)
@@ -169,4 +169,4 @@ class FicheWord:
                 _run(p, noms[j], 8.5)
             _bordures_cellule(cell, top=(8, "000000"), bottom=(8, "000000"), left=(8, "000000"),
                               right=(8, "000000"))
-        _hauteur(t.rows[0], 26)
+        _hauteur(t.rows[0], 42)

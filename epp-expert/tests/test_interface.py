@@ -162,19 +162,18 @@ def test_toutes_les_pages_s_ouvrent(fenetre, messages):
 
 
 def test_menu_selon_le_role(app, demo, messages):
-    from epp.ui.main import FenetrePrincipale
+    from epp.ui.main import ADMIN_VOLETS, FenetrePrincipale
     from epp.ui.widgets import Contexte
     db, annee = demo
     ens = Session(5, "ens", "Enseignant", "ENSEIGNANT", "Enseignant", set(security.DEFAULT_ROLES["ENSEIGNANT"][1]))
     w = FenetrePrincipale(Contexte(db, ens, annee, ESSAI))
-    caches = {w.menu.item(i).data(Qt.UserRole) for i in range(w.menu.count()) if w.menu.item(i).isHidden()}
-    assert "personnel" in caches and "notes" not in caches and "administration" not in caches
+    assert w.barre.sous["personnel"].isHidden() and not w.barre.groupes["notes_bulletins"].isHidden()
+    assert not w.barre.groupes["administration"].isHidden()
     w.aller("personnel")
     assert "personnel" not in w.pages
-    w.aller("sauvegarde")                         # volet sans droit : pas ouvert, et son onglet est masqué
+    w.aller("sauvegarde")                         # onglet sans droit : pas ouvert, et masqué
     assert "sauvegarde" not in w.pages
     w.aller("administration")
-    from epp.ui.main import ADMIN_VOLETS
     assert w.onglets_admin is not None and not w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("sauvegarde"))
     w.timer_licence.stop()
 
@@ -373,22 +372,123 @@ def test_logo_de_l_application_et_bouton_de_connexion_visible(app, demo, message
 
 
 # =================================================================== rapports et administration, suppressions
-def test_rapports_et_administration_en_volets(fenetre, messages):
-    from epp.ui.main import ADMIN_VOLETS, ADMINISTRATION
-    libelles = [fenetre.menu.item(i).text() for i in range(fenetre.menu.count())]
-    assert "Rapports et administration" in libelles
-    assert not {"Rapports", "Paramètres", "Sauvegarde", "Import / Export"} & set(libelles)
+def test_six_volets_et_leurs_onglets(fenetre, messages):
+    """Navigation du prototype v6 : six volets (plus l'aide), onglets dans chaque volet, Paramètres à part."""
+    from epp.ui.main import ADMIN_VOLETS, ADMINISTRATION, VOLETS
+    assert [v[1] for v in VOLETS][:6] == ["Tableau de bord", "Élèves & personnel", "Notes & bulletins", "Absences",
+                                          "Rapports & administration", "Paramètres"]
+    assert ADMIN_VOLETS[:2] == ["rapports", "generateur"] and "parametres" not in ADMIN_VOLETS
+    fenetre.aller("classes")
+    t = fenetre.volets["eleves_personnel"]
+    assert fenetre.pile.currentWidget() is t and t.tabText(t.currentIndex()) == "Classes"
+    assert fenetre.page_affichee() is fenetre.pages["classes"]
+    assert fenetre.barre.groupes["eleves_personnel"].isChecked() and fenetre.barre.sous["classes"].isChecked()
+    assert not fenetre.barre.blocs["administration"].isVisible()
+    assert "Classes" in fenetre.fil.text()
     fenetre.aller("parametres")
+    assert fenetre.page_affichee() is fenetre.pages["parametres"] and fenetre.barre.groupes["parametres"].isChecked()
+    fenetre.aller("rapports")
     t = fenetre.onglets_admin
-    assert fenetre.pile.currentWidget() is t and t.tabText(t.currentIndex()) == "Paramètres"
-    assert fenetre.page_affichee() is fenetre.pages["parametres"]
-    assert fenetre.menu.currentItem().data(Qt.UserRole) == ADMINISTRATION
-    t.setCurrentIndex(ADMIN_VOLETS.index("rapports"))           # clic sur l'onglet Rapports
+    t.setCurrentIndex(ADMIN_VOLETS.index("statistiques"))         # clic sur l'onglet Statistiques
     QApplication.processEvents()
+    assert fenetre.page_affichee() is fenetre.pages["statistiques"]
+    fenetre.aller("accueil")
+    assert fenetre.page_affichee() is fenetre.pages["tableau"]
+    fenetre.aller(ADMINISTRATION)                                # retour sur le dernier onglet ouvert
+    assert fenetre.page_affichee() is fenetre.pages["statistiques"]
+    fenetre.barre.sous["eleves"].click()                         # sous-menu de la barre latérale
+    assert fenetre.page_affichee() is fenetre.pages["eleves"]
+
+
+def test_tableau_de_bord_cliquable(fenetre, messages):
+    p = fenetre.page("tableau")
+    p.rafraichir()
+    d = p.donnees
+    assert d["effectif"] == d["garcons"] + d["filles"] > 0
+    assert p.k_eleves.valeur.text().startswith(str(d["effectif"]))
+    assert len(p.b_eff.lignes) == len(fenetre.ctx.annee.classes)
+    p.k_presence.clic.emit()
+    assert fenetre.page_affichee() is fenetre.pages["absences"]
+    fenetre.aller("accueil")
+    p.b_eff.clic.emit("CE1")                                   # ligne « CE1 » : liste des élèves de CE1
+    e = fenetre.page_affichee()
+    assert e is fenetre.pages["eleves"] and {r["classe"] for r in e.table.lignes()} == {"CE1"}
+    fenetre.aller("accueil")
+    m = d["premiers"][0]
+    p._fiche(m["inscription_id"])                              # premier de classe : sa fiche à droite
+    assert fenetre.tiroir.isVisible() and fenetre.tiroir.ligne["inscription_id"] == m["inscription_id"]
+
+
+def test_recherche_globale_et_fiche_de_l_eleve(fenetre, messages):
+    db, annee = fenetre.ctx.db, fenetre.ctx.annee
+    r = repo.inscriptions(db, annee)[3]
+    res = fenetre._resultats_recherche(r["nom"].split()[0])
+    el = [x for x in res if x["type"] == "eleve"]
+    assert any(x["inscription_id"] == r["inscription_id"] for x in el)
+    assert any(x["type"] == "ecran" and x["cle"] == "notes" for x in fenetre._resultats_recherche("notes"))
+    fenetre._ouvrir_resultat(next(x for x in el if x["inscription_id"] == r["inscription_id"]))
+    t = fenetre.tiroir
+    assert t.isVisible()
+    textes = " ".join(w.text() for w in t.contenu.findChildren(type(fenetre.fil)))
+    assert r["nom"] in textes and r["matricule_ecole"] in textes
+    assert textes.index("Matricule école") < textes.index("Né(e) le")      # matricules en premier
+    t._ouvrir()
+    p = fenetre.page_affichee()
+    assert p is fenetre.pages["eleves"] and p.table.ligne_courante()["inscription_id"] == r["inscription_id"]
+    fenetre._ouvrir_resultat({"type": "ecran", "cle": "generateur", "titre": ""})
+    assert fenetre.page_affichee() is fenetre.pages["generateur"]
+
+
+def test_generateur_de_rapports(fenetre, messages, monkeypatch):
+    from epp.reports import store
+    from epp.ui.designer import editeur
+    p = fenetre.page("generateur")
+    p.rafraichir()
+    assert p.table.lignes() and all(r["origine"] == "Officiel" for r in p.table.lignes())
+    composes = []
+    monkeypatch.setattr(editeur.EditeurModele, "exec", lambda self: composes.append(self.ref) or 0)
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("Mon rapport de test", True))
+    p.nouveau_vide()
+    db = fenetre.ctx.db
+    mid = db.scalar("SELECT id FROM modele_rapport WHERE nom='Mon rapport de test'")
+    assert mid and composes == [mid] and not store.get(db, mid)["integre"]
+    p.table.selectionner(lambda r: r["integre"] == 1)
+    assert not p.b_modifier.isEnabled() and p.b_copier.isEnabled()   # un rapport officiel se copie
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("Copie de test", True))
+    p.copier()
+    assert db.scalar("SELECT COUNT(*) FROM modele_rapport WHERE nom='Copie de test' AND integre=0") == 1
+    p.table.selectionner(lambda r: r["nom"] == "Copie de test")
+    p.apercu()
     assert fenetre.page_affichee() is fenetre.pages["rapports"]
-    fenetre.aller("tableau")
-    fenetre.aller(ADMINISTRATION)                                # retour sur le dernier volet ouvert
-    assert fenetre.page_affichee() is fenetre.pages["rapports"]
+
+
+def test_modifier_un_eleve_exige_l_administrateur(fenetre, messages, monkeypatch):
+    """Matricules en tête de la fiche ; une fois l'élève enregistré, toute modification passe par
+    l'administrateur (refus : rien n'est modifié)."""
+    from epp.ui.pages.eleves import DialogueEleve
+    p = fenetre.page("eleves")
+    db = p.db
+    r = p.table.lignes()[0]
+    d = DialogueEleve(p, r)
+    assert d.forms[0] is d.f_mat and set(d.f_mat.widgets) == {"matricule_ecole", "matricule_desps"}
+    assert d.f_mat.widgets["matricule_ecole"].text() == r["matricule_ecole"]
+    assert "matricule_desps" not in d.f_id.widgets
+    demandes = []
+    monkeypatch.setattr("epp.ui.pages.eleves.valider_modification", lambda *a: demandes.append(a[3]) or False)
+    d.f_id.widgets["nom"].setText("NOM MODIFIE Refusé")
+    d._enregistrer()
+    assert demandes and r["nom"] in demandes[0] and d.result() != QDialog.Accepted
+    assert db.scalar("SELECT nom FROM eleve WHERE id=?", (r["eleve_id"],)) == r["nom"]
+    monkeypatch.setattr("epp.ui.pages.eleves.valider_modification", lambda *a: True)
+    d._enregistrer()
+    assert d.result() == QDialog.Accepted
+    assert db.scalar("SELECT nom FROM eleve WHERE id=?", (r["eleve_id"],)) == "NOM MODIFIE Refusé"
+    # un nouvel élève s'enregistre sans mot de passe
+    monkeypatch.setattr("epp.ui.pages.eleves.valider_modification", lambda *a: pytest.fail("pas pour un ajout"))
+    n = DialogueEleve(p)
+    n.f_id.widgets["nom"].setText("NOUVEAU Sans Mot De Passe")
+    n._enregistrer()
+    assert n.result() == QDialog.Accepted, _textes(messages)
 
 
 def test_suppression_d_un_eleve_validee_par_un_administrateur(fenetre, messages, monkeypatch):
@@ -459,3 +559,30 @@ def test_fiche_scolaire_depuis_la_fiche_eleve(fenetre, messages, monkeypatch, tm
     p._fiche_scolaire()
     assert appels and appels[0][0] == "FICHE_SCOLAIRE" and appels[0][1]["eleve"] == r["inscription_id"]
     assert (tmp_path / "f.pdf").exists() and r["nom"] in appels[0][2]
+
+
+def test_import_du_fichier_national_des_eleves(fenetre, messages, tmp_path):
+    from epp.domain import repo
+    from epp.io import import_eleves19
+    from epp.ui.pages.import_export import DialogueEleves19
+    p = fenetre.page("import_export")
+    assert p.b_n_import.isEnabled() and p.b_n_export.isEnabled()
+    ch = import_eleves19.modele(tmp_path / "eleves19.xlsx", p.db, exemple=True)
+    bilan = import_eleves19.analyser(p.db, p.annee, ch)
+    d = DialogueEleves19(p, bilan, ch)
+    assert d.table.model().rowCount() == 1 and d.b_ok.isEnabled()
+    d._importer()
+    assert any(r["matricule_desps"] == "00000000A" for r in repo.inscriptions(p.db, p.annee, "CE1"))
+    assert any(t == "Import terminé" for _, t, _ in messages)
+
+
+def test_codes_dren_iepp_et_listes_officielles(fenetre):
+    from epp.ui.pages.eleves import DialogueEleve
+    from epp.ui.pages.parametres import OngletEtablissement
+    assert {"code_dren", "code_iepp"} <= {k for k, _ in OngletEtablissement.CHAMPS}
+    page = fenetre.page("eleves")
+    d = DialogueEleve(page, None)
+    sp = d.f_ec.widgets["sous_prefecture"]
+    assert sp.isEditable() and sp.findText("TOUBA") >= 0
+    assert d.f_id.widgets["nationalite"].findText("BURKINABE") >= 0
+    d.reject()

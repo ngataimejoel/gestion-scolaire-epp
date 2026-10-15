@@ -19,7 +19,7 @@ a = Analysis(
         *collect_data_files("docx"),                 # modèle Word de base de python-docx
     ],
     # reportlab.graphics.barcode charge ses modules dynamiquement (code QR de la fiche scolaire)
-    hiddenimports=[*MODULES, *collect_submodules("reportlab.graphics.barcode"),
+    hiddenimports=[*MODULES, *collect_submodules("reportlab.graphics.barcode"), "PySide6.QtSvg",
                    "PySide6.QtPdf", "PySide6.QtPdfWidgets", "PySide6.QtMultimedia",
                    "PySide6.QtMultimediaWidgets", "PySide6.QtCharts", "PySide6.QtPrintSupport"],
     excludes=["tkinter", "pandas", "numpy", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets",

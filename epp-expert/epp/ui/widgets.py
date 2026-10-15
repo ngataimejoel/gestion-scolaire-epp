@@ -10,8 +10,8 @@ from pathlib import Path
 from PySide6.QtCore import (QAbstractTableModel, QDate, QModelIndex, QObject, QSortFilterProxyModel, Qt, QUrl,
                             Signal)
 from PySide6.QtGui import QBrush, QColor, QDesktopServices, QFont, QPainter, QPen
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QDateEdit, QDoubleSpinBox, QFileDialog, QFormLayout,
-                               QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QCompleter, QDateEdit, QDoubleSpinBox, QFileDialog,
+                               QFormLayout, QFrame, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QMessageBox, QPlainTextEdit,
                                QPushButton, QSizePolicy, QSpinBox, QTableView, QVBoxLayout, QWidget)
 
 from epp.core import paths
@@ -136,6 +136,15 @@ def valider_suppression(parent, db, s, quoi: str) -> bool:
                        "administrateur. Saisissez le mot de passe d'un administrateur.", f"suppression : {quoi}"))
 
 
+def valider_modification(parent, db, s, quoi: str) -> bool:
+    """Toute modification d'une fiche déjà enregistrée (élève) exige le mot de passe d'un administrateur ;
+    chaque tentative est inscrite au journal."""
+    return bool(mot_de_passe_admin(
+        parent, db, s, f"Modification : {quoi}.\n\nUne fiche déjà enregistrée ne peut être modifiée qu'avec "
+                       "l'accord d'un administrateur. Saisissez le mot de passe d'un administrateur.",
+        f"modification : {quoi}"))
+
+
 def info(parent, titre: str, texte: str) -> None:
     QMessageBox.information(parent, titre, texte)
 
@@ -145,7 +154,8 @@ def ouvrir_fichier(chemin) -> None:
 
 
 FILTRES = {"pdf": "Document PDF (*.pdf)", "xlsx": "Classeur Excel (*.xlsx)", "docx": "Document Word (*.docx)",
-           "zip": "Sauvegarde (*.zip)", "epptpl": "Modèle de rapport (*.epptpl)"}
+           "zip": "Sauvegarde (*.zip)", "epptpl": "Modèle de rapport (*.epptpl)",
+           "csv": "Fichier CSV (*.csv)"}
 
 
 def chemin_sortie(parent, titre: str, nom: str, formats: list[str]) -> tuple[Path | None, str | None]:
@@ -429,6 +439,7 @@ class Tableau(QTableView):
         self.verticalHeader().setDefaultSectionSize(28)
         self.setShowGrid(False)
         self.setWordWrap(False)
+        self.setMouseTracking(True)          # ligne survolée surlignée
         h = self.horizontalHeader()
         h.setHighlightSections(False)
         h.setStretchLastSection(True)
@@ -537,6 +548,12 @@ class Formulaire(QWidget):
                 else:
                     w.addItem(v, v)
             w.setEditable(typ == "liste_libre")
+            if typ == "liste_libre":              # saisie libre avec suggestions (« touba » → TOUBA)
+                w.setInsertPolicy(QComboBox.NoInsert)
+                comp = w.completer()
+                comp.setCaseSensitivity(Qt.CaseInsensitive)
+                comp.setFilterMode(Qt.MatchContains)
+                comp.setCompletionMode(QCompleter.PopupCompletion)
             return w
         if typ in ("date", "date_obl"):
             return ChampDate(obligatoire=typ == "date_obl")

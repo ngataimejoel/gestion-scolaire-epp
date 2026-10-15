@@ -123,6 +123,16 @@ class PageRapports(Page):
                     break
         self._choisir()
 
+    def selectionner_modele(self, mid: int) -> bool:
+        """Sélectionne un modèle (depuis le générateur de rapports) ; True s'il est dans la liste."""
+        if self._a_actualiser:
+            self.actualiser()
+        for it in self._items():
+            if it.data(0, Qt.UserRole) == mid:
+                self.arbre.setCurrentItem(it)
+                return True
+        return False
+
     def _items(self):
         for i in range(self.arbre.topLevelItemCount()):
             t = self.arbre.topLevelItem(i)
