@@ -319,35 +319,16 @@ def _logo(data: bytes, max_w: float, max_h: float):
 
 
 def _officiel(doc: E.Document, avail: float, force: bool = False) -> list:
+    """En-tête officiel sur le modèle de la fiche scolaire de l'école (ministère, DRENA, IEPP à gauche,
+    République, devise et logos à droite, trait de séparation)."""
     if not force and not doc.entete.get("officiel", True):
         return []
+    from epp.reports.fiche_pdf import EnteteOfficielPDF
     gauche, droite, logos = E.entete_officiel(doc)
-    st = _style(8, bold=True, align=TA_CENTER, leading=9.6)
-    lp = [_p(x, st) for x in gauche]
-    rp = [_p(x, st) for x in droite]
-    # centre à la largeur des logos (18 mm de haut), le reste de la ligne va au texte
-    tailles = []
-    for d in logos:
-        try:
-            tailles.append(ImageReader(io.BytesIO(d)).getSize())
-        except Exception:
-            pass
-    besoin = sum(18 * mm * w / h for w, h in tailles) + 6 * mm * len(tailles)
-    centre = max(avail * 0.16, min(besoin, avail * 0.34))
-    cote = (avail - centre) / 2
-    imgs = [i for i in (_logo(d, centre / len(logos) - 3 * mm, 18 * mm) for d in logos) if i] if logos else []
-    if len(imgs) > 1:
-        mid = RLTable([imgs], colWidths=[centre / len(imgs)] * len(imgs))
-        mid.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                                 ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0)]))
-    else:
-        mid = imgs[0] if imgs else ""
-    tbl = RLTable([[lp, mid, rp]], colWidths=[cote, centre, cote])
-    tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "CENTER")]))
-    out = [tbl]
+    out = [EnteteOfficielPDF(gauche, droite, logos, (FONT, FONT_B)), Spacer(1, 2 * mm)]
     if doc.entete.get("texte"):
         out.append(_p(E.subst(doc.entete["texte"], doc.variables), _style(8, align=TA_CENTER)))
-    out.append(Spacer(1, 4 * mm))
+    out.append(Spacer(1, 3 * mm))
     return out
 
 
@@ -444,7 +425,8 @@ def _bulletin(doc: E.Document, b: E.Bulletin, avail: float) -> list:
              ("Matricule DESPS", d.get("matricule_desps") or "–"), ("Classe", d.get("classe")),
              ("Sexe", {"M": "Masculin", "F": "Féminin"}.get(d.get("sexe"), "")),
              ("Né(e) le", E.fmt(d.get("date_naissance"), "date") or "–"),
-             ("Redoublant", d.get("redoublant") or "NON"), ("Effectif classé", str(d.get("effectif") or 0))]
+             ("Redoublant", d.get("redoublant") or "NON"), ("Effectif classé", str(d.get("effectif") or 0)),
+             ("Père", d.get("pere") or "–"), ("Mère", d.get("mere") or "–")]
     cells = [[_p(k, lab), _p(str(v or ""), val)] for k, v in ident]
     grid = [cells[i] + cells[i + 1] for i in range(0, len(cells), 2)]
     pw, ph = 30 * mm, 38 * mm
@@ -685,6 +667,9 @@ def render(doc: E.Document, out: str | Path | io.BytesIO) -> None:
             emit(_bulletin(doc, b, avail))
         elif isinstance(b, E.Lettre):
             emit(_lettre(b, avail))
+        elif isinstance(b, E.FicheScolaire):
+            from epp.reports.fiche_pdf import FicheScolairePDF
+            emit([FicheScolairePDF(doc, b, (FONT, FONT_B, FONT_I))])
         elif isinstance(b, E.EnteteOfficiel):
             emit(_officiel(doc, avail, force=True))
         elif isinstance(b, E.PageBreak):

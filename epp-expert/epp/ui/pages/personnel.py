@@ -8,7 +8,7 @@ from epp.domain import repo, stats
 from epp.ui.pages.base import Page
 from epp.ui.pages.eleves import Photo
 from epp.ui.widgets import (Carte, Col, Formulaire, Tableau, afficher_erreur, bouton, confirmer, label, ligne,
-                            protege)
+                            protege, valider_suppression)
 
 
 class DialogueAgent(QDialog):
@@ -61,6 +61,9 @@ class DialogueAgent(QDialog):
             self.photo.set_donnees(self.photo_data)
 
     def _retirer(self):
+        if self.photo_data and not self.photo_modifiee and self.agent and not valider_suppression(
+                self, self.page.db, self.page.s, f"photo de {self.agent['nom']}"):
+            return
         self.photo_data, self.photo_modifiee = None, True
         self.photo.vider()
 
@@ -153,7 +156,8 @@ class PagePersonnel(Page):
         r = self.table.ligne_courante()
         if r and confirmer(self, "Supprimer l'agent",
                            f"Supprimer définitivement {r['nom']} ({r['matricule']}) et ses absences ?",
-                           "Supprimer", True):
+                           "Supprimer", True) \
+                and valider_suppression(self, self.db, self.s, f"agent {r['nom']} ({r['matricule']})"):
             repo.delete_personnel(self.db, self.s, r["id"])
             self.ctx.modifie("personnel")
 

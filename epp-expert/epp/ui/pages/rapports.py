@@ -16,7 +16,7 @@ from epp.ui.dialogs.export import Apercu, enregistrer, fichier_apercu, formats_a
 from epp.ui.pages.absences import mois_de_l_annee
 from epp.ui.pages.base import Page
 from epp.ui.widgets import (Carte, ChampDate, afficher_erreur, bouton, confirmer, info, label, ouvrir_fichier,
-                            protege)
+                            protege, valider_suppression)
 
 LOT = "lot:"
 
@@ -354,7 +354,8 @@ class PageRapports(Page):
         ref = self._ref()
         m = store.get(self.db, ref)
         if confirmer(self, "Supprimer le modèle", f"Supprimer définitivement le modèle « {m['nom']} » et son "
-                                                  "historique ?", "Supprimer", True):
+                                                  "historique ?", "Supprimer", True) \
+                and valider_suppression(self, self.db, self.s, f"modèle de rapport {m['nom']}"):
             store.supprimer(self.db, self.s, ref)
             self._apres()
 

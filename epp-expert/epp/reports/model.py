@@ -35,6 +35,7 @@ SECTION_TYPES = {
     "signature": "Bloc signature",
     "saut_page": "Saut de page",
     "bulletin": "Bulletins des élèves (une page par élève)",
+    "fiche_scolaire": "Fiches scolaires des élèves (une page par élève, code QR)",
 }
 
 PARAMETRES = {
@@ -43,7 +44,7 @@ PARAMETRES = {
     "compo": "Évaluation / composition",
     "date_debut": "Du (date)",
     "date_fin": "Au (date)",
-    "eleve": "Élève (un seul bulletin)",
+    "eleve": "Élève (un seul bulletin ou une seule fiche)",
 }
 
 OPERATEURS = {
@@ -121,6 +122,8 @@ def nouvelle_section(type_: str) -> dict:
                     bilan_suivi=4, photo=True, appreciations=True, statistiques_classe=True,
                     observations=True, inclure_sortis=False, titre_bulletin="",
                     signatures=["L'enseignant(e)", "Le Directeur", "Les parents"])
+    elif type_ == "fiche_scolaire":
+        base.update(photo=True, qr=True, inclure_sortis=True, titre_fiche="FICHE SCOLAIRE")
     elif type_ == "signature":
         base.update(lieu_date=True, fonction="LE DIRECTEUR", nom="{directeur}")
     return base

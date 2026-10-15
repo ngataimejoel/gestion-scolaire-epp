@@ -13,8 +13,8 @@ import sys
 from PySide6.QtCore import QRect, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QFont, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (QApplication, QComboBox, QFrame, QHBoxLayout, QLabel, QListWidget, QListWidgetItem,
-                               QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QStyledItemDelegate, QToolButton,
-                               QVBoxLayout, QWidget)
+                               QMainWindow, QMenu, QMessageBox, QScrollArea, QStackedWidget, QStyledItemDelegate,
+                               QTabWidget, QToolButton, QVBoxLayout, QWidget)
 
 from epp import APP_MARQUE, APP_NAME, __version__
 from epp.core import backup, licence, security
@@ -45,6 +45,25 @@ PAGES = [
     ("sauvegarde", "Sauvegarde", "", "sauvegarde:PageSauvegarde", "sauvegarde.creer"),
     ("aide", "Aide et tutoriels", "F1", "aide:PageAide", None),
 ]
+
+# Une seule entrée du menu pour les rapports et l'administration : chaque page y est un volet (onglet).
+ADMINISTRATION = "administration"
+ADMIN_LIBELLE = "Rapports et administration"
+ADMIN_RACCOURCI = "Ctrl+0"
+ADMIN_VOLETS = ["rapports", "parametres", "import_export", "sauvegarde"]
+
+
+def menu_entrees() -> list[tuple[str, str, str]]:
+    """Entrées du menu latéral (clé, libellé, raccourci) : les volets d'administration sont réunis."""
+    out = []
+    for cle, lib, rac, _, _ in PAGES:
+        if cle in ADMIN_VOLETS:
+            if not any(e[0] == ADMINISTRATION for e in out):
+                out.append((ADMINISTRATION, ADMIN_LIBELLE, ADMIN_RACCOURCI))
+            continue
+        out.append((cle, lib, rac))
+    return out
+
 
 VERIF_LICENCE_MS = 15 * 60 * 1000
 
@@ -85,6 +104,8 @@ class FenetrePrincipale(QMainWindow):
         self.setMinimumSize(1080, 660)
         self.pages: dict[str, QWidget] = {}
         self.zones: dict[str, QScrollArea] = {}
+        self.onglets_admin: QTabWidget | None = None     # volets Rapports, Paramètres, Import / Export, Sauvegarde
+        self._hotes_admin: dict[str, QWidget] = {}
         central = QWidget()
         self.setCentralWidget(central)
         h = QHBoxLayout(central)
@@ -101,7 +122,7 @@ class FenetrePrincipale(QMainWindow):
         self.pile = QStackedWidget()
         droite.addWidget(self.pile, 1)
         h.addLayout(droite, 1)
-        for cle, _, rac, _, _ in PAGES:
+        for cle, _, rac in menu_entrees():
             if rac:
                 QShortcut(QKeySequence(rac), self, activated=lambda c=cle: self.aller(c))
         ctx.annee_changee.connect(self._maj_entete)
@@ -145,8 +166,10 @@ class FenetrePrincipale(QMainWindow):
         self.menu.setItemDelegate(_DelegueMenu(self.menu))
         self.menu.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.menu.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        for cle, lib, rac, _, _ in PAGES:
+        self._items: dict[str, QListWidgetItem] = {}
+        for cle, lib, rac in menu_entrees():
             it = QListWidgetItem(lib)
+            self._items[cle] = it
             it.setData(Qt.UserRole, cle)
             it.setData(Qt.UserRole + 1, rac)
             if rac:
@@ -209,15 +232,52 @@ class FenetrePrincipale(QMainWindow):
         return f
 
     # ------------------------------------------------------------------ navigation
+    def _permis(self, cle: str) -> bool:
+        perm = next((p[4] for p in PAGES if p[0] == cle), None)
+        return not perm or self.ctx.peut(perm)
+
     def _maj_menu(self) -> None:
-        for i, (_, _, _, _, perm) in enumerate(PAGES):
-            self.menu.item(i).setHidden(bool(perm) and not self.ctx.peut(perm))
+        for cle, it in self._items.items():
+            visible = any(self._permis(k) for k in ADMIN_VOLETS) if cle == ADMINISTRATION else self._permis(cle)
+            it.setHidden(not visible)
+        if self.onglets_admin is not None:
+            for i, k in enumerate(ADMIN_VOLETS):
+                self.onglets_admin.setTabVisible(i, self._permis(k))
+
+    def _administration(self) -> QTabWidget:
+        """Section « Rapports et administration » : un onglet (volet) par page, créée à la première ouverture."""
+        if self.onglets_admin is None:
+            t = QTabWidget()
+            t.setObjectName("ongletsAdmin")
+            t.setDocumentMode(True)
+            t.blockSignals(True)
+            for k in ADMIN_VOLETS:
+                hote = QWidget()
+                lay = QVBoxLayout(hote)
+                lay.setContentsMargins(0, 0, 0, 0)
+                t.addTab(hote, next(p[1] for p in PAGES if p[0] == k))
+                self._hotes_admin[k] = hote
+            t.blockSignals(False)
+            t.currentChanged.connect(lambda i: 0 <= i < len(ADMIN_VOLETS) and self.aller(ADMIN_VOLETS[i]))
+            self.pile.addWidget(t)
+            self.onglets_admin = t
+            self._maj_menu()
+        return self.onglets_admin
 
     def aller(self, cle: str) -> None:
-        i = next(k for k, p in enumerate(PAGES) if p[0] == cle)
-        if self.menu.item(i).isHidden():
+        if cle == ADMINISTRATION:
+            t = self.onglets_admin
+            courant = ADMIN_VOLETS[t.currentIndex()] if t is not None and t.currentIndex() >= 0 else None
+            cle = courant if courant and self._permis(courant) else \
+                next((k for k in ADMIN_VOLETS if self._permis(k)), "")
+            if not cle:
+                return
+        if not any(p[0] == cle for p in PAGES) or not self._permis(cle):
             return
+        volet = cle in ADMIN_VOLETS
+        cle_menu = ADMINISTRATION if volet else cle
         if cle not in self.pages:
+            i = next(k for k, p in enumerate(PAGES) if p[0] == cle)
             QApplication.setOverrideCursor(Qt.WaitCursor)
             try:
                 page = classe_page(PAGES[i][3])(self.ctx)
@@ -233,12 +293,32 @@ class FenetrePrincipale(QMainWindow):
             zone.setFrameShape(QFrame.NoFrame)
             zone.setWidget(page)
             self.zones[cle] = zone
-            self.pile.addWidget(zone)
-        self.pile.setCurrentWidget(self.zones[cle])
-        if self.menu.currentRow() != i:
+            if volet:
+                self._administration()
+                self._hotes_admin[cle].layout().addWidget(zone)
+            else:
+                self.pile.addWidget(zone)
+        if volet:
+            t = self._administration()
+            t.blockSignals(True)
+            t.setCurrentIndex(ADMIN_VOLETS.index(cle))
+            t.blockSignals(False)
+            self.pile.setCurrentWidget(t)
+        else:
+            self.pile.setCurrentWidget(self.zones[cle])
+        it = self._items[cle_menu]
+        if self.menu.currentItem() is not it:
             self.menu.blockSignals(True)
-            self.menu.setCurrentRow(i)
+            self.menu.setCurrentItem(it)
             self.menu.blockSignals(False)
+
+    def page_affichee(self) -> QWidget | None:
+        """Page actuellement à l'écran (y compris dans un volet de Rapports et administration)."""
+        w = self.pile.currentWidget()
+        if w is self.onglets_admin and w is not None:
+            k = ADMIN_VOLETS[w.currentIndex()]
+            return self.pages.get(k)
+        return w.widget() if isinstance(w, QScrollArea) else None
 
     def page(self, cle: str):
         self.aller(cle)

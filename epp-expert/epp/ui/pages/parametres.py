@@ -13,7 +13,7 @@ from epp.domain import calendrier, repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
 from epp.ui.widgets import (Col, Formulaire, Tableau, afficher_erreur, bouton, confirmer, info, label, ligne,
-                            protege)
+                            protege, valider_suppression)
 
 LISTES = {"NATIONALITE": "Nationalités", "MOTIF_ABSENCE": "Motifs d'absence", "FONCTION": "Fonctions du personnel",
           "SITUATION_MATRIMONIALE": "Situations matrimoniales", "ORPHELIN_DE": "Orphelin de",
@@ -64,6 +64,9 @@ class _Logo(QWidget):
 
     @protege
     def _retirer(self):
+        if repo.get_logo(self.page.db, self.quel) is None or not valider_suppression(
+                self, self.page.db, self.page.s, repo.LOGOS[self.quel].lower()):
+            return
         repo.set_logo(self.page.db, self.page.s, self.quel, None)
         self.charger()
         self.page.ctx.annee_changee.emit()
@@ -333,7 +336,8 @@ class OngletCalendrier(QWidget):
     @protege
     def _supprimer(self):
         c = self.table.ligne_courante()
-        if c and confirmer(self, "Supprimer", f"Retirer « {c['libelle']} » du calendrier ?", "Supprimer", True):
+        if c and confirmer(self, "Supprimer", f"Retirer « {c['libelle']} » du calendrier ?", "Supprimer", True) \
+                and valider_suppression(self, self.page.db, self.page.s, f"{c['libelle']} (calendrier)"):
             calendrier.supprimer(self.page.db, self.page.s, self.page.annee, c["id"])
             self._apres()
 

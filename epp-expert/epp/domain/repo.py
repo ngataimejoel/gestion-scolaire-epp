@@ -201,6 +201,7 @@ def save_etablissement(db: Database, s: Session, data: dict) -> None:
 ELEVE_CHAMPS = [
     "matricule_desps", "nom", "sexe", "date_naissance", "nationalite", "localite", "sous_prefecture",
     "extrait", "acte_num", "acte_date", "centre_etat_civil", "orphelin", "orphelin_de",
+    "groupe_sanguin", "allergies",
     "pere_nom", "pere_profession", "pere_residence", "pere_tel",
     "mere_nom", "mere_profession", "mere_residence", "mere_tel",
     "tuteur_nom", "tuteur_profession", "tuteur_residence", "tuteur_tel", "observations",
@@ -303,6 +304,15 @@ def inscrire(db: Database, s: Session, eleve_id: int, annee: Annee, classe_code:
          redoublant, statut, observations)).lastrowid
     log(db, s.login, "INSCRIPTION", "inscription", f"{matricule} ({type_})")
     return iid
+
+
+def changement_efface_notes(db: Database, annee: Annee, inscription_id: int, classe_code: str) -> bool:
+    """Le changement de classe effacerait des notes déjà saisies (autre grille de notes)."""
+    old = db.one("SELECT classe_id FROM inscription WHERE id=?", (inscription_id,))
+    cl, old_cl = annee.classe(classe_code), annee.classe_par_id(old["classe_id"]) if old else None
+    if not cl or not old_cl or old_cl.id == cl.id or old_cl.grille_id == cl.grille_id:
+        return False
+    return bool(db.scalar("SELECT 1 FROM note WHERE inscription_id=? LIMIT 1", (inscription_id,)))
 
 
 def update_inscription(db: Database, s: Session, inscription_id: int, annee: Annee, classe_code: str,

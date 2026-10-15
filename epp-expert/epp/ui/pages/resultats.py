@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QComboBox, QDialog, QFormLayout, QLineEdit, QSplit
 
 from epp.domain import fin_annee
 from epp.ui.pages.base import Page
-from epp.ui.widgets import Carte, Col, Tableau, bouton, confirmer, info, label, ligne, protege
+from epp.ui.widgets import Carte, Col, Tableau, bouton, confirmer, info, label, ligne, protege, valider_suppression
 
 
 class DialogueDecision(QDialog):
@@ -195,7 +195,8 @@ class PageResultats(Page):
     def _annuler(self):
         cl = self._classe()
         if confirmer(self, "Annuler la validation", f"Retirer les décisions validées de la classe {cl} ? "
-                                                     "Les propositions calculées reviennent."):
+                                                     "Les propositions calculées reviennent.") \
+                and valider_suppression(self, self.db, self.s, f"décisions validées de la classe {cl}"):
             fin_annee.annuler_validation(self.db, self.s, self.annee, cl)
             self.ctx.modifie("notes")
 

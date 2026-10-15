@@ -13,10 +13,14 @@ from epp.core.db import Database
 ENTETE_GAUCHE_DEFAUT = "{ministere}\n{dren}\n{iepp}\n{ecole}  -  Code : {code_ecole}"
 ENTETE_DROITE_DEFAUT = "{pays}\n{devise_pays}\nANNEE SCOLAIRE : {annee}"
 
+ANCIEN_MINISTERE = "MINISTERE DE L'EDUCATION NATIONALE ET DE L'ALPHABETISATION"
+MINISTERE_DEFAUT = ("MINISTERE DE L'EDUCATION NATIONALE, DE L'ALPHABETISATION ET DE L'ENSEIGNEMENT "
+                    "TECHNIQUE")
+
 DEFAULT_PARAMS = {
     "pays": "REPUBLIQUE DE COTE D'IVOIRE",
     "devise_pays": "Union - Discipline - Travail",
-    "ministere": "MINISTERE DE L'EDUCATION NATIONALE ET DE L'ALPHABETISATION",
+    "ministere": MINISTERE_DEFAUT,
     "dren": "DRENAET DE TOUBA",
     "iepp": "IEPP OUANINOU",
     "ecole_nom": "EPP OUANINOU 2",

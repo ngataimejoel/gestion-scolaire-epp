@@ -128,6 +128,14 @@ def mot_de_passe_admin(parent, db, s, texte: str, motif: str) -> str | None:
     return resultat[0] if resultat else None
 
 
+def valider_suppression(parent, db, s, quoi: str) -> bool:
+    """Toute suppression de données exige le mot de passe d'un administrateur, même pour un administrateur
+    connecté ; chaque tentative (acceptée ou refusée) est inscrite au journal."""
+    return bool(mot_de_passe_admin(
+        parent, db, s, f"Suppression : {quoi}.\n\nToute suppression de données doit être validée par un "
+                       "administrateur. Saisissez le mot de passe d'un administrateur.", f"suppression : {quoi}"))
+
+
 def info(parent, titre: str, texte: str) -> None:
     QMessageBox.information(parent, titre, texte)
 

@@ -82,6 +82,7 @@ ELEVE_COLS = [
     Col("centre_etat_civil", "Centre d'état civil"),
     Col("orphelin", "Orphelin", "liste", liste="OUI_NON", largeur=10),
     Col("orphelin_de", "Orphelin de", "liste", liste="ORPHELIN_DE", largeur=13),
+    Col("groupe_sanguin", "Groupe sanguin", largeur=10), Col("allergies", "Allergies / handicap", largeur=20),
     Col("pere_nom", "Père", largeur=24), Col("pere_profession", "Profession du père"),
     Col("pere_residence", "Résidence du père"), Col("pere_tel", "Téléphone du père", largeur=15),
     Col("mere_nom", "Mère", largeur=24), Col("mere_profession", "Profession de la mère"),

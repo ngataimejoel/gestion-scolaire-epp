@@ -411,6 +411,16 @@ def _lettre_personnel(db, annee, a: dict, v: dict, E) -> list:
                     (etab.get("autorisation_decision") or seed_p["autorisation_decision"], decision)])]
 
 
+def _parents_lignes(r: dict) -> list[tuple[str, str]]:
+    """Père et mère de l'élève (nom et prénoms, profession) pour l'en-tête des documents de l'élève."""
+    from epp.domain.fiche_scolaire import parents
+    out = []
+    for p in parents(r)[:2]:
+        val = p["nom_complet"] + (f" – {p['profession']}" if p["profession"] else "")
+        out.append((f"{'Père' if p['qui'] == 'pere' else 'Mère'} (nom, prénoms, profession)", val or "–"))
+    return out
+
+
 def _fiche(db, annee, a: dict, v: dict, E) -> list:
     if a["kind"] != "eleve":
         return _lettre_personnel(db, annee, a, v, E)
@@ -425,6 +435,7 @@ def _fiche(db, annee, a: dict, v: dict, E) -> list:
     blocs.append(_table(E, "ÉLÈVE CONCERNÉ", [
         ("Nom et prénoms", a["nom"]), ("Matricule école", a["matricule"]), ("Classe", a["classe"]),
         ("Enseignant(e)", fiche.get("enseignant", "")),
+        *_parents_lignes(dict(ins) if ins else {}),
         ("Parent / tuteur demandeur", demandeur), ("Téléphone", a.get("contact") or fiche.get("telephone", ""))]))
     phrase = (f"Je soussigné(e) {demandeur or '……………………………'}, parent / tuteur de l'élève {a['nom']} "
               f"({a['classe']}), sollicite pour mon enfant une autorisation d'absence {a['periode']}, "

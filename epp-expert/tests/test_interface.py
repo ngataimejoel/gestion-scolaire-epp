@@ -157,7 +157,7 @@ def test_toutes_les_pages_s_ouvrent(fenetre, messages):
     for cle, *_ in PAGES:
         fenetre.aller(cle)
         QApplication.processEvents()
-        assert fenetre.pile.currentWidget().widget() is fenetre.pages[cle], cle
+        assert fenetre.page_affichee() is fenetre.pages[cle], cle
     assert not [m for m in messages if m[0] == "critical"], _textes(messages)
 
 
@@ -168,9 +168,14 @@ def test_menu_selon_le_role(app, demo, messages):
     ens = Session(5, "ens", "Enseignant", "ENSEIGNANT", "Enseignant", set(security.DEFAULT_ROLES["ENSEIGNANT"][1]))
     w = FenetrePrincipale(Contexte(db, ens, annee, ESSAI))
     caches = {w.menu.item(i).data(Qt.UserRole) for i in range(w.menu.count()) if w.menu.item(i).isHidden()}
-    assert {"personnel", "sauvegarde"} <= caches and "notes" not in caches
+    assert "personnel" in caches and "notes" not in caches and "administration" not in caches
     w.aller("personnel")
     assert "personnel" not in w.pages
+    w.aller("sauvegarde")                         # volet sans droit : pas ouvert, et son onglet est masqué
+    assert "sauvegarde" not in w.pages
+    w.aller("administration")
+    from epp.ui.main import ADMIN_VOLETS
+    assert w.onglets_admin is not None and not w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("sauvegarde"))
     w.timer_licence.stop()
 
 
@@ -274,6 +279,7 @@ def test_sauvegarde_et_restauration(fenetre, messages, monkeypatch):
     db.execute("DELETE FROM eleve WHERE id IN (SELECT id FROM eleve LIMIT 5)")
     reco = []
     monkeypatch.setattr(fenetre, "reconnexion", lambda nouvelle: reco.append(nouvelle))
+    monkeypatch.setattr("epp.ui.pages.sauvegarde.valider_suppression", lambda *a, **k: True)   # admin
     monkeypatch.setattr(QInputDialog, "getText", staticmethod(lambda *a, **k: ("non", True)))
     p._restaurer(fichier)
     assert not reco                                              # mot de confirmation absent : rien
@@ -364,3 +370,92 @@ def test_logo_de_l_application_et_bouton_de_connexion_visible(app, demo, message
     c = img.pixelColor(img.width() // 2, 3)
     assert c.green() < 150 and c.red() < 100, c.name()          # fond vert foncé, texte blanc lisible
     d.close()
+
+
+# =================================================================== rapports et administration, suppressions
+def test_rapports_et_administration_en_volets(fenetre, messages):
+    from epp.ui.main import ADMIN_VOLETS, ADMINISTRATION
+    libelles = [fenetre.menu.item(i).text() for i in range(fenetre.menu.count())]
+    assert "Rapports et administration" in libelles
+    assert not {"Rapports", "Paramètres", "Sauvegarde", "Import / Export"} & set(libelles)
+    fenetre.aller("parametres")
+    t = fenetre.onglets_admin
+    assert fenetre.pile.currentWidget() is t and t.tabText(t.currentIndex()) == "Paramètres"
+    assert fenetre.page_affichee() is fenetre.pages["parametres"]
+    assert fenetre.menu.currentItem().data(Qt.UserRole) == ADMINISTRATION
+    t.setCurrentIndex(ADMIN_VOLETS.index("rapports"))           # clic sur l'onglet Rapports
+    QApplication.processEvents()
+    assert fenetre.page_affichee() is fenetre.pages["rapports"]
+    fenetre.aller("tableau")
+    fenetre.aller(ADMINISTRATION)                                # retour sur le dernier volet ouvert
+    assert fenetre.page_affichee() is fenetre.pages["rapports"]
+
+
+def test_suppression_d_un_eleve_validee_par_un_administrateur(fenetre, messages, monkeypatch):
+    p = fenetre.page("eleves")
+    db = p.db
+    r = p.table.lignes()[0]
+    p.table.selectionner(lambda x: x["eleve_id"] == r["eleve_id"])
+    demandes = []
+    monkeypatch.setattr("epp.ui.pages.eleves.valider_suppression", lambda *a: demandes.append(a[3]) or False)
+    p._supprimer()
+    assert demandes and r["nom"] in demandes[0]
+    assert db.scalar("SELECT COUNT(*) FROM eleve WHERE id=?", (r["eleve_id"],)) == 1    # refusé : rien effacé
+    monkeypatch.setattr("epp.ui.pages.eleves.valider_suppression", lambda *a: True)
+    p.table.selectionner(lambda x: x["eleve_id"] == r["eleve_id"])
+    p._supprimer()
+    assert db.scalar("SELECT COUNT(*) FROM eleve WHERE id=?", (r["eleve_id"],)) == 0
+
+
+def test_mot_de_passe_admin_exige_et_journalise(fenetre, messages, monkeypatch):
+    from epp.ui import widgets
+    db = fenetre.ctx.db
+    security.create_user(db, "chef", "Chef", "Admin#2026x", "ADMIN")
+    vus = []
+
+    def faux_dialogue(parent, db_, s, texte, motif):
+        vus.append(texte)
+        return security.verifier_admin(db_, s, "mauvais", motif)
+    monkeypatch.setattr(widgets, "mot_de_passe_admin", faux_dialogue)
+    assert not widgets.valider_suppression(fenetre, db, fenetre.ctx.session, "classe CP1")
+    assert "administrateur" in vus[0]
+    assert db.scalar("SELECT COUNT(*) FROM journal WHERE action='AUTORISATION_ADMIN_ECHEC' "
+                     "AND details LIKE 'suppression : classe CP1%'") == 1
+    monkeypatch.setattr(widgets, "mot_de_passe_admin",
+                        lambda parent, db_, s, texte, motif: security.verifier_admin(db_, s, "Admin#2026x", motif))
+    assert widgets.valider_suppression(fenetre, db, fenetre.ctx.session, "classe CP1")
+    assert db.scalar("SELECT COUNT(*) FROM journal WHERE action='AUTORISATION_ADMIN' "
+                     "AND details LIKE 'chef : suppression : classe CP1%'") == 1
+
+
+def test_suppressions_protegees_partout(fenetre, messages, monkeypatch):
+    """Absence, agent, classe, demande d'autorisation : rien n'est supprimé sans l'administrateur."""
+    for mod in ("absences", "personnel", "classes"):
+        monkeypatch.setattr(f"epp.ui.pages.{mod}.valider_suppression", lambda *a: False)
+    db = fenetre.ctx.db
+    n_pers = db.scalar("SELECT COUNT(*) FROM personnel")
+    p = fenetre.page("personnel")
+    p.table.selectionner(lambda x: True)
+    p._supprimer()
+    n_cl = db.scalar("SELECT COUNT(*) FROM classe")
+    c = fenetre.page("classes")
+    c.table.selectionner(lambda x: True)
+    c._supprimer()
+    assert db.scalar("SELECT COUNT(*) FROM personnel") == n_pers and db.scalar("SELECT COUNT(*) FROM classe") == n_cl
+
+
+def test_fiche_scolaire_depuis_la_fiche_eleve(fenetre, messages, monkeypatch, tmp_path):
+    from epp.reports import service
+    p = fenetre.page("eleves")
+    r = p.table.lignes()[0]
+    p.table.selectionner(lambda x: x["eleve_id"] == r["eleve_id"])
+    assert p.b_fiche.isEnabled()
+    appels = []
+
+    def faux_export(page, code, params, nom):
+        appels.append((code, params, nom))
+        return service.generer(page.ctx.db, page.ctx.session, page.ctx.annee, code, params, tmp_path / "f.pdf")
+    monkeypatch.setattr("epp.ui.dialogs.export.exporter_rapport", faux_export)
+    p._fiche_scolaire()
+    assert appels and appels[0][0] == "FICHE_SCOLAIRE" and appels[0][1]["eleve"] == r["inscription_id"]
+    assert (tmp_path / "f.pdf").exists() and r["nom"] in appels[0][2]

@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS eleve (
     centre_etat_civil TEXT,
     orphelin TEXT CHECK (orphelin IN ('OUI', 'NON') OR orphelin IS NULL),
     orphelin_de TEXT,
+    groupe_sanguin TEXT,
+    allergies TEXT,
     pere_nom TEXT, pere_profession TEXT, pere_residence TEXT, pere_tel TEXT,
     mere_nom TEXT, mere_profession TEXT, mere_residence TEXT, mere_tel TEXT,
     tuteur_nom TEXT, tuteur_profession TEXT, tuteur_residence TEXT, tuteur_tel TEXT,
