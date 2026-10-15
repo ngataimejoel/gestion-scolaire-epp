@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import io
 
-from reportlab.graphics.barcode.qr import QrCodeWidget
 from reportlab.graphics.shapes import Drawing
 from reportlab.graphics import renderPDF
 from reportlab.lib import colors
@@ -138,6 +137,7 @@ def titre_encadre(c, xc: float, y_haut: float, texte: str, police: str, taille: 
 
 
 def qr_dessin(texte: str, cote: float) -> Drawing:
+    from reportlab.graphics.barcode.qr import QrCodeWidget   # à la demande : l'en-tête seul n'en a pas besoin
     w = QrCodeWidget(texte, barLevel="M", barBorder=1)
     b = w.getBounds()
     d = Drawing(cote, cote, transform=[cote / (b[2] - b[0]), 0, 0, cote / (b[3] - b[1]), 0, 0])
