@@ -586,3 +586,35 @@ def test_codes_dren_iepp_et_listes_officielles(fenetre):
     assert sp.isEditable() and sp.findText("TOUBA") >= 0
     assert d.f_id.widgets["nationalite"].findText("BURKINABE") >= 0
     d.reject()
+
+
+# =================================================================== téléphones (application Android)
+def test_page_telephones_association_et_retrait(fenetre, messages):
+    from test_synchro import Client
+    from epp.synchro import protocole as P
+    security.create_user(fenetre.ctx.db, "ens", "Enseignant", "Ensei!2026", "ENSEIGNANT")
+    fenetre.aller("telephones")
+    p = fenetre.page("telephones")
+    t = fenetre.onglets_admin
+    assert fenetre.page_affichee() is p and t.tabText(t.currentIndex()) == "Téléphones"
+    assert not fenetre.synchro.en_marche and p.b_marche.isEnabled()
+    try:
+        p.compte.setCurrentIndex(p.compte.findText("ens", Qt.MatchContains))
+        p._code()                                          # démarre le serveur et affiche un code
+        assert fenetre.synchro.en_marche, _textes(messages)
+        code = fenetre.synchro.srv.code.code
+        assert p.l_code.text() == P.afficher_code(code) and "Adresse" in p.l_code_info.text()
+        c = Client(fenetre.synchro.srv.port)
+        assert c.appairer(code)[0] == 200
+        st, rep = c.synchro()
+        assert st == 200 and rep["instantane"]["eleves"]
+        p.rafraichir()
+        lignes = p.table.lignes()
+        assert len(lignes) == 1 and lignes[0]["etat"] == "actif" and "ens" in lignes[0]["utilisateur"]
+        p.table.selectionner(lambda r: True)
+        p._revoquer()
+        assert p.table.lignes()[0]["etat"] == "retiré" and c.synchro()[0] == 401
+    finally:
+        fenetre.synchro.arreter()
+    assert not fenetre.synchro.en_marche
+    assert not [m for m in messages if m[0] == "critical"], _textes(messages)
