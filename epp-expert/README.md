@@ -25,6 +25,11 @@ python -m venv .venv
 - Manuel, sous Windows : `powershell -ExecutionPolicy Bypass -File packaging\build_windows.ps1`
   (Python 3.13 64 bits et Inno Setup 6 requis).
 
+## Application Android
+
+`android/` : application AKWA SCHOOL pour téléphone, synchronisée avec l'ordinateur de l'école par le Wi-Fi
+(sans Internet). L'APK est construit par la même CI et joint aux versions publiées. Détails : `docs/ANDROID.md`.
+
 ## Données
 
 La base est dans `%LOCALAPPDATA%\GestionScolaireEPP` (jamais dans le dossier d'installation) ; elle est

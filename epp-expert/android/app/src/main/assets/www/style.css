@@ -1,0 +1,130 @@
+/* AKWA SCHOOL – application Android. Couleurs et composants repris du prototype v7 (vert AKWA, orange AKWA). */
+:root{
+ --acc:#0E6646;--on-acc:#FFFFFF;--acc-pale:#E3EEE8;
+ --bg:#F2F4EF;--surface:#FFFFFF;--sunk:#E9EDE6;--ink:#14201A;--mut:#5A6961;--line:#DCE3DA;
+ --org:#E8892F;--org-ink:#9C520D;--org-pale:#FBEBDC;
+ --cg:#08704B;--cf:#CC6E16;--ok:#11804F;--warn:#9F5C06;--bad:#BF3A33;--bad-pale:#F8E1DF;
+ --r:14px;
+ --font:Roboto,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+ color-scheme:light}
+@media (prefers-color-scheme:dark){:root{
+ --acc:#43B98C;--on-acc:#07130D;--acc-pale:#18322A;
+ --bg:#0C110E;--surface:#141B17;--sunk:#1B241F;--ink:#E4ECE7;--mut:#91A098;--line:#27322C;
+ --org:#F0A050;--org-ink:#F0A863;--org-pale:#33251A;--cg:#2FA87C;--cf:#C47228;--ok:#46C08A;--warn:#E3A44A;
+ --bad:#EC6A60;--bad-pale:#3A1F1D;color-scheme:dark}}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 var(--font)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+h1,h2,h3{margin:0;letter-spacing:-.2px}
+.num{font-variant-numeric:tabular-nums}
+.mut{color:var(--mut)}.small{font-size:13px}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.hidden{display:none!important}
+svg.i{width:20px;height:20px;flex:none;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---------- ossature ---------- */
+.top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--line)}
+.top img{width:34px;height:34px;border-radius:9px}
+.top .t{min-width:0;flex:1}
+.top b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top small{display:block;color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sync{position:relative;border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 10px;display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;color:var(--acc)}
+.sync .badge{position:absolute;top:-6px;right:-6px;background:var(--org);color:#fff;border-radius:10px;font-size:11px;min-width:19px;height:19px;display:grid;place-items:center;padding:0 5px}
+.sync.tourne svg{animation:tour 1s linear infinite}
+@keyframes tour{to{transform:rotate(360deg)}}
+.vue{padding:14px 14px 96px;max-width:760px;margin:0 auto}
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0)}
+.bnav button{flex:1;border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px 9px;font-size:11.5px;font-weight:600;color:var(--mut)}
+.bnav button.on{color:var(--acc)}
+.bnav button.on svg{stroke-width:2.4}
+
+/* ---------- éléments ---------- */
+.ph{margin:4px 0 12px}.ph h2{font-size:21px}.ph p{margin:2px 0 0;color:var(--mut);font-size:13.5px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:12px}
+.card h3{font-size:15px;margin-bottom:8px}
+.hero{background:var(--acc);color:var(--on-acc);border:0}
+.hero h2{font-size:20px}.hero p{margin:4px 0 0;opacity:.9;font-size:13.5px}
+.kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px}
+.kpi small{color:var(--mut);font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.4px}
+.kpi b{display:block;font-size:26px;line-height:1.15;margin-top:2px}
+.kpi span{font-size:12.5px;color:var(--mut)}
+.btn{border:1px solid var(--line);background:var(--surface);padding:10px 14px;border-radius:12px;font-weight:600;display:inline-flex;gap:8px;align-items:center;justify-content:center}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.btn.org{background:var(--org);border-color:var(--org);color:#fff}
+.btn.dng{color:var(--bad);border-color:var(--bad)}
+.btn.sm{padding:6px 10px;font-size:13px;border-radius:10px}
+.btn.bloc{width:100%}
+.btn:disabled{opacity:.5}
+.rang{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.esp{flex:1}
+label.f{display:block;margin:10px 0 4px;font-size:13px;font-weight:600;color:var(--mut)}
+input.c,select.c,textarea.c{width:100%;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface);outline:none}
+input.c:focus,select.c:focus,textarea.c:focus{border-color:var(--acc)}
+input.code{font-size:24px;letter-spacing:4px;text-align:center;text-transform:uppercase;font-weight:700}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:10px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:20px;padding:6px 13px;font-size:13px;font-weight:600;color:var(--mut)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:var(--on-acc)}
+.seg{display:flex;background:var(--sunk);border-radius:12px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;padding:8px 4px;border-radius:9px;font-weight:600;font-size:13px;color:var(--mut)}
+.seg button.on{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px #0002}
+.liste{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
+.ligne{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-top:0}
+.ligne:last-child{border-bottom:0}
+.ligne .t{flex:1;min-width:0}
+.ligne b{display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ligne small{display:block;color:var(--mut);font-size:12.5px}
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none;background:var(--acc-pale);color:var(--acc)}
+.av.f{background:var(--org-pale);color:var(--org-ink)}
+.pill{display:inline-block;border-radius:10px;padding:1px 8px;font-size:11.5px;font-weight:700;background:var(--sunk);color:var(--mut)}
+.pill.ok{background:var(--acc-pale);color:var(--acc)}.pill.org{background:var(--org-pale);color:var(--org-ink)}.pill.bad{background:var(--bad-pale);color:var(--bad)}
+.vide{padding:22px 12px;text-align:center;color:var(--mut)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px}
+.kv dt{color:var(--mut)}.kv dd{margin:0;font-weight:600;min-width:0;overflow-wrap:anywhere}
+table.t{width:100%;border-collapse:collapse;font-size:14px}
+table.t th{font-size:12px;color:var(--mut);text-align:left;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+table.t td{padding:6px;border-bottom:1px solid var(--line)}
+.barre{height:8px;border-radius:5px;background:var(--sunk);overflow:hidden;display:flex}
+.barre i{display:block;height:100%}
+
+/* ---------- saisie des notes ---------- */
+.note{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.note:last-child{border-bottom:0}
+.note .t{flex:1;min-width:0}
+.note b{display:block;font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.note small{display:block;font-size:12px;color:var(--mut)}
+.note input{width:74px;padding:9px 6px;border-radius:10px;border:1px solid var(--line);background:var(--surface);text-align:center;font-size:17px;font-weight:700}
+.note input.attente{border-color:var(--org);background:var(--org-pale)}
+.note input.err{border-color:var(--bad);background:var(--bad-pale)}
+.note input:disabled{background:var(--sunk);color:var(--mut)}
+.abs{border:1px solid var(--line);background:var(--surface);border-radius:9px;font-size:11.5px;font-weight:700;padding:6px 7px;color:var(--mut)}
+.abs.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.appel{display:flex;gap:4px}
+.appel button{border:1px solid var(--line);background:var(--surface);border-radius:9px;font-size:12px;font-weight:700;padding:7px 8px;color:var(--mut)}
+.appel button.a.on{background:var(--bad);border-color:var(--bad);color:#fff}
+.appel button.r.on{background:var(--org);border-color:var(--org);color:#fff}
+.attente-txt{color:var(--org-ink);font-weight:600}
+
+/* ---------- écrans d'accueil, association, verrouillage ---------- */
+.ecran{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 20px;text-align:center}
+.ecran .logo{width:96px;height:96px;border-radius:24px;margin-bottom:14px}
+.ecran h1{font-size:26px;letter-spacing:.8px}
+.ecran p{color:var(--mut);max-width:420px}
+.ecran .card{text-align:left;width:100%;max-width:440px}
+.etapes{counter-reset:e;list-style:none;padding:0;margin:0}
+.etapes li{counter-increment:e;display:flex;gap:10px;margin:8px 0;font-size:14px}
+.etapes li::before{content:counter(e);flex:none;width:24px;height:24px;border-radius:50%;background:var(--acc-pale);color:var(--acc);font-weight:700;display:grid;place-items:center;font-size:13px}
+
+/* ---------- fenêtres ---------- */
+.voile{position:fixed;inset:0;z-index:30;background:#0007;display:flex;align-items:flex-end;justify-content:center}
+.feuille{background:var(--bg);width:100%;max-width:760px;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px 26px;animation:monte .18s ease-out}
+.feuille .poignee{width:42px;height:5px;border-radius:3px;background:var(--line);margin:-6px auto 12px}
+@keyframes monte{from{transform:translateY(40px);opacity:.4}}
+.toast{position:fixed;left:14px;right:14px;bottom:78px;z-index:40;background:var(--ink);color:var(--bg);padding:12px 14px;border-radius:12px;font-size:14px;box-shadow:0 8px 24px #0004;animation:monte .18s ease-out}
+.toast.bad{background:var(--bad);color:#fff}
+.bandeau{border-radius:12px;padding:10px 12px;font-size:13.5px;margin-bottom:12px;background:var(--org-pale);color:var(--org-ink)}
+.bandeau.bad{background:var(--bad-pale);color:var(--bad)}
+.bandeau.ok{background:var(--acc-pale);color:var(--acc)}
+@media (min-width:600px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}

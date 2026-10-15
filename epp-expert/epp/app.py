@@ -78,6 +78,18 @@ def selftest(out=sys.stdout) -> int:
             assert licence.verifier(lic, sig, pub, m) and not licence.verifier(lic, sig[:-4] + "AAAA", pub, m)
             assert licence.etat().statut in ("essai", "active", "essai_termine", "expiree")
             ok("contrôle de licence (signature Ed25519) opérationnel")
+            import json
+            import urllib.request
+            from epp.synchro.serveur import ServeurSynchro
+            srv = ServeurSynchro(Path(tmp) / "selftest.sqlite", port=0, port_decouverte=None, hote="127.0.0.1")
+            srv.demarrer()
+            try:
+                sans_proxy = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+                with sans_proxy.open(f"http://127.0.0.1:{srv.port}/akwa", timeout=10) as r:
+                    assert json.loads(r.read())["service"] == "AKWA SCHOOL"
+            finally:
+                srv.arreter()
+            ok("synchronisation des téléphones (serveur local) opérationnelle")
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance() or QApplication([])

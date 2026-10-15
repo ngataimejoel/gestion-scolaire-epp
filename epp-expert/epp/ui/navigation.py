@@ -26,6 +26,7 @@ PAGES = [
     ("statistiques", "Statistiques", "", "statistiques:PageStatistiques", "eleves.lire"),
     ("import_export", "Import et export", "", "import_export:PageImportExport", None),
     ("sauvegarde", "Sauvegarde", "", "sauvegarde:PageSauvegarde", "sauvegarde.creer"),
+    ("telephones", "Téléphones", "", "telephones:PageTelephones", None),
     ("parametres", "Paramètres", "", "parametres:PageParametres", None),
     ("aide", "Aide et tutoriels", "", "aide:PageAide", None),
 ]
@@ -37,7 +38,7 @@ VOLETS = [
     ("notes_bulletins", "Notes & bulletins", "Ctrl+3", "award", ["notes", "resultats"]),
     ("absences", "Absences", "Ctrl+4", "cal", ["absences"]),
     ("administration", "Rapports & administration", "Ctrl+5", "book",
-     ["rapports", "generateur", "statistiques", "import_export", "sauvegarde"]),
+     ["rapports", "generateur", "statistiques", "import_export", "sauvegarde", "telephones"]),
     ("parametres", "Paramètres", "Ctrl+6", "set", ["parametres"]),
     ("aide", "Aide", "F1", "help", ["aide"]),
 ]
@@ -45,7 +46,8 @@ VOLETS = [
 DESCRIPTIONS = {
     "eleves_personnel": "Élèves, inscriptions, classes et personnel de l'école",
     "notes_bulletins": "Saisie des notes, moyennes, classements, bulletins et passage en fin d'année",
-    "administration": "Rapports officiels, générateur de rapports, statistiques, import, export et sauvegarde",
+    "administration": "Rapports officiels, générateur de rapports, statistiques, import, export, sauvegarde et "
+                      "téléphones",
 }
 
 

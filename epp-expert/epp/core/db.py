@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 class Database:
@@ -263,6 +263,27 @@ def _ministere_v7(conn: sqlite3.Connection) -> None:
                  (seed.MINISTERE_DEFAUT, seed.ANCIEN_MINISTERE))
 
 
+_APPAREIL_SQL = [
+    """CREATE TABLE IF NOT EXISTS appareil (
+    id INTEGER PRIMARY KEY,
+    nom TEXT NOT NULL,
+    utilisateur_id INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE,
+    cle TEXT NOT NULL,
+    dernier_seq INTEGER NOT NULL DEFAULT 0,
+    actif INTEGER NOT NULL DEFAULT 1,
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    cree_par TEXT,
+    dernier_contact TEXT
+)""",
+    """CREATE TABLE IF NOT EXISTS synchro_op (
+    uid TEXT PRIMARY KEY,
+    appareil_id INTEGER NOT NULL REFERENCES appareil(id) ON DELETE CASCADE,
+    recu_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    resultat TEXT NOT NULL
+)""",
+]
+
+
 MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexion)
     2: _PHOTO_SQL,          # photos des élèves et du personnel
     3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
@@ -271,6 +292,7 @@ MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexio
     6: [_motifs_absence_v6],                      # nouveaux motifs d'autorisation d'absence
     7: [_ajouter_colonne("eleve", "groupe_sanguin", "TEXT"),   # fiche scolaire : santé de l'élève
         _ajouter_colonne("eleve", "allergies", "TEXT"), _ministere_v7],
+    8: _APPAREIL_SQL,                             # téléphones associés (application Android)
 }
 
 

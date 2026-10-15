@@ -330,3 +330,24 @@ CREATE TABLE IF NOT EXISTS conge (
     CHECK (date_fin >= date_debut)
 );
 CREATE INDEX IF NOT EXISTS idx_conge_annee ON conge(annee_id, date_debut);
+
+-- version 8 : téléphones associés (application Android AKWA SCHOOL synchronisée par le Wi-Fi de l'école)
+CREATE TABLE IF NOT EXISTS appareil (
+    id INTEGER PRIMARY KEY,
+    nom TEXT NOT NULL,
+    utilisateur_id INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE,
+    cle TEXT NOT NULL,                         -- clé secrète partagée (AES-256-GCM), base64
+    dernier_seq INTEGER NOT NULL DEFAULT 0,    -- compteur anti-rejeu des requêtes du téléphone
+    actif INTEGER NOT NULL DEFAULT 1,
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    cree_par TEXT,
+    dernier_contact TEXT
+);
+
+-- Opérations reçues des téléphones (identifiant unique : une opération renvoyée n'est jamais appliquée deux fois)
+CREATE TABLE IF NOT EXISTS synchro_op (
+    uid TEXT PRIMARY KEY,
+    appareil_id INTEGER NOT NULL REFERENCES appareil(id) ON DELETE CASCADE,
+    recu_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    resultat TEXT NOT NULL                     -- JSON renvoyé au téléphone
+);

@@ -106,11 +106,79 @@ jobs:
             epp-expert/selftest_*.txt
           if-no-files-found: error
 
+  # Application Android (android/) : client de synchronisation testé contre le vrai serveur Python, puis APK signé.
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: epp-expert
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Dépendances du serveur de synchronisation (sans l'interface Qt)
+        run: grep -v '^PySide6' requirements.txt | python -m pip install -r /dev/stdin
+
+      - name: Client Java du téléphone contre le serveur de l'ordinateur
+        run: |
+          javac -encoding UTF-8 -d build/jvm android/app/src/main/java/com/akwaschool/mobile/synchro/*.java \
+            android/test-jvm/TestSynchro.java
+          mkfifo arret
+          python outils/serveur_synchro_test.py info.json < arret > serveur.log 2>&1 &
+          serveur=$!
+          exec 3> arret                      # entrée du serveur ouverte tant que le test tourne
+          for i in $(seq 90); do [ -s info.json ] && break; sleep 1; done
+          java -Dfile.encoding=UTF-8 -cp build/jvm TestSynchro info.json
+          exec 3>&-                          # fin du test : le serveur s'arrête et vérifie la note reçue
+          wait $serveur
+          cat serveur.log
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Construire l'APK signé
+        working-directory: epp-expert/android
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/akwa.p12"
+            export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/akwa.p12"
+          fi
+          gradle --no-daemon --stacktrace assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk AkwaSchool.apk
+          outils=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$outils/apksigner" verify --print-certs AkwaSchool.apk
+          "$outils/aapt2" dump badging AkwaSchool.apk | head -3
+          unzip -l AkwaSchool.apk | grep -E "assets/www/(index.html|app.js|style.css|logo.png)"
+          ls -l AkwaSchool.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AkwaSchool-Android
+          path: epp-expert/android/AkwaSchool.apk
+          if-no-files-found: error
+
   # Étiquette expert-vX.Y.Z (poussée, ou créée en publiant une version sur la page GitHub) : l'installateur
   # testé ci-dessus est publié en version publique (téléchargeable sans compte GitHub), sous son nom
-  # versionné et sous le nom fixe AkwaSchool-Setup.exe (lien « latest »).
+  # versionné et sous le nom fixe AkwaSchool-Setup.exe (lien « latest »), avec l'application Android
+  # (AkwaSchool.apk).
   publier:
-    needs: windows
+    needs: [windows, android]
     if: startsWith(github.ref, 'refs/tags/expert-v')
     runs-on: ubuntu-latest
     concurrency:                 # étiquette et version publiée déclenchent chacune une exécution : l'une après l'autre
@@ -127,6 +195,10 @@ jobs:
         with:
           name: AkwaSchool-Setup
           path: setup
+      - uses: actions/download-artifact@v4
+        with:
+          name: AkwaSchool-Android
+          path: android
       - name: Publier la version
         env:
           GH_TOKEN: ${{ github.token }}
@@ -135,17 +207,24 @@ jobs:
           exe=$(ls setup/dist/AkwaSchool-Setup-*.exe 2>/dev/null || ls setup/AkwaSchool-Setup-*.exe)
           cp "$exe" AkwaSchool-Setup.exe
           version="${TAG#expert-v}"
+          cp android/AkwaSchool.apk AkwaSchool.apk
+          cp android/AkwaSchool.apk "AkwaSchool-${version}.apk"
           cat > notes.md <<NOTES
           AKWA SCHOOL – Gestion scolaire EPP, version ${version}, pour Windows 10 et 11.
 
           Téléchargez **AkwaSchool-Setup.exe** ci-dessous, puis lancez-le. Si l'application est déjà installée,
           ce même fichier la met à jour : les données de l'école sont conservées.
+
+          **Téléphones Android (8 ou plus récent)** : téléchargez **AkwaSchool.apk** sur le téléphone et ouvrez-le
+          pour l'installer. Le téléphone se synchronise avec l'ordinateur de l'école par le Wi-Fi, sans Internet
+          (sur l'ordinateur : Rapports & administration › Téléphones).
           NOTES
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # version créée depuis la page GitHub (Releases › Draft a new release) : on y joint l'installateur
-            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber AkwaSchool-Setup.exe "$exe"
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber AkwaSchool-Setup.exe "$exe" \
+              AkwaSchool.apk "AkwaSchool-${version}.apk"
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md --latest
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "AKWA SCHOOL ${version}" \
-              --notes-file notes.md --latest AkwaSchool-Setup.exe "$exe"
+              --notes-file notes.md --latest AkwaSchool-Setup.exe "$exe" AkwaSchool.apk "AkwaSchool-${version}.apk"
           fi

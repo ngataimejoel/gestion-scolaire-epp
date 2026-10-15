@@ -25,6 +25,7 @@ from epp.ui.navigation import (PAGES, VOLETS, BarreLaterale, Recherche, Tiroir, 
                                volet_de)
 from epp.ui.dialogs.acces import (DialogueActivation, DialogueConnexion, DialogueMotDePasse,
                                   DialoguePremierLancement)
+from epp.ui.synchro import PARAM_AUTO, GestionSynchro
 from epp.ui.widgets import Contexte, afficher_erreur, bouton
 
 log = logging.getLogger(__name__)
@@ -98,6 +99,12 @@ class FenetrePrincipale(QMainWindow):
         self._maj_licence()
         self._maj_entete()
         self._maj_menu()
+        self.synchro = GestionSynchro(ctx, self)
+        if ctx.db.get_param(PARAM_AUTO) == "1":
+            try:
+                self.synchro.demarrer()
+            except OSError:
+                log.exception("Synchronisation des téléphones : démarrage automatique impossible")
         self.aller("accueil")
         self.timer_licence = QTimer(self)
         self.timer_licence.timeout.connect(self.verifier_licence)
@@ -403,6 +410,7 @@ class FenetrePrincipale(QMainWindow):
         except Exception:      # noqa: BLE001 - ne bloque pas la fermeture
             log.exception("Sauvegarde automatique à la fermeture impossible")
         self.timer_licence.stop()
+        self.synchro.arreter()
         super().closeEvent(e)
         QApplication.instance().quit()
 
