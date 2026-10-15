@@ -48,10 +48,14 @@ class Client:
         return st, rep
 
     def synchro(self, ops=(), admin=None, seq=None):
-        self.seq = seq if seq is not None else self.seq + 1
-        corps = {"seq": self.seq, "ops": list(ops), "client": {"version": "test"}}
+        corps = {"ops": list(ops), "client": {"version": "test"}}
         if admin:
             corps["admin"] = admin
+        return self.synchro_brut(corps, seq)
+
+    def synchro_brut(self, corps: dict, seq=None):
+        self.seq = seq if seq is not None else self.seq + 1
+        corps = {**corps, "seq": self.seq}
         msg = P.sceller(self.cle, P.json_octets(corps), P.aad_requete(self.appareil_id))
         st, data = self._post("/api/synchro", msg, {"X-Akwa-Appareil": str(self.appareil_id),
                                                     "Content-Type": "application/octet-stream"})
@@ -245,3 +249,146 @@ def test_decouverte_sur_le_reseau(ecole):
     assert rep["port"] == srv.port and rep["serveur_id"] == srv.serveur_id and rep["service"] == "AKWA SCHOOL"
     with urllib.request.urlopen(f"http://127.0.0.1:{srv.port}/akwa", timeout=5) as r:
         assert json.loads(r.read())["protocole"] == P.VERSION_PROTOCOLE
+
+
+# =================================================================== version 1.1.1 : téléphone utilisable seul
+def test_inscription_et_fiche_depuis_le_telephone(ecole):
+    db, annee, srv, etat, modifs = ecole
+    from epp.domain import repo
+    assert _client(db, srv).synchro([{"uid": _uid(), "op": "eleve", "donnees": {"nom": "X", "sexe": "M",
+                                                                               "classe": "CP1"}}])[1]["resultats"][0]["code"] == "DROITS"
+    c = _client(db, srv, "admin")
+    i = c.synchro()[1]["instantane"]
+    assert i["classes"][0]["regle_mga"] in ("STANDARD", "MOYENNE4")
+    u = _uid()
+    cree = {"uid": u, "op": "eleve", "donnees": {"nom": "TANOH Ange Désiré", "sexe": "M", "date_naissance": "2019-03-04",
+                                                  "classe": "CP1", "pere_tel": "0707070707"}}
+    g = next(g for g in i["grilles"] if g["id"] == next(x for x in i["classes"] if x["code"] == "CP1")["grille_id"])
+    note = {"uid": _uid(), "op": "note", "inscription_id": "u:" + u, "matiere_id": g["matieres"]["1"][0]["id"],
+            "valeur": 7, "avant": None}
+    absence = {"uid": _uid(), "op": "absence", "kind": "eleve", "cible": "u:" + u, "date": annee.date_debut[:4] + "-10-02",
+               "nature": "ABSENCE", "jours": 1}
+    st, rep = c.synchro([cree, note, absence])
+    assert [r["ok"] for r in rep["resultats"]] == [True, True, True], rep["resultats"]
+    iid = rep["resultats"][0]["inscription_id"]
+    assert any(e["inscription_id"] == iid and e["nom"] == "TANOH Ange Désiré" for e in rep["instantane"]["eleves"])
+    assert db.scalar("SELECT valeur FROM note WHERE inscription_id=?", (iid,)) == 7
+    # renvoi (réponse perdue) : rien n'est créé deux fois ; même élève inscrit une seconde fois : reconnu
+    assert c.synchro([cree])[1]["resultats"][0]["inscription_id"] == iid
+    st, rep = c.synchro([{**cree, "uid": _uid()}])
+    assert rep["resultats"][0]["inscription_id"] == iid and "déjà inscrit" in rep["resultats"][0]["message"]
+    assert [e["nom"] for e in repo.inscriptions(db, annee)].count("TANOH Ange Désiré") == 1
+    # correction de la fiche : mot de passe administrateur, et pas d'écrasement d'une correction de l'ordinateur
+    modif = {"uid": _uid(), "op": "eleve", "inscription_id": iid, "donnees": {"mere_tel": "0505050505", "classe": "CP2"},
+             "avant": {"mere_tel": None}}
+    assert c.synchro([modif])[1]["resultats"][0]["code"] == "ADMIN_REQUIS"
+    assert c.synchro([{**modif, "avant": {"mere_tel": "01"}}], admin=MDP_ADMIN)[1]["resultats"][0]["code"] == "CONFLIT"
+    r = c.synchro([modif], admin=MDP_ADMIN)[1]["resultats"][0]
+    assert r["ok"], r
+    row = db.one("SELECT e.mere_tel, e.pere_tel, c.code FROM inscription i JOIN eleve e ON e.id=i.eleve_id "
+                 "JOIN classe c ON c.id=i.classe_id WHERE i.id=?", (iid,))
+    assert (row["mere_tel"], row["pere_tel"], row["code"]) == ("0505050505", "0707070707", "CP2")
+    assert any("eleves" in q for q, *_ in modifs)
+
+
+def _base_telephone(db, annee):
+    """Base d'un téléphone utilisé seul : même forme que l'instantané, identifiants propres au téléphone."""
+    from epp.domain import repo
+    i = donnees_instantane(db, annee)
+    gid = {g["id"]: 900 + n for n, g in enumerate(i["grilles"])}
+    mid = {}
+    grilles = []
+    for g in i["grilles"]:
+        ms = {}
+        for num, l in g["matieres"].items():
+            ms[num] = []
+            for m in l:
+                mid[m["id"]] = 5000 + len(mid)
+                ms[num].append({**m, "id": mid[m["id"]]})
+        grilles.append({**g, "id": gid[g["id"]], "matieres": ms})
+    cp1 = next(c for c in i["classes"] if c["code"] == "CP1")
+    classes = [{**c, "id": 70 + n, "grille_id": gid[c["grille_id"]]} for n, c in enumerate(i["classes"])]
+    classes.append({**cp1, "id": 99, "code": "CP1B", "libelle": "CP1 B", "grille_id": gid[cp1["grille_id"]]})
+    connu = repo.inscriptions(db, annee, "CP1")[0]
+    m1 = next(g for g in grilles if g["id"] == gid[cp1["grille_id"]])["matieres"]
+    note_connue = db.one("SELECT matiere_id, valeur FROM note WHERE inscription_id=? LIMIT 1", (connu["inscription_id"],))
+    return {
+        "version": 1, "mode": "autonome", "ecole": i["ecole"], "annee": {**i["annee"], "id": 1},
+        "classes": classes, "grilles": grilles, "evaluations": i["evaluations"],
+        "eleves": [
+            {"inscription_id": 1, "nom": connu["nom"].lower(), "sexe": connu["sexe"], "date_naissance": connu["date_naissance"],
+             "classe": "CP1", "statut": "PRESENT"},
+            {"inscription_id": 2, "nom": "BROU Akissi", "sexe": "F", "date_naissance": "2019-05-06", "classe": "CP1B",
+             "statut": "PRESENT", "matricule_ecole": "CP1B-001-26"},
+            {"inscription_id": 3, "nom": "SORO Issa", "sexe": "M", "date_naissance": "2019-07-08", "classe": "CP1",
+             "statut": "PRESENT"},
+        ],
+        "notes": {"1": {str(mid[note_connue["matiere_id"]]): note_connue["valeur"] + 1,
+                        str(m1["1"][-1]["id"]): 4},
+                  "2": {str(m1["1"][0]["id"]): 8, str(m1["2"][0]["id"]): 6.5},
+                  "3": {str(m1["2"][1]["id"]): 99}},
+        "absents_evaluation": {"3": [1]},
+        "personnel": [{"id": 1, "matricule": "TEL-001", "nom": "KONAN Paul", "sexe": "M", "fonction": "INSTITUTEUR ADJOINT",
+                       "classe_tenue": "CP1B"}],
+        "absences_eleves": [{"id": 1, "inscription_id": 2, "date": annee.date_debut[:4] + "-10-05", "nature": "ABSENCE",
+                             "jours": 1, "motif": "Maladie"}],
+        "absences_personnel": [{"id": 1, "personnel_id": 1, "date": annee.date_debut[:4] + "-10-05", "nature": "RETARD",
+                                "retard_min": 20}],
+    }, connu, note_connue
+
+
+def donnees_instantane(db, annee):
+    from epp.synchro import donnees
+    return donnees.instantane(db, security.system_session(), ESSAI)
+
+
+def test_envoi_des_donnees_d_un_telephone_utilise_seul(ecole):
+    db, annee, srv, etat, modifs = ecole
+    from epp.domain import repo
+    base, connu, note_connue = _base_telephone(db, annee)
+    c = _client(db, srv, "admin")
+    corps = {"fusion": base}
+    st, rep = c.synchro_brut(corps)
+    assert rep.get("code") == "ADMIN_REQUIS"
+    st, rep = c.synchro_brut({"fusion": {**base, "annee": {"libelle": "2001-2002"}}, "admin": MDP_ADMIN})
+    assert rep["code"] == "FUSION" and "2001-2002" in rep["erreur"]
+    avant = len(repo.inscriptions(db, annee))
+    st, rep = c.synchro_brut({**corps, "admin": MDP_ADMIN})
+    r = rep["fusion"]
+    assert r["classes_creees"] == 1 and r["eleves_ajoutes"] == 2 and r["eleves_reconnus"] == 1, r
+    assert len(repo.inscriptions(db, annee)) == avant + 2
+    # note différente sur l'ordinateur : signalée, jamais remplacée ; note hors barème refusée
+    assert db.scalar("SELECT valeur FROM note WHERE inscription_id=? AND matiere_id=?",
+                     (connu["inscription_id"], note_connue["matiere_id"])) == note_connue["valeur"]
+    assert r["differences"] and r["differences"][0]["eleve"] == connu["nom"].lower()
+    assert r["notes_ajoutees"] >= 2 and any("99" in e or "comprise" in e for e in r["erreurs"]), r
+    brou = next(e for e in repo.inscriptions(db, annee) if e["nom"] == "BROU Akissi")
+    assert brou["classe"] == "CP1B" and brou["matricule_ecole"] == "CP1B-001-26"
+    soro = next(e for e in repo.inscriptions(db, annee) if e["nom"] == "SORO Issa")
+    assert db.scalar("SELECT present FROM presence_eval WHERE inscription_id=? AND eval_num=1", (soro["inscription_id"],)) == 0
+    assert r["absences_ajoutees"] == 2 and r["personnel_ajoute"] == 1
+    assert rep["instantane"]["eleves"] and any(e["nom"] == "BROU Akissi" for e in rep["instantane"]["eleves"])
+    # nouvel envoi : rien n'est ajouté deux fois
+    r2 = c.synchro_brut({**corps, "admin": MDP_ADMIN})[1]["fusion"]
+    assert (r2["eleves_ajoutes"], r2["absences_ajoutees"], r2["personnel_ajoute"], r2["classes_creees"]) == (0, 0, 0, 0)
+    assert r2["eleves_reconnus"] == 3 and r2["absences_existantes"] == 2
+    assert db.scalar("SELECT COUNT(*) FROM journal WHERE action='FUSION_TELEPHONE'") == 2
+
+
+def test_cle_publique_du_telephone_identique_a_l_ordinateur():
+    from pathlib import Path
+    racine = Path(__file__).resolve().parents[1]
+    cle = json.loads((racine / "epp" / "resources" / "activation.json").read_text(encoding="utf-8"))["cle_publique"]
+    java = (racine / "android" / "app" / "src" / "main" / "java" / "com" / "akwaschool" / "mobile" / "noyau" /
+            "Licence.java").read_text(encoding="utf-8")
+    assert f'CLE_PUBLIQUE = "{cle}"' in java
+
+
+def test_structure_par_defaut_du_telephone_identique_a_l_ordinateur():
+    import importlib.util
+    from pathlib import Path
+    racine = Path(__file__).resolve().parents[1]
+    spec = importlib.util.spec_from_file_location("defauts_telephone", racine / "outils" / "defauts_telephone.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    assert m.FICHIER.read_text(encoding="utf-8") == m.contenu(), "relancez python outils/defauts_telephone.py"

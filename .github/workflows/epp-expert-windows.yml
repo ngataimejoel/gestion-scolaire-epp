@@ -143,6 +143,14 @@ jobs:
           wait $serveur
           cat serveur.log
 
+      - name: Noyau Java du téléphone seul (licence, lecture des fichiers, sauvegarde) comparé au code Python
+        run: |
+          javac -encoding UTF-8 -d build/jvm-noyau android/app/src/main/java/com/akwaschool/mobile/synchro/*.java \
+            android/app/src/main/java/com/akwaschool/mobile/noyau/*.java android/test-jvm/TestNoyau.java
+          python outils/fixtures_noyau.py preparer build/noyau
+          java -Dfile.encoding=UTF-8 -cp build/jvm-noyau TestNoyau build/noyau
+          python outils/fixtures_noyau.py verifier build/noyau
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.14.3"

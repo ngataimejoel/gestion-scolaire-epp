@@ -6,7 +6,11 @@ Les règles de l'application Windows s'appliquent à l'identique, ici, côté or
 - corriger ou effacer une note déjà saisie, noter absent un élève qui a des notes, supprimer une absence :
   mot de passe d'un administrateur (chaque tentative est inscrite au journal) ;
 - année clôturée en lecture seule ; contrôles de validité des notes et des absences (repo).
-Les fiches des élèves et du personnel ne se modifient pas depuis le téléphone (consultation seulement).
+Depuis la version 1.1.1, le téléphone peut aussi inscrire un élève (droit eleves.modifier) et corriger la fiche
+d'un élève enregistré (mot de passe d'un administrateur, comme sur l'ordinateur). Un élève inscrit sur le
+téléphone porte l'identifiant provisoire « u:<uid de l'opération> » jusqu'à la synchronisation : les saisies qui
+le concernent (notes, absences) sont rattachées à l'élève créé, même envoyées plus tard.
+La fiche du personnel reste modifiable sur l'ordinateur seulement.
 """
 from __future__ import annotations
 
@@ -18,6 +22,7 @@ from epp.core import security
 from epp.core.db import AnneeCloturee, Database
 from epp.core.security import AccessDenied, Session
 from epp.domain import repo, resultats
+from epp.domain.referentiels import norm
 from epp.domain.repo import ValidationError
 
 CHAMPS_ELEVE = ("inscription_id", "eleve_id", "numero", "matricule_ecole", "matricule_desps", "nom", "sexe",
@@ -65,7 +70,8 @@ def instantane(db: Database, s: Session, etat_licence) -> dict:
     out["annee"] = {"id": a.id, "libelle": a.libelle, "date_debut": a.date_debut, "date_fin": a.date_fin,
                     "cloturee": a.cloturee}
     out["classes"] = [{"id": c.id, "code": c.code, "libelle": c.libelle, "grille_id": c.grille_id,
-                       "calendrier": c.calendrier, "bareme": c.bareme, "seuil": c.seuil} for c in a.classes]
+                       "calendrier": c.calendrier, "bareme": c.bareme, "seuil": c.seuil, "regle_mga": c.regle_mga,
+                       "niveau_suivant": c.niveau_suivant} for c in a.classes]
     out["grilles"] = [{"id": g.id, "code": g.code, "libelle": g.libelle, "mode": g.mode, "echelle": g.echelle,
                        "note_max": g.note_max,
                        "matieres": {str(n): [{"id": m["id"], "libelle": m["libelle"], "valeur": m["valeur"]}
@@ -153,7 +159,10 @@ class Applicateur:
         try:
             with self.db.transaction():
                 message = self._executer(op)
-                res = {"uid": uid, "ok": True, "message": message}
+                extra = {}
+                if isinstance(message, tuple):
+                    message, extra = message
+                res = {"uid": uid, "ok": True, "message": message, **extra}
                 self.db.execute("INSERT INTO synchro_op(uid, appareil_id, resultat) VALUES(?,?,?)",
                                 (uid, self.appareil["id"], json.dumps(res, ensure_ascii=False)))
             return res
@@ -169,7 +178,7 @@ class Applicateur:
             return {"uid": uid, "ok": False, "code": "INVALIDE", "message": str(e) or "Opération invalide."}
 
     # ------------------------------------------------------------------ opérations
-    def _executer(self, op: dict) -> str:
+    def _executer(self, op: dict):
         quoi = op.get("op")
         if quoi == "note":
             return self._note(op)
@@ -179,11 +188,23 @@ class Applicateur:
             return self._absence(op)
         if quoi == "suppr_absence":
             return self._suppr_absence(op)
+        if quoi == "eleve":
+            return self._eleve(op)
         raise ValidationError(f"Opération inconnue : {quoi}")
+
+    def _resoudre(self, iid) -> int:
+        """Identifiant d'inscription : entier, ou « u:<uid> » pour un élève inscrit depuis le téléphone."""
+        if isinstance(iid, str) and iid.startswith("u:"):
+            res = self.db.scalar("SELECT resultat FROM synchro_op WHERE uid=?", (iid[2:66],))
+            vrai = json.loads(res).get("inscription_id") if res else None
+            if not vrai:
+                raise ValidationError("Élève inscrit sur le téléphone mais pas encore enregistré sur l'ordinateur.")
+            return int(vrai)
+        return int(iid)
 
     def _inscription(self, iid) -> dict:
         r = self.db.one("SELECT i.id, i.annee_id, i.matricule_ecole, e.nom FROM inscription i "
-                        "JOIN eleve e ON e.id=i.eleve_id WHERE i.id=?", (int(iid),))
+                        "JOIN eleve e ON e.id=i.eleve_id WHERE i.id=?", (self._resoudre(iid),))
         if r is None:
             raise ValidationError("Élève introuvable sur l'ordinateur (inscription supprimée ?).")
         return dict(r)
@@ -267,3 +288,74 @@ class Applicateur:
         repo.delete_absence(self.db, self.s, kind, r["id"])
         self.modifie.add("absences")
         return "Absence supprimée."
+
+    def _eleve(self, op: dict):
+        """Inscription d'un élève (sans « inscription_id ») ou correction de sa fiche (mot de passe administrateur ;
+        « avant » = valeurs vues par le téléphone, pour ne pas écraser une correction faite sur l'ordinateur)."""
+        self.s.require("eleves.modifier")
+        d = op.get("donnees") or {}
+        aid = repo.active_annee_id(self.db)
+        if not aid:
+            raise ValidationError("Aucune année scolaire active sur l'ordinateur.")
+        annee = repo.load_annee(self.db, aid)
+        if annee.cloturee:
+            raise AnneeCloturee()
+        champs = {k: d.get(k) for k in repo.ELEVE_CHAMPS if k in d}
+        if op.get("inscription_id") in (None, ""):
+            classe = annee.classe(str(d.get("classe") or ""))
+            if classe is None:
+                raise ValidationError(f"Classe inconnue sur l'ordinateur : {d.get('classe')}.")
+            existant = trouver_inscription(self.db, annee, champs)
+            if existant:
+                return "Élève déjà inscrit sur l'ordinateur.", {"inscription_id": existant}
+            eid = None
+            if champs.get("matricule_desps"):
+                eid = self.db.scalar("SELECT id FROM eleve WHERE matricule_desps=?",
+                                     (str(champs["matricule_desps"]).replace(" ", ""),))
+            if eid:                 # élève connu d'une année précédente : réinscrit, sa fiche est conservée
+                type_ = "REINSCRIPTION"
+            else:
+                eid = repo.save_eleve(self.db, self.s, None, champs, annee)
+                type_ = "INSCRIPTION"
+            iid = repo.inscrire(self.db, self.s, eid, annee, classe.code, redoublant=d.get("redoublant") or "NON",
+                                statut=d.get("statut") or "PRESENT", type_=type_)
+            self.modifie.add("eleves")
+            return f"{champs.get('nom') or 'Élève'} inscrit en {classe.code}.", {"inscription_id": iid}
+        ins = self._inscription(op["inscription_id"])
+        cur = self.db.one("SELECT e.*, i.redoublant, i.statut, c.code AS classe FROM inscription i "
+                          "JOIN eleve e ON e.id=i.eleve_id JOIN classe c ON c.id=i.classe_id WHERE i.id=?", (ins["id"],))
+        cur = dict(cur)
+        for k, v in (op.get("avant") or {}).items():
+            if k in cur and str(cur[k] or "").strip() != str(v or "").strip():
+                raise Conflit(f"La fiche de {cur['nom']} a été modifiée sur l'ordinateur après votre dernière "
+                              "synchronisation : synchronisez, vérifiez-la, puis refaites la correction.")
+        self._exiger_admin(f"modifier la fiche de {cur['nom']}")
+        repo.save_eleve(self.db, self.s, cur["id"], {**{k: cur.get(k) for k in repo.ELEVE_CHAMPS}, **champs}, annee)
+        classe = d.get("classe") or cur["classe"]
+        redoublant, statut = d.get("redoublant") or cur["redoublant"], d.get("statut") or cur["statut"]
+        if (classe, redoublant, statut) != (cur["classe"], cur["redoublant"], cur["statut"]):
+            obs = self.db.scalar("SELECT observations FROM inscription WHERE id=?", (ins["id"],))
+            repo.update_inscription(self.db, self.s, ins["id"], annee, classe, redoublant, statut, obs)
+        security.log(self.db, self.s.login, "MODIF_ELEVE", "eleve",
+                     f"{cur['nom']} ({ins['matricule_ecole']}) depuis le téléphone {self.appareil['nom']}")
+        self.modifie.add("eleves")
+        return "Fiche de l'élève enregistrée.", {"inscription_id": ins["id"]}
+
+
+def trouver_inscription(db: Database, annee, champs: dict) -> int | None:
+    """Inscription de l'année d'un élève déjà connu : même matricule DESPS, sinon même nom et même date de
+    naissance (comparés sans accents ni ponctuation)."""
+    m = str(champs.get("matricule_desps") or "").replace(" ", "")
+    if m:
+        iid = db.scalar("SELECT i.id FROM inscription i JOIN eleve e ON e.id=i.eleve_id "
+                        "WHERE i.annee_id=? AND e.matricule_desps=?", (annee.id, m))
+        if iid:
+            return iid
+    nom, dn = norm(champs.get("nom")), str(champs.get("date_naissance") or "")[:10]
+    if not nom:
+        return None
+    for r in db.query("SELECT i.id, e.nom, e.date_naissance FROM inscription i JOIN eleve e ON e.id=i.eleve_id "
+                      "WHERE i.annee_id=?", (annee.id,)):
+        if norm(r["nom"]) == nom and str(r["date_naissance"] or "")[:10] == dn:
+            return r["id"]
+    return None

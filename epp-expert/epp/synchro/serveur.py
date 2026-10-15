@@ -25,8 +25,10 @@ from typing import Callable
 
 from epp import APP_MARQUE, __version__
 from epp.core import licence, security
-from epp.core.db import Database
+from epp.core.db import AnneeCloturee, Database
+from epp.domain.repo import ValidationError
 from epp.synchro import donnees
+from epp.synchro.fusion import Fusion
 from epp.synchro import protocole as P
 
 log = logging.getLogger(__name__)
@@ -252,6 +254,22 @@ class ServeurSynchro:
         s = licence.restreindre(security.load_session(db, a["utilisateur_id"]), etat)
         if not etat.utilisable:
             return {"erreur": etat.message, "code": "LICENCE", "instantane": donnees.instantane(db, s, etat)}
+        rapport = None
+        if isinstance(req.get("fusion"), dict):
+            # première synchronisation d'un téléphone utilisé seul : sa base est ajoutée à l'année active
+            if not security.verifier_admin(db, s, req.get("admin") or "", f"données du téléphone « {a['nom']} »"):
+                return {"erreur": "Envoyer les données du téléphone demande le mot de passe d'un administrateur de "
+                                  "l'ordinateur." if not req.get("admin") else "Mot de passe administrateur incorrect.",
+                        "code": "ADMIN_REQUIS"}
+            try:
+                rapport = Fusion(db, s, a).appliquer(req["fusion"])
+            except (ValidationError, AnneeCloturee) as e:
+                return {"erreur": str(e), "code": "FUSION"}
+            if self.quand_modifie:
+                try:
+                    self.quand_modifie({"eleves", "notes", "absences"}, a["nom"], rapport["eleves_ajoutes"])
+                except Exception:      # noqa: BLE001
+                    log.exception("Notification de l'interface impossible")
         ops = req.get("ops") or []
         if not isinstance(ops, list):
             ops = []
@@ -266,7 +284,10 @@ class ServeurSynchro:
                 self.quand_modifie(set(app.modifie), a["nom"], ok)
             except Exception:      # noqa: BLE001 - l'affichage de l'ordinateur ne bloque pas la synchronisation
                 log.exception("Notification de l'interface impossible")
-        return {"resultats": res, "instantane": donnees.instantane(db, s, etat)}
+        out = {"resultats": res, "instantane": donnees.instantane(db, s, etat)}
+        if rapport is not None:
+            out["fusion"] = rapport
+        return out
 
     def presentation(self) -> dict:
         return {"service": APP_MARQUE, "version": __version__, "protocole": P.VERSION_PROTOCOLE,

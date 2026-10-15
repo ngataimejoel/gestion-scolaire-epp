@@ -9,6 +9,8 @@ import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.print.PrintAttributes;
+import android.print.PrintManager;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
@@ -24,6 +26,8 @@ import android.webkit.WebViewClient;
 public class MainActivity extends Activity {
     private WebView web;
     private Pont pont;
+    /** Page en cours d'impression : gardée tant qu'Android la met en page. */
+    private WebView aImprimer;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -95,6 +99,37 @@ public class MainActivity extends Activity {
             startActivity(i);
         } catch (ActivityNotFoundException ignored) {
             // aucune application pour ce lien
+        }
+    }
+
+    /** Met en page le document HTML (sans JavaScript) puis ouvre l'impression d'Android (imprimante ou PDF). */
+    void imprimer(String html, String titre) {
+        WebView w = new WebView(this);
+        w.getSettings().setJavaScriptEnabled(false);
+        w.getSettings().setAllowFileAccess(false);
+        w.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r) {
+                return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView v, String url) {
+                PrintManager pm = (PrintManager) getSystemService(PRINT_SERVICE);
+                String nom = titre == null || titre.isEmpty() ? "AKWA SCHOOL" : titre;
+                pm.print(nom, v.createPrintDocumentAdapter(nom), new PrintAttributes.Builder()
+                        .setMediaSize(PrintAttributes.MediaSize.ISO_A4).build());
+            }
+        });
+        aImprimer = w;
+        w.loadDataWithBaseURL("file:///android_asset/www/", html, "text/html", "utf-8", null);
+    }
+
+    @Override
+    protected void onActivityResult(int demande, int resultat, Intent donnees) {
+        super.onActivityResult(demande, resultat, donnees);
+        if (demande == Pont.CHOISIR || demande == Pont.ENREGISTRER) {
+            pont.resultatActivite(demande, resultat == RESULT_OK, donnees == null ? null : donnees.getData());
         }
     }
 

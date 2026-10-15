@@ -1,14 +1,27 @@
 # Application Android AKWA SCHOOL et synchronisation par le Wi-Fi
 
-## Principe
+## Principe (version 1.1.1)
 
-- Le téléphone garde une copie de l'année en cours (élèves, classes, notes, résultats, personnel, absences),
-  limitée aux droits du compte choisi à l'association. Il fonctionne sans réseau.
-- Les saisies du téléphone (notes, absences aux évaluations, absences et retards des élèves et du personnel)
-  attendent sur le téléphone, puis partent à la synchronisation.
-- La synchronisation passe par le réseau local (Wi-Fi de l'école ou partage de connexion d'un téléphone) :
-  aucun serveur sur Internet, aucun abonnement. L'ordinateur doit être allumé, AKWA SCHOOL ouvert et la
-  synchronisation démarrée (Rapports & administration › Téléphones).
+Le téléphone fonctionne de deux façons, au choix de l'école :
+
+- **Seul**, sans ordinateur ni Internet : « Créer mon école » (nom, IEPP, DRENAET, année, classes avec les
+  grilles par défaut de l'application Windows), import du fichier ELEVES national (.xls, .xlsx, .csv), saisie
+  des élèves, des notes, de l'appel et des absences, résultats calculés comme sur l'ordinateur (moyennes, MGA,
+  rang, décision), impression (liste de classe, fiche de notes, résultats annuels, bulletins, absences du mois)
+  ou PDF par Android, exports CSV, sauvegarde chiffrée (.akwa). Licence propre au téléphone : 7 jours d'essai,
+  puis un code d'activation (même service que l'ordinateur, Internet seulement à ce moment-là). Mot de passe
+  administrateur local pour corriger une note, supprimer une donnée ou modifier une fiche d'élève enregistrée.
+- **Associé** à l'ordinateur de l'école : le téléphone garde une copie de l'année en cours, limitée aux droits
+  du compte choisi, et ses saisies attendent sur le téléphone.
+
+La synchronisation n'est jamais automatique : le bouton « Synchroniser maintenant » affiche ce qui sera envoyé
+et reçu, puis échange par le réseau local (Wi-Fi de l'école ou partage de connexion d'un téléphone). L'ordinateur
+doit être allumé, AKWA SCHOOL ouvert et la synchronisation démarrée (Rapports & administration › Téléphones).
+
+Un téléphone utilisé seul puis associé envoie ses données à la première synchronisation (mot de passe d'un
+administrateur de l'ordinateur) : `epp/synchro/fusion.py` les ajoute à l'année active sans rien écraser
+(élèves reconnus par matricule DESPS ou nom + date de naissance, notes différentes signalées, envoi rejouable
+sans doublon). Les données du téléphone sont archivées sur lui. Dissocier permet de repartir seul avec une copie.
 
 ## Règles appliquées par l'ordinateur (il a toujours le dernier mot)
 
@@ -20,7 +33,7 @@
   enregistrée : mot de passe d'un administrateur (demandé sur le téléphone, envoyé chiffré, jamais conservé,
   chaque tentative inscrite au journal de l'ordinateur).
 - Note modifiée sur l'ordinateur depuis la dernière synchronisation du téléphone : conflit signalé, rien n'est
-  écrasé. Année clôturée : lecture seule. Fiches des élèves et du personnel : modifiables sur l'ordinateur seulement.
+  écrasé. Année clôturée : lecture seule. Inscription d'un élève depuis le téléphone : acceptée (pas de doublon) ; correction de sa fiche : mot de passe administrateur.
 - Une saisie renvoyée (réponse perdue) n'est jamais appliquée deux fois (identifiant unique, table `synchro_op`).
 
 ## Sécurité
@@ -39,7 +52,8 @@
 | Protocole (ordinateur) | `epp/synchro/protocole.py`, `serveur.py` (HTTP 8765, découverte UDP 8766), `donnees.py` |
 | Page Téléphones | `epp/ui/pages/telephones.py`, `epp/ui/synchro.py` |
 | Téléphone | `android/` : interface `app/src/main/assets/www/` (reprise du prototype v7), pont Java `Pont.java`, protocole `synchro/` (Java pur) |
-| Tests | `tests/test_synchro.py`, `android/test-jvm/TestSynchro.java` (client Java contre le vrai serveur, en CI) |
+| Téléphone seul | `noyau/` (Java pur : licence Ed25519, lecture xls/xlsx/csv, sauvegarde chiffrée), `www/documents.js` (impressions, exports), `www/defauts.js` (généré par `outils/defauts_telephone.py`) |
+| Tests | `tests/test_synchro.py`, `android/test-jvm/TestSynchro.java` (client Java contre le vrai serveur), `TestNoyau.java` + `outils/fixtures_noyau.py` (lecture comparée au code Python), en CI |
 
 ## Construction et publication
 
