@@ -226,20 +226,26 @@ def repartition_ages(db: Database, annee: Annee, extrait: str = "tous") -> dict:
     return {"classes": classes, "ages": ages, "n": n, "extrait": extrait}
 
 
-def classement(db: Database, annee: Annee, compo: int, top: int = 3) -> dict[str, list[dict]]:
-    """Trois meilleurs par niveau (RAPPORT DE COMPOSITION) ; ex æquo : premier inscrit d'abord."""
+def classement(db: Database, annee: Annee, compo: int, top: int = 3, par_niveau: bool = False) -> dict[str, list[dict]]:
+    """Trois meilleurs par classe (RAPPORT DE COMPOSITION) ; ex æquo : premier inscrit d'abord.
+    Avec par_niveau, les classes d'un même niveau (« CE1 A », « CE1 B ») sont classées ensemble, sous la clé
+    du niveau (CP1 … CM2), comme dans le prototype."""
+    from epp.domain.fiche_scolaire import niveau
     moys = resultats.moyennes_par_evaluation(db, annee)
-    out: dict[str, list[dict]] = {}
-    for cl in annee.classes:
+    groupes: dict[str, list] = {}
+    for ci, cl in enumerate(annee.classes):
         rows = repo.inscriptions(db, annee, cl.code)
-        cand = []
+        cle = niveau(cl.code) if par_niveau else cl.code
+        cand = groupes.setdefault(cle, [])
         for pos, r in enumerate(rows):
             m = moys.get(r["inscription_id"], {}).get(compo, {})
             if m.get("moyenne") is not None:
-                cand.append((m["moyenne"], -pos, r))
-        cand.sort(key=lambda t: (t[0], t[1]), reverse=True)
-        out[cl.code] = [{"rang": i + 1, "nom": r["nom"], "matricule_ecole": r["matricule_ecole"], "moyenne": m}
-                        for i, (m, _, r) in enumerate(cand[:top])]
+                cand.append((m["moyenne"], -ci, -pos, r))
+    out: dict[str, list[dict]] = {}
+    for cle, cand in groupes.items():
+        cand.sort(key=lambda t: (t[0], t[1], t[2]), reverse=True)
+        out[cle] = [{"rang": i + 1, "nom": r["nom"], "matricule_ecole": r["matricule_ecole"], "moyenne": m,
+                     "classe": r["classe"]} for i, (m, _, _, r) in enumerate(cand[:top])]
     return out
 
 

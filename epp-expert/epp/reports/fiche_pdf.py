@@ -1,7 +1,8 @@
 """Fiche scolaire de l'élève en PDF (une page A4, modèle de l'école) et en-tête officiel « fiche scolaire ».
 
 L'en-tête reprend la fiche de l'école : à gauche le ministère, la direction régionale et l'inspection
-séparés par des tirets ; à droite la République, la devise et les logos ; un trait sous l'ensemble.
+séparés par des tirets, puis les logos de l'IEPP et de l'école ; à droite la République et la devise ;
+un trait sous l'ensemble.
 Le même en-tête est utilisé par tous les documents (rapports, bulletins, demandes, fiches).
 """
 from __future__ import annotations
@@ -50,9 +51,10 @@ class _Mesure:
 
 
 def dessiner_entete(c, x0: float, y_haut: float, W: float, gauche: list[str], droite: list[str],
-                    logos: list[bytes], polices: tuple[str, str], logo_h: float = 18 * mm,
+                    logos: list[bytes], polices: tuple[str, str], logo_h: float = 14 * mm,
                     taille: float = 8.2, tirets: bool = True) -> float:
     """Dessine l'en-tête officiel (style fiche scolaire) ; renvoie la hauteur utilisée (trait compris).
+    Les logos (IEPP puis école) sont placés juste sous les lignes de gauche, comme dans le prototype.
     Avec c=None, rien n'est dessiné : seule la hauteur est calculée."""
     c = c or _Mesure()
     F, FB = polices
@@ -72,6 +74,16 @@ def dessiner_entete(c, x0: float, y_haut: float, W: float, gauche: list[str], dr
             c.drawString(x0, y, morceau)
             y -= pas
     bas_g = y + pas
+    if logos:
+        # logos de l'IEPP et de l'école : sous les lignes de gauche, décalés de 18 % (carrés, proportions gardées)
+        n, ecart = len(logos), 2.6 * mm
+        xl = x0 + bloc * 0.18
+        cote = min(logo_h, (x0 + wg - xl - (n - 1) * ecart) / n)
+        haut_logo = bas_g - 1.5 * mm
+        if not isinstance(c, _Mesure):
+            for i, data in enumerate(logos):
+                _image(c, data, xl + i * (cote + ecart), haut_logo - cote, cote, cote)
+        bas_g = haut_logo - cote
     y = y_haut - taille - 1.5
     xc = xd + wd / 2
     for i, l in enumerate(droite):
@@ -85,14 +97,6 @@ def dessiner_entete(c, x0: float, y_haut: float, W: float, gauche: list[str], dr
             c.drawCentredString(xc, y + 2.5, TIRETS)
             y -= pas * 0.6
     bas_d = y + pas * 0.6
-    if logos:
-        n = len(logos)
-        lw = min(wd / n - 2 * mm, 30 * mm)
-        y -= logo_h - 1.5 * mm
-        if not isinstance(c, _Mesure):
-            for i, data in enumerate(logos):
-                _image(c, data, xc - (n * lw) / 2 + i * lw + 1 * mm, y, lw - 2 * mm, logo_h)
-        bas_d = y
     bas = min(bas_g, bas_d) - 2.5 * mm
     c.setStrokeColor(NOIR)
     c.setLineWidth(1)
@@ -213,7 +217,7 @@ class FicheScolairePDF(Flowable):
         gauche, droite, logos = E.entete_officiel(doc)
         y -= dessiner_entete(c, x0, y, Wi, gauche, droite, logos, (self.F, self.FB))
         # espacements réduits si l'en-tête est haut (parties fixes : titre, photo, tableau, signatures)
-        k = max(0.55, min(1.0, (y - 2 * mm - 106 * mm) / (134 * mm)))
+        k = max(0.55, min(1.0, (y - 2 * mm - 116 * mm) / (134 * mm)))
         y -= 4 * mm * k
         y -= titre_encadre(c, W / 2, y, o.get("titre_fiche") or "FICHE SCOLAIRE", self.FB, 22)
         y -= 5 * mm * k
@@ -352,11 +356,15 @@ class FicheScolairePDF(Flowable):
         y -= 4 * mm * k
 
         # ---------------------------------------------------- signatures
-        hb = max(14 * mm, min(30 * mm, y - 2 * mm))
-        wb = (xf - xi - 8 * mm) / 3
+        # la case du directeur est la plus large et la plus haute possible : signature et cachet
+        hb = max(14 * mm, min(48 * mm, y - 3 * mm))
+        utile = xf - xi - 8 * mm
+        larg = (utile * 0.27, utile * 0.27, utile * 0.46)
         noms = ["", d.get("enseignant") or "", d.get("directeur") or v.get("directeur", "")]
+        bx = xi - 4 * mm
         for i, t in enumerate(("Le Parent / Tuteur", "L'Enseignant(e)", "Le Directeur de l'école")):
-            bx = xi + i * (wb + 4 * mm)
+            bx += (larg[i - 1] if i else 0) + 4 * mm
+            wb = larg[i]
             c.setLineWidth(1)
             c.roundRect(bx, y - hb, wb, hb, 2.5 * mm, stroke=1, fill=0)
             tw = self._txt(bx + wb / 2, y - 5 * mm, t, self.FB, 9.5, "center")

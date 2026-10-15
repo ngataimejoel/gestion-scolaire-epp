@@ -4,7 +4,7 @@ Un modèle est un document JSON indépendant du code :
 
 {
   "format": 1,
-  "page": {"taille": "A4", "orientation": "portrait" | "paysage"},
+  "page": {"taille": "A4", "orientation": "portrait" | "paysage", "une_page": false},
   "entete": {"officiel": true, "logo": true, "texte": ""},
   "titre": "...", "sous_titre": "...",
   "pied": {"texte": "...", "numerotation": true, "date_edition": true},
@@ -12,6 +12,9 @@ Un modèle est un document JSON indépendant du code :
   "repeter_par": "" | "classe",
   "sections": [ {"type": "tableau", ...}, ... ]
 }
+
+« une_page » : à l'impression PDF, le contenu est réduit (au plus à 40 %) pour tenir sur une seule page
+A4 ; avec des sauts de page (ou « une page par classe »), chaque partie tient sur sa page.
 
 Les textes peuvent contenir des variables entre accolades : {ecole}, {annee}, {classe}...
 """
@@ -62,7 +65,8 @@ FORMATS = {"auto": "Automatique", "texte": "Texte", "entier": "Entier", "decimal
 ALIGNEMENTS = {"auto": "Automatique", "gauche": "Gauche", "centre": "Centre", "droite": "Droite"}
 
 VARIABLES = {
-    "{ecole}": "Nom de l'établissement", "{code_ecole}": "Code de l'établissement", "{annee}": "Année scolaire",
+    "{ecole}": "Nom de l'établissement", "{code_ecole}": "Code de l'établissement",
+    "{code_dren}": "Code de la DREN", "{code_iepp}": "Code de l'IEPP", "{annee}": "Année scolaire",
     "{directeur}": "Nom du directeur", "{localite}": "Localité", "{iepp}": "Inspection (IEPP)",
     "{dren}": "Direction régionale", "{ministere}": "Ministère", "{secteur}": "Secteur pédagogique",
     "{date_edition}": "Date d'édition des états", "{date_ref_age}": "Date de référence de l'âge",
@@ -108,7 +112,7 @@ def nouvelle_section(type_: str) -> dict:
     elif type_ == "repartition_ages":
         base.update(extrait="tous", sexes=["M", "F", "T"])
     elif type_ == "classement":
-        base.update(top=3)
+        base.update(top=3, par="classe")
     elif type_ == "cles_valeurs":
         base.update(source="tableau_de_bord", elements=[])
     elif type_ == "graphique":
@@ -140,6 +144,8 @@ def valider(defn: dict) -> dict:
     base = nouveau_modele()
     for k, v in base.items():
         d.setdefault(k, copy.deepcopy(v))
+    if not isinstance(d["page"], dict):
+        raise ModeleInvalide("Le format de page est invalide.")
     if d["page"].get("orientation") not in ("portrait", "paysage"):
         raise ModeleInvalide("Orientation de page inconnue (portrait ou paysage).")
     for p in d.get("parametres", []):

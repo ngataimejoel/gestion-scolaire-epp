@@ -14,6 +14,9 @@ test("format et saisie des codes", () => {
   assert.equal(normaliserCode(c.toLowerCase().replaceAll("-", " ")), c);
   assert.equal(normaliserCode("EPP-0000-1111-2222-3333"), null);   // 0 et 1 n'existent pas
   assert.equal(new Set(Array.from({ length: 2000 }, nouveauCode)).size, 2000);
+  // un code tiré au hasard peut commencer par « EPP » (1 chance sur 32 768) : il reste valable
+  assert.equal(normaliserCode("EPP-EPPA-BCDE-FGHJ-KLMN"), "EPP-EPPA-BCDE-FGHJ-KLMN");
+  assert.equal(normaliserCode("eppa bcde fghj klmn"), "EPP-EPPA-BCDE-FGHJ-KLMN");   // saisi sans le préfixe
 });
 
 test("un code ne sert qu'une seule fois", async () => {

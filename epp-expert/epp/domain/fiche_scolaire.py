@@ -119,6 +119,7 @@ def fiches(db: Database, annee: Annee, classe_code: str | None = None, inscripti
             "fiche_no": f"{r.get('ordre') or r['numero']:04d}",
             "parents": parents(r), "ligne_parents": ligne_parents(r), "scolarite": sco,
             "ecole": e.get("ecole_nom", ""), "code_ecole": e.get("ecole_code", ""), "iepp": e.get("iepp", ""),
+            "code_dren": e.get("code_dren", ""), "code_iepp": e.get("code_iepp", ""),
             "dren": e.get("dren", ""), "ville": e.get("localite", ""), "lieu_naissance": r.get("localite") or "",
             "directeur": e.get("directeur", ""), "enseignant": profs.get(r["classe"], ""),
             "sous_prefecture_ecole": e.get("sous_prefecture", "") or e.get("localite", ""),
@@ -136,7 +137,9 @@ def qr_texte(d: dict) -> str:
     dn = calculs.to_date(d.get("date_naissance"))
     lignes = [
         f"ECOLE: {d.get('ecole', '')}" + (f" (code {d['code_ecole']})" if d.get("code_ecole") else ""),
-        f"IEPP: {d.get('iepp', '')}", f"DREN: {d.get('dren', '')}", f"LOCALITE: {d.get('ville', '')}",
+        f"IEPP: {d.get('iepp', '')}" + (f" (code {d['code_iepp']})" if d.get("code_iepp") else ""),
+        f"DREN: {d.get('dren', '')}" + (f" (code {d['code_dren']})" if d.get("code_dren") else ""),
+        f"LOCALITE: {d.get('ville', '')}",
         f"ANNEE SCOLAIRE: {d.get('annee', '')}",
         f"ELEVE: {d.get('nom', '')}", f"SEXE: {d.get('sexe', '')}",
         f"NE(E) LE: {dn.strftime('%d/%m/%Y') if dn else ''}" + (f" A {d['lieu_naissance']}"

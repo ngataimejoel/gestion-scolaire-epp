@@ -236,6 +236,16 @@ def entete_officiel_word(conteneur, avail: float, gauche: list[str], droite: lis
             p = cg.add_paragraph()
         _format_para(p, 0, 0, WD_ALIGN_PARAGRAPH.LEFT)
         _run(p, l, taille, gras=True)
+    if logos:
+        # logos de l'IEPP et de l'école sous les lignes de gauche (décalés de 18 %), comme le prototype
+        p = cg.add_paragraph()
+        _format_para(p, 2, 0, WD_ALIGN_PARAGRAPH.LEFT)
+        p.paragraph_format.left_indent = Mm(wg * 0.18)
+        cote = min(14, (wg * 0.82 - 3 * (len(logos) - 1)) / len(logos))
+        for i, data in enumerate(logos):
+            if i:
+                p.add_run("   ")
+            _image(p, data, cote, cote)
     cg.vertical_alignment = WD_ALIGN_VERTICAL.TOP
     cd = t.cell(0, 2)
     for i, l in enumerate(droite):
@@ -246,13 +256,6 @@ def entete_officiel_word(conteneur, avail: float, gauche: list[str], droite: lis
             p = cd.add_paragraph()
             _format_para(p, 0, 0, WD_ALIGN_PARAGRAPH.CENTER)
             _run(p, TIRETS, 6.5)
-    if logos:
-        p = cd.add_paragraph()
-        _format_para(p, 2, 0, WD_ALIGN_PARAGRAPH.CENTER)
-        for i, data in enumerate(logos):
-            if i:
-                p.add_run("  ")
-            _image(p, data, min(wd / len(logos) - 3, 30), 18)
     cd.vertical_alignment = WD_ALIGN_VERTICAL.TOP
     for c in t.rows[0].cells:
         _bordures_cellule(c, bottom=(10, "000000"))
@@ -383,12 +386,12 @@ class _Rendu:
         _para(self.d, "", apres=4).paragraph_format.keep_with_next = True
         t = self.d.add_table(1, 2)
         _bordures(t, None)
-        _largeurs(t, [self.avail * 0.55, self.avail * 0.45])
+        _largeurs(t, [self.avail * 0.5, self.avail * 0.5])
         _ecrire(t.cell(0, 0), b.lieu_date, 9, valign="haut")
         c = t.cell(0, 1)
-        _ecrire(c, b.fonction, 9, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER, valign="haut")
-        _para(c, "", apres=0).paragraph_format.space_before = Mm(14)
-        _para(c, b.nom, 9, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER)
+        _ecrire(c, b.fonction, 10, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER, valign="haut")
+        _para(c, "", apres=0).paragraph_format.space_before = Mm(30)    # signature et cachet du directeur
+        _para(c, b.nom, 10, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER)
         _insecable(t.rows[0])
 
     # ------------------------------------------------------------------ lettre administrative
@@ -449,7 +452,7 @@ class _Rendu:
                 for x in lignes[1:]:
                     _para(c, x, 7.5, align=WD_ALIGN_PARAGRAPH.CENTER)
             _hauteur(t.rows[0], 9)
-            _hauteur(t.rows[1], 34)
+            _hauteur(t.rows[1], 42)
             for row in t.rows:
                 _insecable(row)
 
@@ -471,7 +474,7 @@ class _Rendu:
                     typ = rtype
                 cells.append(E.fmt(v, typ, self.monnaie))
             corps.append(cells)
-        taille = 9 if ncols <= 8 else 8 if ncols <= 12 else 7 if ncols <= 18 else 6.5
+        taille = 10 if ncols <= 8 else 9 if ncols <= 12 else 7.5 if ncols <= 18 else 7
         largeurs = self._largeurs_colonnes(t, hgrid, spans, corps, taille)
         if t.title:
             _para(self.d, t.title, 10, gras=True, couleur=BLEU, apres=3).paragraph_format.keep_with_next = True
@@ -493,7 +496,8 @@ class _Rendu:
             textes = [r[i] for r, row in zip(corps, t.rows) if row.kind != "group"]
             larges = {(c0, r0) for (c0, r0), (c1, _) in spans if c1 > c0}    # en-têtes sur plusieurs colonnes
             entetes = [hgrid[r][i] for r in range(len(hgrid)) if (i, r) not in larges]
-            long_ = max([_mesure(x, taille) for x in textes] + [0])
+            nom = i < len(t.noms) and t.noms[i]
+            long_ = max([_mesure(x, taille, gras=nom) for x in textes] + [0])
             mots = [w for x in textes for w in _mots(x)] + [w for x in entetes for w in str(x).split()]
             mot = max([_mesure(w, taille, gras=True) for w in mots] + [3])
             tete = max([_mesure(x, taille, gras=True) for x in entetes] + [0])
@@ -559,8 +563,9 @@ class _Rendu:
                 cell = tr.cells[i]
                 if " " in x and len(_mots(x)) == 1:
                     x = x.replace(" ", "\u00a0")          # numéro ou nombre : jamais coupé
-                _ecrire(cell, x, taille, gras=gras or (t.first_col_header and i == 0),
-                        align=ALIGN.get(t.aligns[i], WD_ALIGN_PARAGRAPH.LEFT))
+                nom = i < len(t.noms) and t.noms[i]          # noms et prénoms : en gras, à gauche
+                _ecrire(cell, x, taille, gras=gras or nom or (t.first_col_header and i == 0),
+                        align=WD_ALIGN_PARAGRAPH.LEFT if nom else ALIGN.get(t.aligns[i], WD_ALIGN_PARAGRAPH.LEFT))
                 if fond:
                     _ombre(cell, fond)
                 elif t.first_col_header and i == 0:
@@ -680,7 +685,7 @@ class _Rendu:
             _largeurs(t, [avail / len(sig)] * len(sig))
             for i, x in enumerate(sig):
                 _ecrire(t.cell(0, i), x, 9, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER)
-            _hauteur(t.rows[1], 18)
+            _hauteur(t.rows[1], 32)
 
     def _petit_tableau(self, tete, lignes, proportions, total=False) -> None:
         t = self.d.add_table(1 + len(lignes), len(tete))

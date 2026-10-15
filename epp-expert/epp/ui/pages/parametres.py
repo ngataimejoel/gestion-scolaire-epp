@@ -75,7 +75,8 @@ class _Logo(QWidget):
 class OngletEtablissement(QWidget):
     CHAMPS = [("pays", "Pays"), ("devise_pays", "Devise du pays"), ("ministere", "Ministère"),
               ("dren", "Direction régionale (DRENAET)"), ("iepp", "Inspection (IEPP)"), ("ecole_nom", "École"),
-              ("ecole_code", "Code de l'école"), ("localite", "Localité"), ("directeur", "Directeur / Directrice"),
+              ("ecole_code", "Code de l'école"), ("code_dren", "Code DREN"), ("code_iepp", "Code IEPP"),
+              ("localite", "Localité"), ("directeur", "Directeur / Directrice"),
               ("secteur", "Secteur pédagogique")]
 
     def __init__(self, page):
@@ -103,7 +104,7 @@ class OngletEtablissement(QWidget):
         fe.addRow("Colonne de gauche", self.gauche)
         fe.addRow("Colonne de droite", self.droite)
         fe.addRow(label("Une ligne par ligne imprimée. Variables : {ministere}, {dren}, {iepp}, {ecole}, "
-                        "{code_ecole}, {pays}, {devise_pays}, {annee}, {localite}, {directeur}.", discret=True,
+                        "{code_ecole}, {code_dren}, {code_iepp}, {pays}, {devise_pays}, {annee}, {localite}, {directeur}.", discret=True,
                         wrap=True))
         v.addWidget(ge)
         self.b_reset = bouton("Rétablir l'en-tête officiel", self._reset)

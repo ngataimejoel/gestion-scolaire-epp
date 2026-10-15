@@ -30,8 +30,9 @@ def _excel_value(v, typ):
     return v
 
 
-def _entete_droite(ws, droite_rows: list, logos: list[bytes], maxcol: int) -> None:
-    """Colonne de droite de l'en-tête officiel (alignée sur la dernière colonne) et logos au centre."""
+def _entete_droite(ws, droite_rows: list, logos: list[bytes], maxcol: int, ligne_logos: int = 1) -> None:
+    """Colonne de droite de l'en-tête officiel (alignée sur la dernière colonne) et logos de l'IEPP et de
+    l'école sous les lignes de gauche (comme le prototype)."""
     last = max(maxcol, 4)
     for row, line in droite_rows:
         c = ws.cell(row, last, line)
@@ -41,15 +42,27 @@ def _entete_droite(ws, droite_rows: list, logos: list[bytes], maxcol: int) -> No
         return
     import io
     from openpyxl.drawing.image import Image as XLImage
-    col = max(2, (last + 1) // 2)
-    for i, data in enumerate(logos):
+    x = 0
+    for data in logos:
         try:
             img = XLImage(io.BytesIO(data))
         except Exception:
             continue
-        k = 70 / max(img.height, 1)            # environ 18 mm de haut
+        k = 54 / max(img.height, img.width, 1)          # environ 14 mm de côté
         img.width, img.height = img.width * k, img.height * k
-        ws.add_image(img, f"{get_column_letter(col + 2 * i)}1")
+        _ancre(ws, img, ligne_logos, 18 + x)
+        x += img.width + 10
+
+
+def _ancre(ws, img, ligne: int, decalage_px: float) -> None:
+    """Ancre l'image en haut de la ligne donnée, décalée de decalage_px depuis le bord gauche de la colonne A."""
+    from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, AnchorMarker
+    from openpyxl.drawing.xdr import XDRPositiveSize2D
+    from openpyxl.utils.units import pixels_to_EMU
+    marqueur = AnchorMarker(col=0, colOff=pixels_to_EMU(int(decalage_px)), row=ligne - 1, rowOff=0)
+    img.anchor = OneCellAnchor(_from=marqueur, ext=XDRPositiveSize2D(pixels_to_EMU(int(img.width)),
+                                                                     pixels_to_EMU(int(img.height))))
+    ws.add_image(img)
 
 
 def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> None:
@@ -59,7 +72,7 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
     widths: dict[int, float] = {}
     r = 1
     maxcol = 1
-    droite_rows, logos = [], []
+    droite_rows, logos, ligne_logos = [], [], 1
     if doc.entete.get("officiel", True):
         gauche, droite, logos = E.entete_officiel(doc)
         h0 = r
@@ -67,7 +80,8 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
             ws.cell(r, 1, line).font = Font(bold=True, size=9)
             r += 1
         droite_rows = [(h0 + i, line) for i, line in enumerate(droite)]   # placées une fois la largeur connue
-        r = max(r, h0 + len(droite), h0 + (5 if logos else 0)) + 1
+        ligne_logos = r
+        r = max(r + (4 if logos else 0), h0 + len(droite)) + 1
     print_title_rows = None
     for b in doc.blocks:
         if isinstance(b, tuple) and b[0] == "TITRE":
@@ -128,9 +142,10 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
                     x.border = BORDER
                     if typ in NUMFMT and not isinstance(val, str):
                         x.number_format = NUMFMT[typ]
-                    x.alignment = Alignment(horizontal=H_ALIGN.get(b.aligns[i], "left"), vertical="center",
-                                            wrap_text=True)
-                    if row.kind in ("subtotal", "total") or (b.first_col_header and i == 0):
+                    nom = i < len(b.noms) and b.noms[i]          # noms et prénoms : en gras, à gauche
+                    x.alignment = Alignment(horizontal="left" if nom else H_ALIGN.get(b.aligns[i], "left"),
+                                            vertical="center", wrap_text=True)
+                    if nom or row.kind in ("subtotal", "total") or (b.first_col_header and i == 0):
                         x.font = Font(bold=True)
                     if row.kind == "subtotal":
                         x.fill = SUB_FILL
@@ -242,13 +257,15 @@ def render(doc: E.Document, out: str | Path, sheet_title: str = "Rapport") -> No
     ws.page_setup.orientation = "landscape" if doc.orientation == "paysage" else "portrait"
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    # rapport « sur une seule page » : la feuille entière tient sur une page à l'impression
+    ws.page_setup.fitToHeight = 1 if getattr(doc, "une_page", False) and \
+        not any(isinstance(b, E.PageBreak) for b in doc.blocks) else 0
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_options.horizontalCentered = True
     ws.page_margins.left = ws.page_margins.right = 0.8 / 2.54
     if print_title_rows:
         ws.print_title_rows = print_title_rows
     if droite_rows or logos:
-        _entete_droite(ws, droite_rows, logos, maxcol)
+        _entete_droite(ws, droite_rows, logos, maxcol, ligne_logos)
     ws.oddFooter.center.text = "Page &P / &N"
     wb.save(out)

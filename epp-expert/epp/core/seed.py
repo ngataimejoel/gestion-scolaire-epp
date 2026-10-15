@@ -25,6 +25,8 @@ DEFAULT_PARAMS = {
     "iepp": "IEPP OUANINOU",
     "ecole_nom": "EPP OUANINOU 2",
     "ecole_code": "",
+    "code_dren": "35",          # codes officiels de l'export national des élèves (fichier ELEVES)
+    "code_iepp": "000251",
     "localite": "OUANINOU",
     "directeur": "",
     "secteur": "",
