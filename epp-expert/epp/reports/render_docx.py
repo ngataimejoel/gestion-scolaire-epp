@@ -215,6 +215,50 @@ def _saut_de_page(d) -> None:
     d.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
 
+# =================================================================== en-tête officiel
+TIRETS = "-" * 26
+
+
+def entete_officiel_word(conteneur, avail: float, gauche: list[str], droite: list[str], logos: list[bytes],
+                         taille: float = 8, tirets: bool = True):
+    """Tableau d'en-tête « fiche scolaire » (2 colonnes, trait en bas) ajouté à un document ou une cellule."""
+    wg = min(avail * 0.56, 110)
+    wd = min(avail * 0.40, 80)
+    t = conteneur.add_table(1, 3)
+    _bordures(t, None)
+    _largeurs(t, [wg, avail - wg - wd, wd])
+    cg = t.cell(0, 0)
+    for i, l in enumerate(gauche):
+        p = cg.paragraphs[0] if i == 0 else cg.add_paragraph()
+        if i and tirets:
+            _format_para(p, 0, 0, WD_ALIGN_PARAGRAPH.LEFT)
+            _run(p, TIRETS, 6.5)
+            p = cg.add_paragraph()
+        _format_para(p, 0, 0, WD_ALIGN_PARAGRAPH.LEFT)
+        _run(p, l, taille, gras=True)
+    cg.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+    cd = t.cell(0, 2)
+    for i, l in enumerate(droite):
+        p = cd.paragraphs[0] if i == 0 else cd.add_paragraph()
+        _format_para(p, 0, 0, WD_ALIGN_PARAGRAPH.CENTER)
+        _run(p, l, taille + 2 if i == 0 else (taille - 1 if i == 1 else taille), gras=True)
+        if i == 1 and tirets:
+            p = cd.add_paragraph()
+            _format_para(p, 0, 0, WD_ALIGN_PARAGRAPH.CENTER)
+            _run(p, TIRETS, 6.5)
+    if logos:
+        p = cd.add_paragraph()
+        _format_para(p, 2, 0, WD_ALIGN_PARAGRAPH.CENTER)
+        for i, data in enumerate(logos):
+            if i:
+                p.add_run("  ")
+            _image(p, data, min(wd / len(logos) - 3, 30), 18)
+    cd.vertical_alignment = WD_ALIGN_VERTICAL.TOP
+    for c in t.rows[0].cells:
+        _bordures_cellule(c, bottom=(10, "000000"))
+    return t
+
+
 # =================================================================== rendu
 class _Rendu:
     def __init__(self, doc: E.Document):
@@ -264,22 +308,12 @@ class _Rendu:
 
     # ------------------------------------------------------------------ en-tête officiel
     def officiel(self, force: bool = False) -> None:
+        """En-tête officiel sur le modèle de la fiche scolaire : ministère, DRENA, IEPP à gauche (séparés par
+        des tirets), République, devise et logos à droite, trait sous l'ensemble."""
         doc = self.doc
         if not force and not doc.entete.get("officiel", True):
             return
-        gauche, droite, logos = E.entete_officiel(doc)
-        centre = max(self.avail * 0.16, min(self.avail * 0.34, 24 * len(logos) + 6))
-        cote = (self.avail - centre) / 2
-        t = self.d.add_table(1, 3)
-        _bordures(t, None)
-        _largeurs(t, [cote, centre, cote])
-        for cell, lignes in ((t.cell(0, 0), gauche), (t.cell(0, 2), droite)):
-            _ecrire(cell, "\n".join(lignes), 8, gras=True, align=WD_ALIGN_PARAGRAPH.CENTER, valign="haut")
-        p = _ecrire(t.cell(0, 1), align=WD_ALIGN_PARAGRAPH.CENTER, valign="haut")
-        for i, data in enumerate(logos):
-            if i:
-                p.add_run("  ")
-            _image(p, data, centre / max(len(logos), 1) - 3, 18)
+        entete_officiel_word(self.d, self.avail, *E.entete_officiel(doc))
         if doc.entete.get("texte"):
             _para(self.d, E.subst(doc.entete["texte"], doc.variables), 8, align=WD_ALIGN_PARAGRAPH.CENTER)
         _para(self.d, "", apres=4)
@@ -554,10 +588,11 @@ class _Rendu:
                  ("Matricule DESPS", d.get("matricule_desps") or "–"), ("Classe", d.get("classe")),
                  ("Sexe", {"M": "Masculin", "F": "Féminin"}.get(d.get("sexe"), "")),
                  ("Né(e) le", E.fmt(d.get("date_naissance"), "date") or "–"),
-                 ("Redoublant", d.get("redoublant") or "NON"), ("Effectif classé", str(d.get("effectif") or 0))]
+                 ("Redoublant", d.get("redoublant") or "NON"), ("Effectif classé", str(d.get("effectif") or 0)),
+             ("Père", d.get("pere") or "–"), ("Mère", d.get("mere") or "–")]
         photo = o.get("photo", True)
         larg = avail - (34 if photo else 0)
-        t = self.d.add_table(4, 5 if photo else 4)
+        t = self.d.add_table(5, 5 if photo else 4)
         _bordures(t, None)
         _largeurs(t, [larg * 0.18, larg * 0.32, larg * 0.18, larg * 0.32] + ([34] if photo else []))
         for i, (k, v) in enumerate(ident):
@@ -567,7 +602,7 @@ class _Rendu:
             _bordures_cellule(t.cell(r, c), bottom=(2, "C0C0C0"))
             _bordures_cellule(t.cell(r, c + 1), bottom=(2, "C0C0C0"))
         if photo:
-            m = t.cell(0, 4).merge(t.cell(3, 4))
+            m = t.cell(0, 4).merge(t.cell(4, 4))
             for p in m.paragraphs[1:]:
                 p._element.getparent().remove(p._element)
             p = _ecrire(m, align=WD_ALIGN_PARAGRAPH.CENTER)
@@ -668,7 +703,8 @@ class _Rendu:
     # ------------------------------------------------------------------ document
     def rendre(self) -> DocxDocument:
         doc = self.doc
-        bulletins_seuls = all(isinstance(b, (E.Bulletin, E.PageBreak)) for b in doc.blocks) and doc.blocks
+        bulletins_seuls = all(isinstance(b, (E.Bulletin, E.FicheScolaire, E.PageBreak)) for b in doc.blocks) \
+            and doc.blocks
         if doc.blocks and all(isinstance(b, (E.Lettre, E.PageBreak)) for b in doc.blocks):
             for sec in self.d.sections:          # lettre : marges d'un courrier administratif
                 sec.left_margin = sec.right_margin = Mm(MARGE_G + 16)
@@ -698,6 +734,12 @@ class _Rendu:
                 self.officiel(force=True)
             elif isinstance(b, E.Lettre):
                 self.lettre(b)
+            elif isinstance(b, E.FicheScolaire):
+                if not premier_bulletin and not dernier_saut:
+                    _saut_de_page(self.d)
+                premier_bulletin = False
+                from epp.reports.fiche_docx import FicheWord
+                FicheWord(self, b).rendre()
             elif isinstance(b, E.Bulletin):
                 if not premier_bulletin and not dernier_saut:
                     _saut_de_page(self.d)
@@ -787,8 +829,9 @@ class BulletinWord:
 
     def rendre(self) -> None:
         K, C, d = self.K, self.C, self.d
-        if K["mention"]:
-            _para(d, K["mention"], 6.5, gras=True, couleur=C["gris_txt"], align=WD_ALIGN_PARAGRAPH.CENTER, apres=2)
+        if K["officiel"]:                   # en-tête officiel « fiche scolaire » compact
+            entete_officiel_word(d, self.W, K["officiel"][0], K["officiel"][1], [], taille=6.5, tirets=False)
+            _para(d, "", apres=2)
         self._entete()
         self._identite()
         self._disciplines()
@@ -876,6 +919,8 @@ class BulletinWord:
         champ(g, True, [("Élève :", K["eleve"])])
         champ(g, False, [("Né(e) le :", K["naissance"]), ("Âge :", K["age"])])
         champ(g, False, [("Classe :", K["classe"]), ("Enseignant(e) :", K["enseignant"])])
+        if K["parents"]:
+            champ(g, False, [("Parents :", K["parents"])])
         dcell = t.cell(0, 1)
         champ(dcell, True, [("Établissement :", K["ecole"])])
         champ(dcell, False, [("Année scolaire :", K["annee"])])

@@ -12,8 +12,9 @@ from epp.domain import calculs, repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
 from epp.ui.widgets import (Carte, Col, Formulaire, Tableau, afficher_erreur, bouton, confirmer, info, label,
-                            ligne, protege)
+                            ligne, protege, valider_suppression)
 
+GROUPES_SANGUINS = ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"]
 STATUTS = [("", "Tous les statuts"), ("PRESENT", "Présents"), ("ABANDON", "Abandons"), ("TRANSFERE", "Transférés")]
 
 
@@ -85,10 +86,12 @@ class DialogueEleve(QDialog):
             ("extrait", "Extrait de naissance", "oui_non"), ("acte_num", "N° de l'acte", "texte"),
             ("acte_date", "Date de l'acte", "date"), ("centre_etat_civil", "Centre d'état civil", "texte"),
             ("orphelin", "Orphelin", "oui_non"), ("orphelin_de", "Orphelin de", "liste",
-                                                  [("", "")] + [(x, x) for x in repo.liste(self.db, "ORPHELIN_DE")])])
+                                                  [("", "")] + [(x, x) for x in repo.liste(self.db, "ORPHELIN_DE")]),
+            ("groupe_sanguin", "Groupe sanguin", "liste_libre", GROUPES_SANGUINS),
+            ("allergies", "Allergies / handicap", "texte")])
         par = []
         for qui, t in (("pere", "Père"), ("mere", "Mère"), ("tuteur", "Tuteur")):
-            par += [(f"{qui}_nom", f"{t} : nom", "texte"), (f"{qui}_profession", "Profession", "texte"),
+            par += [(f"{qui}_nom", f"{t} : nom et prénoms", "texte"), (f"{qui}_profession", "Profession", "texte"),
                     (f"{qui}_residence", "Résidence", "texte"), (f"{qui}_tel", "Téléphone", "texte")]
         self.f_par = Formulaire(par, colonnes=2)
         classes = [(c.code, f"{c.code} – {c.libelle}") for c in self.annee.classes]
@@ -138,6 +141,9 @@ class DialogueEleve(QDialog):
         self.photo.set_donnees(self.photo_data)
 
     def _retirer_photo(self):
+        if self.photo_data and not self.photo_modifiee and self.ligne and not valider_suppression(
+                self, self.db, self.page.s, f"photo de {self.ligne['nom']}"):
+            return
         self.photo_data, self.photo_modifiee = None, True
         self.photo.vider()
 
@@ -154,6 +160,9 @@ class DialogueEleve(QDialog):
         data = {}
         for f in self.forms:
             data.update(f.valeurs())
+        if self.ligne and repo.changement_efface_notes(db, a, self.ligne["inscription_id"], data["classe"]) \
+                and not valider_suppression(self, db, s, f"notes de {self.ligne['nom']} (changement de classe)"):
+            return
         with db.transaction():
             eid = repo.save_eleve(db, s, self.ligne["eleve_id"] if self.ligne else None, data, a)
             if self.ligne:
@@ -190,6 +199,10 @@ class DialogueChangerClasse(QDialog):
     @protege
     def _ok(self):
         r = self.r
+        if repo.changement_efface_notes(self.page.db, self.page.annee, r["inscription_id"],
+                                        self.classe.currentData()) and not valider_suppression(
+                self, self.page.db, self.page.s, f"notes de {r['nom']} (changement de classe)"):
+            return
         repo.update_inscription(self.page.db, self.page.s, r["inscription_id"], self.page.annee,
                                 self.classe.currentData(), r["redoublant"], r["statut"],
                                 r.get("observations_inscription"))
@@ -269,7 +282,10 @@ class PageEleves(Page):
         self.b_modifier = bouton("Modifier", self.modifier, "primaire")
         self.b_classe = bouton("Changer de classe", self._changer_classe)
         self.b_supprimer = bouton("Supprimer…", self._supprimer, "danger")
-        c.lay.addLayout(ligne(self.b_modifier, self.b_classe, None, self.b_supprimer))
+        self.b_fiche = bouton("Fiche scolaire", self._fiche_scolaire)
+        self.b_fiche.setToolTip("Fiche scolaire de l'élève (en-tête officiel, parents, scolarité, code QR), "
+                                "en PDF ou en Word")
+        c.lay.addLayout(ligne(self.b_modifier, self.b_classe, self.b_fiche, None, self.b_supprimer))
         return c
 
     # ------------------------------------------------------------------ données
@@ -302,6 +318,7 @@ class PageEleves(Page):
         self.b_modifier.setEnabled(bool(r) and ok)
         self.b_classe.setEnabled(bool(r) and ok)
         self.b_supprimer.setEnabled(bool(r) and self.peut("eleves.supprimer") and self.modifiable())
+        self.b_fiche.setEnabled(bool(r) and self.peut("rapports.generer"))
         if not r:
             self.f_nom.setText("Aucun élève sélectionné")
             self.f_sous.setText("Choisissez un élève dans la liste.")
@@ -324,7 +341,9 @@ class PageEleves(Page):
                                         ("Extrait de naissance", r.get("extrait")), ("N° de l'acte", r.get("acte_num")),
                                         ("Date de l'acte", _d(r.get("acte_date"))),
                                         ("Centre d'état civil", r.get("centre_etat_civil")),
-                                        ("Orphelin", r.get("orphelin")), ("Orphelin de", r.get("orphelin_de"))]))
+                                        ("Orphelin", r.get("orphelin")), ("Orphelin de", r.get("orphelin_de")),
+                                        ("Groupe sanguin", r.get("groupe_sanguin")),
+                                        ("Allergies / handicap", r.get("allergies"))]))
         par = []
         for qui, t in (("pere", "Père"), ("mere", "Mère"), ("tuteur", "Tuteur")):
             par += [(t, r.get(f"{qui}_nom")), ("   Profession", r.get(f"{qui}_profession")),
@@ -369,9 +388,19 @@ class PageEleves(Page):
                          "cours d'année, préférez le statut « Abandon » ou « Transféré » (Modifier › Scolarité), "
                          "qui conserve l'historique.", "Supprimer", danger=True):
             return
+        if not valider_suppression(self, self.db, self.s, f"élève {r['nom']} ({r['matricule_ecole']})"):
+            return
         repo.delete_eleve(self.db, self.s, r["eleve_id"])
         self.ctx.modifie("eleves")
         info(self, "Élève supprimé", f"{r['nom']} a été supprimé.")
+
+    def _fiche_scolaire(self):
+        r = self.table.ligne_courante()
+        if not r:
+            return
+        from epp.ui.dialogs.export import exporter_rapport
+        exporter_rapport(self, "FICHE_SCOLAIRE", {"classe": r["classe"], "eleve": r["inscription_id"]},
+                         f"Fiche scolaire {r['nom']} {self.annee.libelle}")
 
     def _exporter(self):
         from epp.ui.dialogs.export import exporter_rapport

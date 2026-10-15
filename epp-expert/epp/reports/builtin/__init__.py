@@ -288,6 +288,11 @@ BULLETIN_ANNUEL = _bulletin("annuel")
 BULLETIN_COMPO = _bulletin("evaluation")
 BULLETIN_COMPO["sections"][0]["colonnes"] = "composition"      # une seule composition, quel que soit le réglage
 
+FICHE_SCOLAIRE = _modele("", sous_titre="", parametres=["classe", "eleve"],
+                         sections=[{"type": "fiche_scolaire", "titre": "", "photo": True, "qr": True,
+                                    "inclure_sortis": True, "titre_fiche": "FICHE SCOLAIRE"}])
+FICHE_SCOLAIRE["entete"] = {"officiel": False, "logo": True, "texte": ""}   # chaque fiche porte son en-tête
+
 # ---------------------------------------------------------------- exemples demandés
 EX_LISTE_CLASSE = _modele(
     "LISTE DES ÉLÈVES PAR CLASSE", parametres=["classe"],
@@ -438,6 +443,9 @@ TEMPLATES = [
      "Une composition : note et appréciation par discipline, total, moyenne et rang.", BULLETIN_COMPO),
     ("BULLETIN_ANNUEL", "Bulletins annuels", "Bulletins",
      "Moyennes des évaluations, MGA, rang, décision et observation de fin d'année.", BULLETIN_ANNUEL),
+    ("FICHE_SCOLAIRE", "Fiches scolaires des élèves", "Bulletins",
+     "Fiche scolaire avec en-tête officiel, parents, scolarité et code QR ; un élève, une classe ou toute l'école.",
+     FICHE_SCOLAIRE),
     ("DECISIONS_FIN_ANNEE", "Décisions de fin d'année", "Fin d'année",
      "Admis, redoublants, abandons, exclus et transférés validés, par classe.", DECISIONS_FIN_ANNEE),
     ("EX_LISTE_CLASSE", "Liste des élèves par classe", EXEMPLE, "Liste alphabétique, une page par classe.",

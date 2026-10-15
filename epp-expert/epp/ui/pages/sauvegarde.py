@@ -10,7 +10,7 @@ from PySide6.QtWidgets import QCheckBox, QFileDialog, QFormLayout, QInputDialog,
 
 from epp.core import backup
 from epp.ui.pages.base import Page
-from epp.ui.widgets import Carte, Col, Tableau, bouton, info, label, ligne, ouvrir_fichier, protege
+from epp.ui.widgets import Carte, Col, Tableau, bouton, info, label, ligne, ouvrir_fichier, protege, valider_suppression
 
 MOT_CONFIRMATION = "RESTAURER"
 
@@ -137,6 +137,8 @@ class PageSauvegarde(Page):
             "l'état actuel est faite d'abord ; vous devrez ensuite vous reconnecter.\n\n"
             f"Pour confirmer, tapez {MOT_CONFIRMATION} :")
         if not ok or mot.strip().upper() != MOT_CONFIRMATION:
+            return
+        if not valider_suppression(self, self.db, self.s, "remplacement de toutes les données par une sauvegarde"):
             return
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
         try:

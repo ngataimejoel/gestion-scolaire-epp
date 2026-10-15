@@ -12,7 +12,7 @@ from epp.domain import autorisations as au
 from epp.domain import calculs, repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
-from epp.ui.widgets import Col, Formulaire, Tableau, bouton, confirmer, info, label, ligne, protege
+from epp.ui.widgets import Col, Formulaire, Tableau, bouton, confirmer, info, label, ligne, protege, valider_suppression
 
 
 def mois_de_l_annee(annee) -> list[tuple[int, str]]:
@@ -164,7 +164,8 @@ class OngletAbsences(QWidget):
         if not r or self._issue_autorisation(r):
             return
         if confirmer(self, "Supprimer", f"Supprimer cette ligne ({r['nom']}, {calculs.to_date(r['date']):%d/%m/%Y}) ?",
-                     "Supprimer", True):
+                     "Supprimer", True) and valider_suppression(
+                self, self.page.db, self.page.s, f"absence de {r['nom']} du {calculs.to_date(r['date']):%d/%m/%Y}"):
             repo.delete_absence(self.page.db, self.page.s, self.kind, r["id"])
             self.page.ctx.modifie("absences")
 
@@ -399,7 +400,8 @@ class OngletAutorisations(QWidget):
         r = self.table.ligne_courante()
         if r and confirmer(self, "Supprimer la demande", f"Supprimer la demande {r['numero']} ({r['nom']}) ? Les "
                                                          "absences qu'elle avait créées sont retirées.", "Supprimer",
-                           True):
+                           True) and valider_suppression(self, self.page.db, self.page.s,
+                                                         f"demande d'autorisation {r['numero']} ({r['nom']})"):
             au.supprimer(self.page.db, self.page.s, r["id"])
             self.page.ctx.modifie("absences")
 

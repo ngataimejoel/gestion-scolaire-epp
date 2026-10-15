@@ -88,6 +88,14 @@ class Bulletin:
 
 
 @dataclass
+class FicheScolaire:
+    """Fiche scolaire d'un élève (une page, modèle de l'école) avec son code QR."""
+    data: dict
+    photo: bytes | None = None
+    options: dict = field(default_factory=dict)
+
+
+@dataclass
 class PageBreak:
     pass
 
@@ -652,7 +660,7 @@ class Builder:
         return [Signature(ld, self.t(s.get("fonction", "")), self.t(s.get("nom", "")))]
 
     def bulletin(self, s: dict) -> list:
-        from epp.domain import bulletins
+        from epp.domain import bulletins, fiche_scolaire
         classe = self.params.get("classe") or None
         eleve = self.params.get("eleve")
         eleve = int(eleve) if eleve not in (None, "") else None
@@ -672,7 +680,28 @@ class Builder:
             if i:
                 out.append(PageBreak())
             photo = repo.get_photo(self.db, "eleve", d["eleve_id"]) if s.get("photo", True) else None
+            par = fiche_scolaire.info_parents(self.db, d["eleve_id"])
+            d["ligne_parents"] = fiche_scolaire.ligne_parents(par)
+            for p in fiche_scolaire.parents(par)[:2]:
+                d[p["qui"]] = p["nom_complet"] + (f" ({p['profession']})" if p["profession"] else "")
             out.append(Bulletin(d, photo, opts))
+        if not data:
+            out.append(Paragraph("Aucun élève ne correspond aux critères choisis.", "note"))
+        return out
+
+    def fiche_scolaire(self, s: dict) -> list:
+        from epp.domain import fiche_scolaire
+        eleve = self.params.get("eleve")
+        data = fiche_scolaire.fiches(self.db, self.annee, self.params.get("classe") or None,
+                                     int(eleve) if eleve not in (None, "") else None,
+                                     inclure_sortis=bool(s.get("inclure_sortis", True)))
+        out = []
+        opts = {k: s.get(k) for k in ("photo", "qr", "titre_fiche") if s.get(k) is not None}
+        for i, d in enumerate(data):
+            if i:
+                out.append(PageBreak())
+            photo = repo.get_photo(self.db, "eleve", d["eleve_id"]) if s.get("photo", True) else None
+            out.append(FicheScolaire(d, photo, opts))
         if not data:
             out.append(Paragraph("Aucun élève ne correspond aux critères choisis.", "note"))
         return out

@@ -205,13 +205,14 @@ def contenu(doc: E.Document, b: E.Bulletin) -> dict:
     sigs = list(o.get("signatures") or ["L'enseignant(e)", "Le Directeur", "Les parents"])[:3]
     noms = [d.get("enseignant", ""), v.get("directeur", ""), ""]
     age = d.get("age")
-    mention = ""
+    mention, officiel = "", None
     if o.get("mention_officielle", True):
         gauche, droite, _ = E.entete_officiel(doc)
         mention = "  •  ".join([*gauche[:3], *(droite[:1])])
+        officiel = (gauche, droite[:2])          # en-tête « fiche scolaire » compact (sans logos)
     return {
         "annuel": annuel, "periodes": cols, "courant": t_courant if trim else courant, "visible": c_visible,
-        "mention": mention,
+        "mention": mention, "officiel": officiel, "parents": d.get("ligne_parents") or "",
         "titre": E.subst(params.get("bulletin_titre") or "{ecole}", v).upper(),
         "slogan": E.subst(params.get("bulletin_slogan", seed.DEFAULT_PARAMS["bulletin_slogan"]) or "", v),
         "devise": E.subst(params.get("bulletin_devise", seed.DEFAULT_PARAMS["bulletin_devise"]) or "", v),
@@ -421,10 +422,13 @@ class BulletinColore(Flowable):
         periodes = K["periodes"]
         y = H
 
-        # mention officielle (ministère, DRENA, IEPP) en petit
-        if K["mention"]:
-            self._txt(W / 2, y - 3 * mm, K["mention"], self.FB, 6.8, "gris_txt", "center", maxw=W)
-            y -= 5 * mm
+        # en-tête officiel (ministère, DRENA, IEPP | République, devise), modèle de la fiche scolaire
+        if K["officiel"]:
+            from epp.reports.fiche_pdf import dessiner_entete
+            c.saveState()
+            y -= dessiner_entete(c, 0, y, W, K["officiel"][0], K["officiel"][1], [], (self.F, self.FB),
+                                 taille=6.4, tirets=False) + 1.5 * mm
+            c.restoreState()
 
         # en-tête
         hh = 33 * mm
@@ -476,7 +480,7 @@ class BulletinColore(Flowable):
         y -= hh + 3 * mm
 
         # identité
-        hi = 25 * mm
+        hi = 31 * mm if K["parents"] else 25 * mm
         c.setFillColor(colors.HexColor(T["identite"]))
         c.setStrokeColor(C["bord"])
         c.setLineWidth(1)
@@ -485,15 +489,15 @@ class BulletinColore(Flowable):
         if K["photo"]:
             pw, ph = 20 * mm, 22 * mm
             xp = W - pw - 2 * mm
-            if not (self.photo and self._image(self.photo, xp, y - hi + 1.5 * mm, pw, ph)):
+            if not (self.photo and self._image(self.photo, xp, y - 25 * mm + 1.5 * mm, pw, ph)):
                 c.setStrokeColor(C["bord"])
                 c.setFillColor(colors.white)
-                c.rect(xp, y - hi + 1.5 * mm, pw, ph, fill=1, stroke=1)
-                self._txt(xp + pw / 2, y - hi + 11 * mm, "PHOTO", self.F, 7, "gris_txt", "center")
+                c.rect(xp, y - 25 * mm + 1.5 * mm, pw, ph, fill=1, stroke=1)
+                self._txt(xp + pw / 2, y - 25 * mm + 11 * mm, "PHOTO", self.F, 7, "gris_txt", "center")
             xp -= 2 * mm
         split = xp * 0.56
         c.setStrokeColor(C["bord"])
-        c.line(split, y - hi + 3 * mm, split, y - 3 * mm)
+        c.line(split, y - (25 * mm) + 3 * mm, split, y - 3 * mm)
 
         def champ(x, yy, lab, val, maxw):
             self._txt(x, yy, lab, self.FB, 8.5, "texte")
@@ -511,6 +515,10 @@ class BulletinColore(Flowable):
             for lab, val, mw in r:
                 champ(xx, yy, lab, val, mw)
                 xx += mw + 2 * mm if len(r) > 1 else 0
+        if K["parents"]:
+            c.setStrokeColor(C["bord"])
+            c.line(3 * mm, y - 24.2 * mm, W - 3 * mm, y - 24.2 * mm)
+            champ(3.5 * mm, y - 28.3 * mm, "Parents :", K["parents"], W - 7 * mm)
         x2 = split + 3.5 * mm
         wr = xp - x2 - 2 * mm
         champ(x2, y - 6.5 * mm, "Établissement :", K["ecole"], wr)
@@ -542,7 +550,7 @@ class BulletinColore(Flowable):
         disc = K["lignes"]
         n = len(disc) + 2
         hh_t = 11 * mm
-        rh = max(5 * mm, min(10.5 * mm, (dispo - hh_t) / max(n, 1)))
+        rh = max(4.2 * mm, min(10.5 * mm, (dispo - hh_t) / max(n, 1)))
         np_ = max(len(periodes), 1)
         w_no, w_moy = 10 * mm, 25 * mm
         w_p = min(27 * mm, (W - w_no - w_moy - 55 * mm) / np_)

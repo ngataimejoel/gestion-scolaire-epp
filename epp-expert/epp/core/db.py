@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 class Database:
@@ -256,12 +256,21 @@ def _motifs_absence_v6(conn: sqlite3.Connection) -> None:
                  "WHERE liste='MOTIF_ABSENCE' AND valeur='Autre'")
 
 
+def _ministere_v7(conn: sqlite3.Connection) -> None:
+    """Nom actuel du ministère (fiche scolaire de l'école), sauf s'il a été personnalisé."""
+    from epp.core import seed
+    conn.execute("UPDATE parametre SET valeur=? WHERE cle='ministere' AND valeur=?",
+                 (seed.MINISTERE_DEFAUT, seed.ANCIEN_MINISTERE))
+
+
 MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexion)
     2: _PHOTO_SQL,          # photos des élèves et du personnel
     3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
     4: _AUTORISATION_SQL + _archive_triggers(),   # demandes d'autorisation d'absence liées aux absences
     5: _CONGE_SQL + _archive_triggers(),          # jours fériés et vacances (non comptés comme jours de classe)
     6: [_motifs_absence_v6],                      # nouveaux motifs d'autorisation d'absence
+    7: [_ajouter_colonne("eleve", "groupe_sanguin", "TEXT"),   # fiche scolaire : santé de l'élève
+        _ajouter_colonne("eleve", "allergies", "TEXT"), _ministere_v7],
 }
 
 

@@ -6,7 +6,8 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QDoubleSpinBox, QHeaderView, 
 
 from epp.domain import repo, stats
 from epp.ui.pages.base import Page
-from epp.ui.widgets import Carte, Col, Formulaire, Tableau, bouton, confirmer, info, label, ligne, protege
+from epp.ui.widgets import (Carte, Col, Formulaire, Tableau, bouton, confirmer, info, label, ligne, protege,
+                            valider_suppression)
 
 REGLES = [("STANDARD", "Standard : (compositions + 2 × passage) ÷ 3"), ("MOYENNE4", "Moyenne des 4 évaluations")]
 
@@ -92,8 +93,13 @@ class DialogueMatieres(QDialog):
 
     def _retirer(self):
         r = self.t.currentRow()
-        if r >= 0:
-            self.t.removeRow(r)
+        if r < 0:
+            return
+        it = self.t.item(r, 0)
+        if it is not None and it.data(256) and not valider_suppression(
+                self, self.page.db, self.page.s, f"matière {it.text()} (et ses notes) – {self.grille.libelle}"):
+            return                       # matière déjà enregistrée : ses notes seront effacées
+        self.t.removeRow(r)
 
     @protege
     def _ok(self):
@@ -192,7 +198,8 @@ class PageClasses(Page):
     @protege
     def _supprimer(self):
         r = self.table.ligne_courante()
-        if r and confirmer(self, "Supprimer la classe", f"Supprimer la classe {r['code']} ?", "Supprimer", True):
+        if r and confirmer(self, "Supprimer la classe", f"Supprimer la classe {r['code']} ?", "Supprimer", True) \
+                and valider_suppression(self, self.db, self.s, f"classe {r['code']}"):
             repo.delete_classe(self.db, self.s, r["id"])
             self._apres()
 
