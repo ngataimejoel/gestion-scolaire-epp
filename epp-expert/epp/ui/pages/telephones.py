@@ -75,7 +75,7 @@ class PageTelephones(Page):
         lien = label(f'<a href="{LIEN_APK}">{LIEN_APK}</a>', wrap=True)
         lien.setOpenExternalLinks(True)
         lien.setTextInteractionFlags(Qt.TextBrowserInteraction)
-        c3.lay.addWidget(label("Scannez ce code avec l'appareil photo du téléphone (Android 6 ou plus récent), "
+        c3.lay.addWidget(label("Scannez ce code avec l'appareil photo du téléphone (Android 8 ou plus récent), "
                                "téléchargez AkwaSchool.apk puis ouvrez-le pour l'installer.", discret=True, wrap=True))
         c3.lay.addWidget(lien)
         c3.lay.addStretch(1)

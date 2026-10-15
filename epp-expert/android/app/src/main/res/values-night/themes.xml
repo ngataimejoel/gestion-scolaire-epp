@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Akwa" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorPrimary">#43B98C</item>
+        <item name="android:colorPrimaryDark">#141B17</item>
+        <item name="android:colorAccent">#F0A050</item>
+        <item name="android:windowBackground">#0C110E</item>
+        <item name="android:statusBarColor">#141B17</item>
+        <item name="android:navigationBarColor">#141B17</item>
+    </style>
+</resources>
