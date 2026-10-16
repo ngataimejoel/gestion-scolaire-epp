@@ -7,12 +7,13 @@
      node outils/tutoriels_v8.js                 -> epp/resources/videos/tutoriels/*.mp4
      PLAYWRIGHT=/chemin/node_modules/playwright node outils/tutoriels_v8.js
 */
+/* eslint-disable @typescript-eslint/no-require-imports */
 'use strict';
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
-const { chromium } = require(process.env.PLAYWRIGHT || 'playwright'); // eslint-disable-line
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 
 const RACINE = path.resolve(__dirname, '..');
 const PAGE = path.join(RACINE, 'epp', 'resources', 'web', 'akwa_v8.html');
