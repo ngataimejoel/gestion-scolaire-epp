@@ -86,6 +86,17 @@ class Page(QWidget):
     def peut(self, perm: str) -> bool:
         return self.ctx.peut(perm)
 
+    @property
+    def restreint(self) -> bool:
+        """Compte enseignant : sa classe seulement."""
+        return bool(self.s and self.s.restreint)
+
+    def voit(self, classe: str | None) -> bool:
+        return not self.restreint or self.s.voit_classe(self.annee.id if self.annee else None, classe)
+
+    def classes_visibles(self) -> list:
+        return [c for c in (self.annee.classes if self.annee else []) if self.voit(c.code)]
+
     def modifiable(self) -> bool:
         """L'année affichée accepte des modifications (elle n'est pas clôturée)."""
         return bool(self.annee) and not self.annee.cloturee

@@ -18,6 +18,7 @@ PAGES = [
     ("inscriptions", "Inscriptions", "", "inscriptions:PageInscriptions", "eleves.lire"),
     ("classes", "Classes", "", "classes:PageClasses", "eleves.lire"),
     ("personnel", "Personnel", "", "personnel:PagePersonnel", "personnel.lire"),
+    ("enseignants", "Enseignants", "", "enseignants:PageEnseignants", "enseignants.gerer"),
     ("notes", "Saisie des notes", "", "notes:PageNotes", "notes.lire"),
     ("resultats", "Résultats, bulletins et fin d'année", "", "resultats:PageResultats", "notes.lire"),
     ("absences", "Absences et autorisations", "", "absences:PageAbsences", "absences.lire"),
@@ -34,7 +35,8 @@ PAGES = [
 # les volets du menu : clé, libellé, raccourci, icône, pages (onglets)
 VOLETS = [
     ("accueil", "Tableau de bord", "Ctrl+1", "home", ["tableau"]),
-    ("eleves_personnel", "Élèves & personnel", "Ctrl+2", "users", ["eleves", "inscriptions", "classes", "personnel"]),
+    ("eleves_personnel", "Élèves & personnel", "Ctrl+2", "users", ["eleves", "inscriptions", "classes", "personnel",
+                                                                          "enseignants"]),
     ("notes_bulletins", "Notes & bulletins", "Ctrl+3", "award", ["notes", "resultats"]),
     ("absences", "Absences", "Ctrl+4", "cal", ["absences"]),
     ("administration", "Rapports & administration", "Ctrl+5", "book",
@@ -44,11 +46,15 @@ VOLETS = [
 ]
 
 DESCRIPTIONS = {
-    "eleves_personnel": "Élèves, inscriptions, classes et personnel de l'école",
+    "eleves_personnel": "Élèves, inscriptions, classes, personnel et comptes des enseignants",
     "notes_bulletins": "Saisie des notes, moyennes, classements, bulletins et passage en fin d'année",
     "administration": "Rapports officiels, générateur de rapports, statistiques, import, export, sauvegarde et "
                       "téléphones",
 }
+
+
+# Pages de l'école entière, cachées à un compte enseignant (limité à sa classe)
+PAGES_ECOLE = {"tableau", "inscriptions", "classes", "generateur", "statistiques", "import_export", "sauvegarde"}
 
 
 def info_page(cle: str) -> tuple | None:

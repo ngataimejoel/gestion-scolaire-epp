@@ -99,13 +99,16 @@ class PageRapports(Page):
         self.arbre.clear()
         cats: dict[str, QTreeWidgetItem] = {}
         lots = QTreeWidgetItem(["Dossiers complets"])
-        self.arbre.addTopLevelItem(lots)
-        for k, (titre, codes) in LOTS.items():
+        if not self.restreint:          # compte enseignant : seulement les rapports d'une classe
+            self.arbre.addTopLevelItem(lots)
+        for k, (titre, codes) in ({} if self.restreint else LOTS).items():
             it = QTreeWidgetItem([titre])
             it.setData(0, Qt.UserRole, LOT + k)
             it.setToolTip(0, "Regroupe : " + ", ".join(codes))
             lots.addChild(it)
         for m in store.lister(self.db):
+            if self.restreint and "classe" not in (store.definition(self.db, m["id"]).get("parametres") or []):
+                continue
             cat = m["categorie"] or "Autre"
             if cat not in cats:
                 cats[cat] = QTreeWidgetItem([cat])
@@ -145,7 +148,8 @@ class PageRapports(Page):
 
     def _remplir_listes(self):
         a = self.annee
-        for w, items in ((self.w_classe, [("", "Toutes les classes")] + [(c, c) for c in a.codes]),
+        classes = [(c.code, c.code) for c in self.classes_visibles()]
+        for w, items in ((self.w_classe, classes if self.restreint else [("", "Toutes les classes")] + classes),
                          (self.w_mois, [(m, t) for m, t in mois_de_l_annee(a)]),
                          (self.w_compo, [(n, a.libelle_evaluation("STD", n)) for n in a.eval_nums()])):
             v = w.currentData()

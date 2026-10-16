@@ -264,7 +264,7 @@ class PageNotes(Page):
     def rafraichir(self):
         cl = self.classe.currentData()
         self.classe.clear()
-        for c in self.annee.classes:
+        for c in self.classes_visibles():
             self.classe.addItem(c.code, c.code)
         if cl:
             self.classe.setCurrentIndex(max(0, self.classe.findData(cl)))

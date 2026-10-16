@@ -155,13 +155,14 @@ class PageTelephones(Page):
         courant = self.compte.currentData()
         self.compte.clear()
         tous = self.peut("utilisateurs.gerer")
+        profs = self.peut("enseignants.gerer")       # le directeur associe les téléphones des enseignants
         for u in security.lister_utilisateurs(self.db):
-            if u["actif"] and (tous or u["id"] == self.s.user_id):
+            if u["actif"] and (tous or u["id"] == self.s.user_id or (profs and u["role"] == security.ROLE_ENSEIGNANT)):
                 self.compte.addItem(f"{u['nom']} ({u['login']} – {u['role_libelle']})", u["id"])
         i = self.compte.findData(courant if courant is not None else self.s.user_id)
         self.compte.setCurrentIndex(max(i, 0))
         self.b_code.setEnabled(self.compte.count() > 0 and (en_marche or regler))
-        lignes = lister_appareils(self.db, None if tous else self.s.user_id)
+        lignes = lister_appareils(self.db, None if tous or profs else self.s.user_id)
         for r in lignes:
             r["utilisateur"] = f"{r['utilisateur']} ({r['login']})"
             r["dernier_contact"] = r["dernier_contact"] or "jamais"

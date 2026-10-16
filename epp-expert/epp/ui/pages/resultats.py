@@ -132,7 +132,7 @@ class PageResultats(Page):
 
     def rafraichir(self):
         cl = self._classe()
-        lignes = fin_annee.etat(self.db, self.annee)
+        lignes = [e for e in fin_annee.etat(self.db, self.annee) if self.voit(e["classe"])]
         for e in lignes:
             e["partants"] = sum(e[k] for k in fin_annee.PARTANTS)
             e["etat_lib"] = ("Validée" if e["complete"] else "Vide" if not e["effectif"] else
