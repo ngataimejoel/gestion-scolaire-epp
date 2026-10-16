@@ -27,6 +27,7 @@ import urllib.request
 from pathlib import Path
 
 TYPES = {"1an": "1 an", "vie": "À vie"}
+URL_SERVICE = "https://epp-expert-activation.netlify.app"
 
 
 class ErreurGenerateur(Exception):
@@ -126,8 +127,8 @@ def ecrire_csv(codes: list[dict], fichier: str) -> None:
 
 # ------------------------------------------------------------------ fenêtre
 def fenetre() -> int:
-    from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QLabel,
-                                   QLineEdit, QMessageBox, QPushButton, QSpinBox, QTableWidget,
+    from PySide6.QtWidgets import (QApplication, QComboBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog,
+                                   QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox, QTableWidget,
                                    QTableWidgetItem, QVBoxLayout, QWidget)
     app = QApplication.instance() or QApplication(sys.argv)
     w = QWidget()
@@ -152,14 +153,24 @@ def fenetre() -> int:
     lay.addWidget(table)
     bas = QHBoxLayout()
     actions = {n: QPushButton(n) for n in ("Actualiser", "Copier le code", "Libérer", "Annuler le code",
-                                           "Exporter (CSV)")}
+                                           "Exporter (CSV)", "Mot de passe…")}
     for b in actions.values():
         bas.addWidget(b)
     lay.addLayout(bas)
     donnees: list[dict] = []
 
+    def configurer() -> bool:
+        """Mot de passe (jeton) du générateur, gardé dans le dossier de l'utilisateur de cet ordinateur."""
+        jeton, ok = QInputDialog.getText(w, "Générateur", "Mot de passe du générateur (jeton) :", QLineEdit.Password)
+        if not ok or not jeton.strip():
+            return False
+        ecrire_config(url=lire_config().get("url") or URL_SERVICE, jeton=jeton.strip())
+        return True
+
     def erreur(e):
         QMessageBox.warning(w, "Générateur", str(e))
+        if "refusé" in str(e).lower() and configurer():
+            remplir()
 
     def remplir():
         nonlocal donnees
@@ -212,8 +223,9 @@ def fenetre() -> int:
     actions["Annuler le code"].clicked.connect(lambda: sur_action(
         revoquer, "Annuler définitivement {} ? Il ne pourra plus être activé."))
     actions["Exporter (CSV)"].clicked.connect(sur_csv)
+    actions["Mot de passe…"].clicked.connect(lambda: configurer() and remplir())
     w.show()
-    if lire_config().get("url"):
+    if lire_config().get("jeton") or configurer():
         remplir()
     return app.exec()
 

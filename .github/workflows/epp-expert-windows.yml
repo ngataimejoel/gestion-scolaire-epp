@@ -102,6 +102,19 @@ jobs:
           if (-not (Test-Path "$data\temoin.txt")) { throw "données supprimées par la désinstallation" }
           Write-Host "Installation, mise à jour et désinstallation : OK (données conservées)"
 
+      # Outil du fournisseur (création des codes) : fichier de compilation seulement, jamais publié
+      - name: Construire le générateur de codes (outil du fournisseur)
+        run: |
+          pyinstaller --noconfirm --clean --onefile --windowed --name GenerateurCodes --icon epp\resources\app.ico `
+            --distpath dist_fournisseur --workpath build_fournisseur outils\generateur_codes.py
+          if (-not (Test-Path dist_fournisseur\GenerateurCodes.exe)) { throw "GenerateurCodes.exe absent" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GenerateurCodes-fournisseur
+          path: epp-expert/dist_fournisseur/GenerateurCodes.exe
+          if-no-files-found: error
+
       - uses: actions/upload-artifact@v4
         with:
           name: AkwaSchool-Setup
