@@ -34,6 +34,8 @@ class DialogueAbsence(QDialog):
         db, a = page.page.db, page.page.annee
         if kind == "eleve":
             for r in repo.inscriptions(db, a):
+                if not page.page.voit(r["classe"]):
+                    continue
                 self.cible.addItem(f"{r['nom']} ({r['matricule_ecole']}) – {r['classe']}", r["inscription_id"])
         else:
             for p in repo.personnel(db, a):
@@ -124,6 +126,10 @@ class OngletAbsences(QWidget):
         self.mois.setCurrentIndex(max(0, self.mois.findData(m or 0)))
         f = repo.absences_eleves if self.kind == "eleve" else repo.absences_personnel
         rows = f(self.page.db, self.page.annee, self.mois.currentData() or None)
+        p = self.page
+        if p.restreint:          # compte enseignant : élèves de sa classe, ses propres absences
+            rows = [r for r in rows if (p.voit(r.get("classe")) if self.kind == "eleve"
+                                        else r.get("personnel_id") == p.s.personnel_id)]
         q = self.recherche.text().strip().lower()
         if q:
             rows = [r for r in rows if q in " ".join(str(r.get(k) or "") for k in (
@@ -345,6 +351,10 @@ class OngletAutorisations(QWidget):
     def rafraichir(self):
         rows = au.lister(self.page.db, self.page.annee, self.recherche.text().strip() or None,
                          self.kind.currentData() or None, self.statut.currentData() or None)
+        p = self.page
+        if p.restreint:
+            rows = [r for r in rows if (r.get("personnel_id") == p.s.personnel_id if r.get("kind") == "personnel"
+                                        else p.voit(r.get("classe_eleve")))]
         self.table.set_lignes(rows)
         att = sum(1 for r in rows if r["statut"] == "EN_ATTENTE")
         self.compte.setText(f"{len(rows)} demande(s)" + (f" · {att} en attente de décision" if att else ""))

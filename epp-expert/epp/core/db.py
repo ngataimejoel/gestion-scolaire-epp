@@ -11,7 +11,7 @@ from typing import Any, Iterable
 from epp import __version__
 from epp.core import paths
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 10
 
 
 class Database:
@@ -284,6 +284,44 @@ _APPAREIL_SQL = [
 ]
 
 
+_ENSEIGNANT_SQL = [
+    """CREATE TABLE IF NOT EXISTS appel (
+    annee_id INTEGER NOT NULL REFERENCES annee_scolaire(id) ON DELETE CASCADE,
+    classe_code TEXT NOT NULL,
+    date TEXT NOT NULL,
+    absents INTEGER NOT NULL DEFAULT 0,
+    presents INTEGER NOT NULL DEFAULT 0,
+    fait_par TEXT,
+    fait_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (annee_id, classe_code, date)
+)""",
+    """CREATE TABLE IF NOT EXISTS message (
+    id INTEGER PRIMARY KEY,
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    auteur TEXT NOT NULL,
+    destinataire_id INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE,
+    titre TEXT NOT NULL,
+    texte TEXT NOT NULL
+)""",
+    """CREATE TABLE IF NOT EXISTS message_lu (
+    message_id INTEGER NOT NULL REFERENCES message(id) ON DELETE CASCADE,
+    utilisateur_id INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE,
+    lu_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (message_id, utilisateur_id)
+)""",
+    """CREATE TRIGGER IF NOT EXISTS personnel_inactif_comptes AFTER UPDATE OF actif ON personnel WHEN NEW.actif=0
+BEGIN
+    UPDATE appareil SET actif=0 WHERE utilisateur_id IN (SELECT id FROM utilisateur WHERE personnel_id=NEW.id);
+    UPDATE utilisateur SET actif=0 WHERE personnel_id=NEW.id;
+END""",
+    """CREATE TRIGGER IF NOT EXISTS personnel_suppr_comptes BEFORE DELETE ON personnel
+BEGIN
+    UPDATE appareil SET actif=0 WHERE utilisateur_id IN (SELECT id FROM utilisateur WHERE personnel_id=OLD.id);
+    UPDATE utilisateur SET actif=0 WHERE personnel_id=OLD.id;
+END""",
+]
+
+
 MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexion)
     2: _PHOTO_SQL,          # photos des élèves et du personnel
     3: _DECISION_SQL + _archive_triggers(),   # décisions de fin d'année, années clôturées en lecture seule
@@ -293,6 +331,12 @@ MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexio
     7: [_ajouter_colonne("eleve", "groupe_sanguin", "TEXT"),   # fiche scolaire : santé de l'élève
         _ajouter_colonne("eleve", "allergies", "TEXT"), _ministere_v7],
     8: _APPAREIL_SQL,                             # téléphones associés (application Android)
+    9: [_ajouter_colonne("utilisateur", "personnel_id", "INTEGER REFERENCES personnel(id) ON DELETE SET NULL"),
+        _ajouter_colonne("note", "en_attente", "INTEGER NOT NULL DEFAULT 0"),
+        _ajouter_colonne("note", "saisi_par", "TEXT"),
+        _ajouter_colonne("evaluation", "saisie_fermee", "INTEGER NOT NULL DEFAULT 0"),
+        _ajouter_colonne("evaluation", "fin_saisie", "TEXT")] + _ENSEIGNANT_SQL,   # accès des enseignants
+    10: [_ajouter_colonne("utilisateur", "secours_hash", "TEXT")],   # code de secours (mot de passe oublié)
 }
 
 

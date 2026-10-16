@@ -145,6 +145,8 @@ public class MainActivity extends Activity {
         super.onActivityResult(demande, resultat, donnees);
         if (demande == Pont.CHOISIR || demande == Pont.ENREGISTRER) {
             pont.resultatActivite(demande, resultat == RESULT_OK, donnees == null ? null : donnees.getData());
+        } else if (demande == Scan.SCANNER || demande == Scan.GALERIE) {
+            pont.resultatScan(demande, resultat == RESULT_OK, donnees);
         }
     }
 

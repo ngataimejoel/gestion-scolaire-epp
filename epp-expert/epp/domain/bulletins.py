@@ -106,7 +106,7 @@ def releve_classe(db: Database, annee: Annee, classe_code: str) -> dict:
             continue
         out["periodes"].append({"num": num, "libelle": evs[num].get("libelle") or f"Évaluation {num}",
                                 "date": evs[num].get("date")})
-        mats, lignes = repo.notes_grille(db, annee, g.id, num, cl.code)
+        mats, lignes = repo.notes_grille(db, annee, g.id, num, cl.code, valides_seulement=True)
         for m in mats:
             if m["libelle"] not in vues:
                 vues[m["libelle"]] = {"libelle": m["libelle"], "max": repo.max_note(g, m)}
@@ -168,7 +168,7 @@ def bulletins_evaluation(db: Database, annee: Annee, num: int, classe_code: str 
         g = annee.grilles.get(cl.grille_id)
         if g is None or num not in g.matieres:
             continue
-        mats, lignes = repo.notes_grille(db, annee, g.id, num, cl.code)
+        mats, lignes = repo.notes_grille(db, annee, g.id, num, cl.code, valides_seulement=True)
         moys = {r["inscription_id"]: r["moyenne"] for r in lignes}
         eligibles = {r["inscription_id"] for r in lignes if r["statut"] == "PRESENT" and r["present"]}
         rk = calculs.rangs(moys, eligibles)

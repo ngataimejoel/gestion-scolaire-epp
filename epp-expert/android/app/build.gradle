@@ -53,3 +53,10 @@ android {
         abortOnError false
     }
 }
+
+dependencies {
+    // scan des feuilles de notes et des extraits de naissance : lecture du texte sur le téléphone (modèle inclus,
+    // sans Internet) et scanner de documents d'Android (bords, redressement, nettoyage de la page)
+    implementation "com.google.mlkit:text-recognition:16.0.1"
+    implementation "com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1"
+}

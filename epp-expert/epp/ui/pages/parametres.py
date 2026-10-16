@@ -13,7 +13,7 @@ from epp.domain import calendrier, repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
 from epp.ui.widgets import (Col, Formulaire, Tableau, afficher_erreur, bouton, confirmer, info, label, ligne,
-                            protege, valider_suppression)
+                            mot_de_passe_admin, protege, valider_suppression)
 
 LISTES = {"NATIONALITE": "Nationalités", "MOTIF_ABSENCE": "Motifs d'absence", "FONCTION": "Fonctions du personnel",
           "SITUATION_MATRIMONIALE": "Situations matrimoniales", "ORPHELIN_DE": "Orphelin de",
@@ -109,7 +109,11 @@ class OngletEtablissement(QWidget):
         v.addWidget(ge)
         self.b_reset = bouton("Rétablir l'en-tête officiel", self._reset)
         self.b_ok = bouton("Enregistrer", self._ok, "primaire")
-        v.addLayout(ligne(self.b_reset, None, self.b_ok))
+        self.b_debloquer = bouton("Modifier l'identité de l'école…", self._debloquer)
+        self.b_debloquer.setToolTip("Les informations de l'école sont verrouillées après la première saisie : "
+                                    "le mot de passe d'un administrateur est demandé pour les changer.")
+        self.admin = None
+        v.addLayout(ligne(self.b_reset, self.b_debloquer, None, self.b_ok))
         v.addStretch(1)
 
     def charger(self):
@@ -121,6 +125,12 @@ class OngletEtablissement(QWidget):
             l.charger()
         ok = self.page.peut("parametres.modifier")
         self.f.activer(ok)
+        self.admin = None
+        fige = ok and repo.identite_verrouillee(self.page.db)
+        for k in repo.IDENTITE_ECOLE:
+            if fige and e.get(k) and k in self.f.widgets:
+                self.f.widgets[k].setEnabled(False)
+        self.b_debloquer.setVisible(fige)
         for w in (self.gauche, self.droite, self.b_reset, self.b_ok, *[b for l in self.logos for b in (l.b1, l.b2)]):
             w.setEnabled(ok)
 
@@ -130,9 +140,20 @@ class OngletEtablissement(QWidget):
         d = {k: v or "" for k, v in d.items()}
         d["entete_gauche"] = self.gauche.toPlainText().strip()
         d["entete_droite"] = self.droite.toPlainText().strip()
-        repo.save_etablissement(self.page.db, self.page.s, d)
+        repo.save_etablissement(self.page.db, self.page.s, d, autorise_par=self.admin)
+        self.charger()
         self.page.ctx.annee_changee.emit()
         info(self, "Paramètres", "Les informations de l'établissement ont été enregistrées.")
+
+    def _debloquer(self):
+        self.admin = mot_de_passe_admin(
+            self, self.page.db, self.page.s, "Les informations de l'école sont verrouillées depuis leur première "
+            "saisie.\n\nSaisissez le mot de passe d'un administrateur pour les modifier.", "identité de l'école")
+        if self.admin:
+            for k in repo.IDENTITE_ECOLE:
+                if k in self.f.widgets:
+                    self.f.widgets[k].setEnabled(True)
+            self.b_debloquer.setVisible(False)
 
     @protege
     def _reset(self):

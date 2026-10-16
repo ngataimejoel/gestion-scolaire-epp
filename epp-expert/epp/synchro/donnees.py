@@ -21,7 +21,7 @@ from epp import __version__
 from epp.core import security
 from epp.core.db import AnneeCloturee, Database
 from epp.core.security import AccessDenied, Session
-from epp.domain import repo, resultats
+from epp.domain import autorisations, enseignants, repo, resultats
 from epp.domain.referentiels import norm
 from epp.domain.repo import ValidationError
 
@@ -57,7 +57,8 @@ def instantane(db: Database, s: Session, etat_licence) -> dict:
         "version": 1, "genere_le": datetime.now(timezone.utc).isoformat(), "app_version": __version__,
         "licence": licence_resume(etat_licence),
         "utilisateur": {"login": s.login, "nom": s.nom, "role": s.role_libelle,
-                        "permissions": sorted(s.permissions)},
+                        "permissions": sorted(s.permissions), "enseignant": s.restreint,
+                        "personnel_id": s.personnel_id},
         "ecole": {k: db.get_param(k, "") or "" for k in PARAMETRES_ECOLE},
         "annee": None,
     }
@@ -67,43 +68,65 @@ def instantane(db: Database, s: Session, etat_licence) -> dict:
     if not aid:
         return out
     a = repo.load_annee(db, aid)
+    autorisees = s.classes(a.id)           # compte enseignant : sa classe seulement
+    visibles = [c for c in a.classes if autorisees is None or c.code in autorisees]
+    out["utilisateur"]["classes"] = [c.code for c in visibles] if autorisees is not None else None
+    out["messages"] = enseignants.messages_pour(db, s)
     out["annee"] = {"id": a.id, "libelle": a.libelle, "date_debut": a.date_debut, "date_fin": a.date_fin,
                     "cloturee": a.cloturee}
     out["classes"] = [{"id": c.id, "code": c.code, "libelle": c.libelle, "grille_id": c.grille_id,
                        "calendrier": c.calendrier, "bareme": c.bareme, "seuil": c.seuil, "regle_mga": c.regle_mga,
-                       "niveau_suivant": c.niveau_suivant} for c in a.classes]
+                       "niveau_suivant": c.niveau_suivant} for c in visibles]
     out["grilles"] = [{"id": g.id, "code": g.code, "libelle": g.libelle, "mode": g.mode, "echelle": g.echelle,
                        "note_max": g.note_max,
                        "matieres": {str(n): [{"id": m["id"], "libelle": m["libelle"], "valeur": m["valeur"]}
                                              for m in ms] for n, ms in g.matieres.items()}}
                       for g in a.grilles.values()]
-    out["evaluations"] = {cal: [{"num": n, "libelle": e["libelle"], "date": e["date"]} for n, e in sorted(evs.items())]
+    out["evaluations"] = {cal: [{"num": n, "libelle": e["libelle"], "date": e["date"],
+                                 "fermee": bool(e.get("saisie_fermee")), "fin_saisie": e.get("fin_saisie")}
+                                for n, e in sorted(evs.items())]
                           for cal, evs in a.evaluations.items()}
+    codes = {c.code for c in visibles}
     out["motifs_absence"] = repo.liste(db, "MOTIF_ABSENCE")
     if s.can("eleves.lire") or s.can("notes.lire") or s.can("absences.lire"):
-        out["eleves"] = [_sous(r, CHAMPS_ELEVE) for r in repo.inscriptions(db, a)]
+        out["eleves"] = [_sous(r, CHAMPS_ELEVE) for r in repo.inscriptions(db, a) if r["classe"] in codes]
+    ids = {e["inscription_id"] for e in out.get("eleves", [])}
     if s.can("notes.lire"):
         notes: dict[str, dict[str, float]] = {}
-        for n in db.query("SELECT n.inscription_id, n.matiere_id, n.valeur FROM note n JOIN inscription i "
+        attente: dict[str, list[int]] = {}
+        for n in db.query("SELECT n.inscription_id, n.matiere_id, n.valeur, n.en_attente FROM note n JOIN inscription i "
                           "ON i.id=n.inscription_id WHERE i.annee_id=?", (a.id,)):
+            if n["inscription_id"] not in ids:
+                continue
             notes.setdefault(str(n["inscription_id"]), {})[str(n["matiere_id"])] = n["valeur"]
+            if n["en_attente"]:
+                attente.setdefault(str(n["inscription_id"]), []).append(n["matiere_id"])
         out["notes"] = notes
+        out["notes_attente"] = attente
         absents: dict[str, list[int]] = {}
         for p in db.query("SELECT p.inscription_id, p.eval_num FROM presence_eval p JOIN inscription i "
                           "ON i.id=p.inscription_id WHERE i.annee_id=? AND p.present=0", (a.id,)):
+            if p["inscription_id"] not in ids:
+                continue
             absents.setdefault(str(p["inscription_id"]), []).append(p["eval_num"])
         out["absents_evaluation"] = absents
         out["resultats"] = [{"inscription_id": r["inscription_id"], "moy1": r["moy1"], "moy2": r["moy2"],
                              "moy3": r["moy3"], "moy4": r["moy4"], "mga": r["mga"], "rang": r["rang"],
                              "decision": r["decision"], "observation": r["observation"]}
-                            for r in resultats.compute(db, a)]
+                            for r in resultats.compute(db, a) if r["inscription_id"] in ids]
+    soi = (lambda pid: pid == s.personnel_id) if s.restreint else (lambda pid: True)
     if s.can("personnel.lire") or s.can("absences.lire"):
-        out["personnel"] = [_sous(r, CHAMPS_PERSONNEL) for r in repo.personnel(db, a)]
+        out["personnel"] = [_sous(r, CHAMPS_PERSONNEL) for r in repo.personnel(db, a) if soi(r["id"])]
     if s.can("absences.lire"):
         out["absences_eleves"] = [{**_sous(r, CHAMPS_ABSENCE), "inscription_id": r["inscription_id"]}
-                                  for r in repo.absences_eleves(db, a)]
+                                  for r in repo.absences_eleves(db, a) if r["inscription_id"] in ids]
         out["absences_personnel"] = [{**_sous(r, CHAMPS_ABSENCE), "personnel_id": r["personnel_id"]}
-                                     for r in repo.absences_personnel(db, a)]
+                                     for r in repo.absences_personnel(db, a) if soi(r["personnel_id"])]
+    if s.personnel_id:                     # demandes d'autorisation d'absence de l'utilisateur
+        out["mes_autorisations"] = [dict(r) for r in db.query(
+            "SELECT id, numero, date_debut, date_fin, demi_journee, jours, motif, statut, avis FROM "
+            "autorisation_absence WHERE annee_id=? AND kind='personnel' AND personnel_id=? ORDER BY date_debut DESC",
+            (a.id, s.personnel_id))]
     return out
 
 
@@ -190,6 +213,13 @@ class Applicateur:
             return self._suppr_absence(op)
         if quoi == "eleve":
             return self._eleve(op)
+        if quoi == "appel":
+            return self._appel(op)
+        if quoi == "message_lu":
+            enseignants.marquer_lu(self.db, self.s, int(op["message_id"]))
+            return "Message lu."
+        if quoi == "autorisation":
+            return self._autorisation(op)
         raise ValidationError(f"Opération inconnue : {quoi}")
 
     def _resoudre(self, iid) -> int:
@@ -288,6 +318,32 @@ class Applicateur:
         repo.delete_absence(self.db, self.s, kind, r["id"])
         self.modifie.add("absences")
         return "Absence supprimée."
+
+    def _annee_active(self):
+        aid = repo.active_annee_id(self.db)
+        if not aid:
+            raise ValidationError("Aucune année scolaire active sur l'ordinateur.")
+        return repo.load_annee(self.db, aid)
+
+    def _appel(self, op: dict) -> str:
+        annee = self._annee_active()
+        absents = [self._resoudre(i) for i in op.get("absents") or []]
+        n = enseignants.enregistrer_appel(self.db, self.s, annee, str(op["classe"]), str(op["date"])[:10], absents,
+                                          bool(op.get("demi_journee")))
+        self.modifie.add("absences")
+        return f"Appel enregistré ({len(absents)} absent(s), {n} absence(s) créée(s))."
+
+    def _autorisation(self, op: dict) -> str:
+        """Demande d'autorisation d'absence de l'utilisateur lui-même (en attente de la décision du directeur)."""
+        if not self.s.personnel_id:
+            raise ValidationError("Votre compte n'est lié à aucune fiche du personnel.")
+        annee = self._annee_active()
+        data = {k: op.get(k) for k in ("date_debut", "date_fin", "demi_journee", "motif", "precisions", "lieu",
+                                       "contact", "interim")}
+        data.update(kind="personnel", personnel_id=self.s.personnel_id, demandeur=self.s.nom, statut="EN_ATTENTE")
+        autorisations.enregistrer(self.db, self.s, annee, None, data)
+        self.modifie.add("absences")
+        return "Demande d'autorisation envoyée au directeur."
 
     def _eleve(self, op: dict):
         """Inscription d'un élève (sans « inscription_id ») ou correction de sa fiche (mot de passe administrateur ;

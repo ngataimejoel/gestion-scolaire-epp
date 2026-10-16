@@ -116,7 +116,9 @@
     save: '<path d="M5 3h11l3 3v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M7 3v5h8V3M7 21v-7h10v7"/>',
     key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
     school: '<path d="M3 10l9-5 9 5-9 5z"/><path d="M7 12v5c3 2 7 2 10 0v-5"/>',
-    pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>'
+    pc: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/>',
+    check: '<path d="M4 12l5 5L20 6"/>'
   };
   function ic(nom) { return '<svg class="i" viewBox="0 0 24 24">' + (ICONES[nom] || "") + "</svg>"; }
 
@@ -180,7 +182,9 @@
       fenetre('<h3>' + ic("key") + " " + esc(titre) + '</h3><p class="mut small">' + esc(texte) + "</p>" +
         '<label class="f">Mot de passe administrateur</label><input class="c" id="mdpAdmin" type="password" autocomplete="off">' +
         '<p class="small bad" id="msgAdmin"></p><div class="rang" style="margin-top:6px"><button class="btn" data-a="admin-non">Annuler</button>' +
+        '<button class="btn sm" data-a="admin-oubli">Mot de passe oublié ?</button>' +
         '<span class="esp"></span><button class="btn pri" data-a="admin-oui">Valider</button></div>', function () { if (!fini) { fini = true; ok(false); } });
+      actionsFenetre["admin-oubli"] = function () { fini = true; recupererAdminLocal().then(ok); };
       actionsFenetre["admin-oui"] = function () {
         var v = document.getElementById("mdpAdmin").value, m = document.getElementById("msgAdmin");
         if (!v) { return; }
@@ -192,6 +196,41 @@
         m.textContent = att > 0 ? "Mot de passe incorrect. Trop d'essais : patientez " + att + " s." : "Mot de passe incorrect.";
       };
       actionsFenetre["admin-non"] = function () { fini = true; fermer(); ok(false); };
+    });
+  }
+  /** Code de secours du mot de passe administrateur : affiché une seule fois, à noter. */
+  function montrerSecours(code) {
+    if (!code) { return; }
+    fenetre('<h3>' + ic("key") + ' Code de secours</h3><p class="small">Il permet de choisir un nouveau mot de passe administrateur en cas ' +
+      "d'oubli, même sans Internet. Notez-le et rangez-le en lieu sûr : il ne sera plus affiché. Il ne sert qu'une fois.</p>" +
+      '<p style="font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;margin:12px 0">' + esc(code) + "</p>" +
+      '<div class="rang"><span class="esp"></span><button class="btn pri" data-a="secours-ok">C\'est noté</button></div>');
+    actionsFenetre["secours-ok"] = fermer;
+  }
+  /** Mot de passe administrateur oublié (téléphone seul) : code de secours. Promesse (vrai si changé). */
+  function recupererAdminLocal() {
+    return new Promise(function (ok) {
+      var fini = false;
+      fenetre('<h3>' + ic("key") + ' Mot de passe oublié</h3><p class="mut small">Saisissez le code de secours remis à la création de l\'école ' +
+        "(ou depuis Plus › Sécurité).</p>" +
+        '<label class="f">Code de secours</label><input class="c" id="recCode" autocomplete="off" autocapitalize="characters">' +
+        '<label class="f">Nouveau mot de passe (6 caractères au moins)</label><input class="c" id="recMdp1" type="password">' +
+        '<label class="f">Confirmez</label><input class="c" id="recMdp2" type="password"><p class="small" id="msgRec"></p>' +
+        '<div class="rang"><button class="btn" data-a="recup-non">Annuler</button><span class="esp"></span>' +
+        '<button class="btn pri" data-a="recup-oui">Valider</button></div>', function () { if (!fini) { fini = true; ok(false); } });
+      var m = function (t, mal) { var e = document.getElementById("msgRec"); e.textContent = t; e.className = "small " + (mal ? "bad" : "ok"); };
+      actionsFenetre["recup-oui"] = function () {
+        var a = document.getElementById("recMdp1").value;
+        if (a.length < 6) { m("6 caractères au moins.", true); return; }
+        if (a !== document.getElementById("recMdp2").value) { m("Les deux mots de passe ne sont pas identiques.", true); return; }
+        var r = JSON.parse(N.recupererAdmin(document.getElementById("recCode").value, a));
+        if (!r.ok) { m(r.message, true); return; }
+        fini = true;
+        toast("Mot de passe administrateur changé.");
+        montrerSecours(r.secours);
+        ok(true);
+      };
+      actionsFenetre["recup-non"] = function () { fini = true; fermer(); ok(false); };
     });
   }
   function confirmer(titre, texte, bouton, danger) {
@@ -565,6 +604,9 @@
     }
     if (o.op === "suppr_absence") { return "Suppression de l'absence du " + dateFr(o.date); }
     if (o.op === "eleve") { return (o.inscription_id ? "Fiche modifiée : " : "Élève inscrit : ") + ((o.donnees || {}).nom || (e ? e.nom : "?")); }
+    if (o.op === "appel") { return "Appel de " + o.classe + " le " + dateFr(o.date) + " : " + o.absents.length + " absent(s)"; }
+    if (o.op === "message_lu") { return "Message lu"; }
+    if (o.op === "autorisation") { return "Demande d'autorisation d'absence du " + dateFr(o.date_debut) + " au " + dateFr(o.date_fin); }
     return o.op;
   }
   function compterOps(ops) {
@@ -576,6 +618,8 @@
     if (c.presence) { t.push(c.presence + " présence(s) aux évaluations"); }
     if (c.absence) { t.push(c.absence + " absence(s) ou retard(s)"); }
     if (c.suppr_absence) { t.push(c.suppr_absence + " suppression(s) d'absence"); }
+    if (c.appel) { t.push(c.appel + " appel(s) du jour"); }
+    if (c.autorisation) { t.push(c.autorisation + " demande(s) d'autorisation d'absence"); }
     return t;
   }
 
@@ -717,6 +761,7 @@
     }
     S.etat.derniere = new Date().toISOString();
     S.etat.revoque = false;
+    setTimeout(programmerRappels, 0);
     if (fusion && rep.fusion) {
       N.ecrire("archive_autonome.json", N.lire("base.json") || "{}");
       N.supprimer("base.json");
@@ -853,6 +898,16 @@
       esc((inst().ecole || {}).iepp || "") + "</p></div>";
     if (inst().annee && inst().annee.cloturee) {
       h += '<div class="bandeau">Année ' + esc(inst().annee.libelle) + " clôturée : consultation seulement.</div>";
+    }
+    if (!local() && messagesNonLus().length) {
+      h += '<div class="bandeau">' + ic("mail") + " " + messagesNonLus().length + ' message(s) du directeur. <button class="btn sm" data-a="plus" data-p="messages">Lire</button></div>';
+    }
+    var rap = notesManquantes();
+    if (rap.length) {
+      h += '<div class="card"><h3>' + ic("cal") + " À faire</h3>" + rap.map(function (r) {
+        return '<p class="small"><b>' + esc(r.classe) + " · " + esc(r.libelle) + "</b> : " + r.manquantes + " note(s) à saisir" +
+          (r.fin ? " avant le " + esc(dateFr(r.fin)) : "") + "</p>";
+      }).join("") + "</div>";
     }
     if (local() && S.licence && S.licence.statut === "essai") {
       h += '<div class="bandeau">' + esc(S.licence.message) + ' <button class="btn sm" data-a="plus" data-p="licence">Activer un code</button></div>';
@@ -1018,6 +1073,11 @@
       h += '<p class="mut small">' + (local() ? "La modification d'une fiche enregistrée demande le mot de passe administrateur." :
         "La correction sera envoyée à la prochaine synchronisation avec le mot de passe d'un administrateur de l'ordinateur.") + "</p>";
     }
+    if (!e && N.scanner) {
+      h += '<div class="rang" style="margin-bottom:6px"><button class="btn" data-a="scan-extrait" data-s="scanner">' + ic("file") +
+        ' Scanner l\'extrait de naissance</button><button class="btn sm" data-a="scan-extrait" data-s="galerie">Photo</button></div>' +
+        '<p class="mut small" id="msgScan"></p>';
+    }
     CHAMPS_FICHE.forEach(function (f) { if (e || f[0] !== "statut") { h += champ(f, v[f[0]]); } });
     h += '<p class="small bad" id="msgEleve"></p><div class="rang" style="margin-top:8px"><button class="btn" data-a="fermer">Annuler</button><span class="esp"></span>' +
       '<button class="btn pri" data-a="eleve-enregistrer" data-i="' + (e ? esc(iid) : "") + '">Enregistrer</button></div>';
@@ -1110,9 +1170,13 @@
     var mats = matieres(g, S.notes.ev);
     if (!mats.some(function (m) { return m.id === S.notes.mat; })) { S.notes.mat = mats.length ? mats[0].id : 0; }
     var m = mats.filter(function (x) { return x.id === S.notes.mat; })[0];
-    var saisie = perm("notes.modifier") && modifiable();
-    var h = '<p class="mut small" style="margin:0 0 8px">' + (saisie ? (local() ? "Les notes sont enregistrées sur le téléphone." :
-      "Les notes saisies sont envoyées à la prochaine synchronisation.") : "Consultation seulement.") + "</p>" + chipsClasses(S.notes.classe, "notes-classe", false) +
+    var ev = evs.filter(function (e) { return e.num === S.notes.ev; })[0] || {};
+    var fermee = !local() && ev.fermee;
+    var saisie = perm("notes.modifier") && modifiable() && !fermee;
+    var h = '<p class="mut small" style="margin:0 0 8px">' + (fermee ? "Saisie de cette évaluation fermée par le directeur." :
+      saisie ? (local() ? "Les notes sont enregistrées sur le téléphone." :
+      "Les notes saisies sont envoyées à la prochaine synchronisation.") : "Consultation seulement.") +
+      (ev.fin_saisie && !fermee ? " À saisir avant le " + esc(dateFr(ev.fin_saisie)) + "." : "") + "</p>" + chipsClasses(S.notes.classe, "notes-classe", false) +
       '<div class="rang" style="margin-bottom:10px"><select class="c" data-ch="notes-ev" style="flex:1">' + evs.map(function (e) {
         return '<option value="' + e.num + '"' + (e.num === S.notes.ev ? " selected" : "") + ">" + esc(e.libelle) + "</option>";
       }).join("") + '</select><select class="c" data-ch="notes-mat" style="flex:1">' + mats.map(function (x) {
@@ -1124,6 +1188,10 @@
       " · Moy. = moyenne de l'évaluation sur " + nb(g.mode === "COEF" ? g.note_max : g.echelle, 0) + ". Une note déjà enregistrée ne se corrige qu'avec le mot de passe d'un administrateur.</p>";
     var l = eleves(c.code);
     if (!l.length) { return h + '<div class="card vide">Aucun élève dans cette classe.</div>'; }
+    if (saisie && N.scanner) {
+      h += '<div class="rang" style="margin-bottom:10px"><button class="btn" data-a="scan-notes" data-s="scanner">' + ic("file") +
+        ' Scanner la feuille de notes</button><button class="btn sm" data-a="scan-notes" data-s="galerie">Photo</button></div>';
+    }
     h += '<div class="liste">' + l.map(function (e) {
       var iid = e.inscription_id, ab = absentEval(iid, S.notes.ev), v = noteAff(iid, m.id), o = local() ? null : opNote(iid, m.id);
       var off = !saisie || ab || e.statut !== "PRESENT";
@@ -1247,6 +1315,11 @@
         '<span class="appel"><button class="a' + (etat === "a" ? " on" : "") + '" data-a="appel" data-n="ABSENCE" data-i="' + esc(e.inscription_id) + '">Absent</button>' +
         '<button class="r' + (etat === "r" ? " on" : "") + '" data-a="appel" data-n="RETARD" data-i="' + esc(e.inscription_id) + '">Retard</button></span></div>';
     }).join("");
+    if (!local()) {
+      var dejaAppel = S.ops.filter(function (o) { return o.op === "appel" && o.classe === S.abs.classe && o.date === d; })[0];
+      h += '</div><button class="btn pri bloc" style="margin-top:10px" data-a="appel-valider">' + ic("check") +
+        (dejaAppel ? " Appel validé – valider de nouveau" : " Valider l'appel de " + esc(S.abs.classe)) + "</button><div>";
+    }
     return h + '</div><p class="mut small">Touchez « Absent » ou « Retard » ' + (local() ? "; une absence enregistrée se supprime avec le mot de passe administrateur." :
       "; touchez de nouveau pour annuler une saisie en attente.") + " Un motif se précise dans « Saisir ».</p>";
   }
@@ -1369,12 +1442,19 @@
       "</small></span>›</button>";
   }
   function vuePlus() {
-    var pages = { personnel: vuePersonnel, synchro: vueSynchro, ecole: vueEcole, classes: vueClasses, import: vueImport,
+    var pages = { messages: vueMessages, demande: vueDemandeAbsence, personnel: vuePersonnel, synchro: vueSynchro, ecole: vueEcole, classes: vueClasses, import: vueImport,
                   imprimer: vueImprimer, exporter: vueExporter, sauvegarde: vueSauvegarde, licence: vueLicence, securite: vueSecurite };
     if (pages[S.plus]) {
       return '<div class="rang ph"><button class="btn sm" data-a="plus" data-p="menu">‹ Retour</button></div>' + pages[S.plus]();
     }
     var h = '<div class="ph"><h2>Plus</h2></div><div class="liste">';
+    if (!local() && inst().messages) {
+      var nl = messagesNonLus().length;
+      h += lignePlus("messages", "mail", "Messages du directeur", nl ? nl + " nouveau(x)" : inst().messages.length + " message(s)");
+    }
+    if (!local() && (inst().utilisateur || {}).personnel_id && perm("absences.modifier")) {
+      h += lignePlus("demande", "cal", "Demander une autorisation d'absence", "Envoyée au directeur, qui accorde ou refuse");
+    }
     if (inst().personnel && perm("personnel.lire")) { h += lignePlus("personnel", "users", "Personnel", inst().personnel.length + " agent(s)"); }
     if (local()) {
       h += lignePlus("ecole", "school", "École", "Nom, IEPP, directeur, année scolaire") +
@@ -1822,7 +1902,10 @@
         "modifier la fiche d'un élève, créer une sauvegarde. Il déverrouille aussi le téléphone en cas d'oubli du code PIN.</p>" +
         '<label class="f">Mot de passe actuel</label><input class="c" id="adm0" type="password"><label class="f">Nouveau mot de passe (6 caractères au moins)</label>' +
         '<input class="c" id="adm1" type="password"><label class="f">Confirmez</label><input class="c" id="adm2" type="password"><p class="small" id="msgAdm"></p>' +
-        '<button class="btn pri" data-a="admin-changer">Changer le mot de passe</button></div>' : "");
+        '<button class="btn pri" data-a="admin-changer">Changer le mot de passe</button></div>' +
+        '<div class="card"><h3>Mot de passe oublié</h3><p class="mut small">Le code de secours permet de choisir un nouveau mot de passe ' +
+        "administrateur, sans Internet. Il ne sert qu'une fois.</p>" +
+        '<button class="btn" data-a="secours-nouveau">Nouveau code de secours</button></div>' : "");
   }
 
   // =================================================================== bienvenue, création de l'école, association, PIN
@@ -1868,6 +1951,7 @@
     if (mdp.length < 6) { m.textContent = "Le mot de passe administrateur compte 6 caractères au moins."; return; }
     if (mdp !== document.getElementById("n_mdp2").value) { m.textContent = "Les deux mots de passe ne sont pas identiques."; return; }
     if (!N.definirAdmin(mdp, null)) { m.textContent = "Un mot de passe administrateur existe déjà sur ce téléphone : utilisez-le, ou restaurez une sauvegarde."; return; }
+    montrerSecours(N.nouveauCodeSecours());
     var niv = Array.prototype.slice.call(document.querySelectorAll(".n_niv:checked")).map(function (x) { return x.value; });
     var e = D.ecole || {};
     var b = { version: 1, mode: "autonome", cree_le: new Date().toISOString(), compteur: 1000,
@@ -2075,6 +2159,192 @@
   }
 
   // =================================================================== événements
+  // =================================================================== enseignant (version 1.2.0)
+  function messagesNonLus() {
+    var lus = S.etat.lus || [];
+    return (inst().messages || []).filter(function (m) { return !m.lu && lus.indexOf(m.id) < 0; });
+  }
+  function vueMessages() {
+    var l = inst().messages || [], lus = S.etat.lus || [];
+    if (!l.length) { return '<div class="card vide">Aucun message du directeur.</div>'; }
+    var h = '<h2 style="margin-bottom:10px">Messages du directeur</h2>' + l.map(function (m) {
+      var nouveau = !m.lu && lus.indexOf(m.id) < 0;
+      return '<div class="card"><h3>' + (nouveau ? '<span class="pill ok" style="flex:none">nouveau</span> ' : "") + esc(m.titre) +
+        '</h3><p class="mut small">' + esc(m.auteur) + " · " + esc(heureFr(m.cree_le)) + "</p><p>" +
+        esc(m.texte).replace(/\n/g, "<br>") + "</p></div>";
+    }).join("");
+    // lus en les affichant : l'accusé de lecture part à la prochaine synchronisation
+    var nouveaux = l.filter(function (m) { return !m.lu && lus.indexOf(m.id) < 0; });
+    if (nouveaux.length) {
+      S.etat.lus = lus.concat(nouveaux.map(function (m) { return m.id; }));
+      nouveaux.forEach(function (m) { ajouterOp({ op: "message_lu", message_id: m.id }); });
+    }
+    return h;
+  }
+  function vueDemandeAbsence() {
+    var mot = inst().motifs_absence || D.motifs_absence || ["Maladie", "Autre"];
+    var h = '<h2 style="margin-bottom:10px">Autorisation d\'absence</h2><div class="card">' +
+      '<label class="f">Du</label><input class="c" type="date" id="dDebut" value="' + esc(aujourdhui()) + '">' +
+      '<label class="f">Au</label><input class="c" type="date" id="dFin" value="' + esc(aujourdhui()) + '">' +
+      '<label class="f">Demi-journée</label><select class="c" id="dDemi"><option value="">Non (journées entières)</option>' +
+      '<option value="MATIN">Matin</option><option value="APRES_MIDI">Après-midi</option></select>' +
+      '<label class="f">Motif</label><select class="c" id="dMotif">' + mot.map(function (x) { return "<option>" + esc(x) + "</option>"; }).join("") + "</select>" +
+      '<label class="f">Précisions</label><input class="c" id="dPrec" maxlength="200">' +
+      '<label class="f">Lieu pendant l\'absence</label><input class="c" id="dLieu" maxlength="120">' +
+      '<label class="f">Contact</label><input class="c" id="dContact" inputmode="tel" maxlength="40">' +
+      '<label class="f">Intérim assuré par</label><input class="c" id="dInterim" maxlength="120">' +
+      '<button class="btn pri bloc" style="margin-top:12px" data-a="demande-absence">Envoyer la demande</button></div>';
+    var mes = inst().mes_autorisations || [];
+    var att = S.ops.filter(function (o) { return o.op === "autorisation"; });
+    if (mes.length || att.length) {
+      h += '<div class="card"><h3>Mes demandes</h3>' + att.map(function (o) {
+        return '<p class="small">' + esc(dateFr(o.date_debut)) + " – " + esc(dateFr(o.date_fin)) + " · " + esc(o.motif) +
+          ' · <span class="attente-txt">à envoyer</span></p>';
+      }).join("") + mes.map(function (a) {
+        var st = { EN_ATTENTE: "en attente du directeur", ACCORDEE: "accordée", REFUSEE: "refusée" }[a.statut] || a.statut;
+        return '<p class="small">' + esc(dateFr(a.date_debut)) + " – " + esc(dateFr(a.date_fin)) + " · " + esc(a.motif) + " · <b>" + esc(st) +
+          "</b>" + (a.avis ? " (" + esc(a.avis) + ")" : "") + "</p>";
+      }).join("") + "</div>";
+    }
+    return h;
+  }
+  function envoyerDemandeAbsence() {
+    var v = function (id) { var x = document.getElementById(id); return x ? x.value.trim() : ""; };
+    var d1 = v("dDebut"), d2 = v("dFin") || d1;
+    if (!dansAnnee(d1) || !dansAnnee(d2) || d2 < d1) { toast("Dates : comprises dans l'année scolaire, la fin après le début.", true); return; }
+    if (v("dDemi") && d1 !== d2) { toast("Une demi-journée ne concerne qu'un seul jour.", true); return; }
+    ajouterOp({ op: "autorisation", date_debut: d1, date_fin: d2, demi_journee: v("dDemi") || null, motif: v("dMotif"),
+      precisions: v("dPrec") || null, lieu: v("dLieu") || null, contact: v("dContact") || null, interim: v("dInterim") || null });
+    toast("Demande enregistrée : elle part au directeur à la prochaine synchronisation.");
+    rendre();
+  }
+  function validerAppel() {
+    var d = S.abs.date, code = S.abs.classe;
+    if (!dansAnnee(d)) { toast("La date doit être comprise dans l'année scolaire.", true); return; }
+    var absents = absencesAffichees("eleve").filter(function (a) {
+      var e = eleve(a.cible);
+      return a.date === d && a.nature === "ABSENCE" && e && e.classe === code;
+    }).map(function (a) { return a.cible; });
+    S.ops.filter(function (o) { return o.op === "appel" && o.classe === code && o.date === d; })
+      .forEach(function (o) { retirerSansSauver(o.uid); });
+    ajouterOp({ op: "appel", classe: code, date: d, absents: absents, demi_journee: false });
+    toast("Appel de " + code + " validé (" + absents.length + " absent(s)) : il part au directeur à la prochaine synchronisation.");
+    rendre();
+  }
+
+  /** Notes manquantes de mes classes pour les évaluations dont le directeur a fixé une date limite. */
+  function notesManquantes() {
+    if (local() || !perm("notes.modifier") || !inst().notes) { return []; }
+    var out = [];
+    classes().forEach(function (c) {
+      var g = grille(c);
+      evaluations(c).forEach(function (ev) {
+        if (!ev.fin_saisie || ev.fermee || ev.fin_saisie < aujourdhui()) { return; }
+        var mats = matieres(g, ev.num), n = 0;
+        eleves(c.code).forEach(function (e) {
+          if (e.statut !== "PRESENT" || absentEval(e.inscription_id, ev.num)) { return; }
+          mats.forEach(function (m) { var v = noteAff(e.inscription_id, m.id); if (v === null || v === undefined) { n++; } });
+        });
+        if (n) { out.push({ classe: c.code, libelle: ev.libelle, num: ev.num, manquantes: n, fin: ev.fin_saisie }); }
+      });
+    });
+    return out;
+  }
+  /** Rappels en notifications : 3 jours et 1 jour avant la date limite, et le jour même, à 7 h. */
+  function programmerRappels() {
+    if (!N || !N.programmerRappels) { return; }
+    var liste = [];
+    notesManquantes().forEach(function (r) {
+      [3, 1, 0].forEach(function (j) {
+        var t = new Date(r.fin + "T07:00:00");
+        t.setDate(t.getDate() - j);
+        liste.push({ quand: t.getTime(), titre: "Notes à saisir : " + r.classe,
+          texte: r.manquantes + " note(s) de « " + r.libelle + " » à saisir avant le " + dateFr(r.fin) + ", puis à synchroniser." });
+      });
+    });
+    var nl = messagesNonLus().length;
+    if (nl) {
+      var demain = new Date(); demain.setDate(demain.getDate() + 1); demain.setHours(7, 30, 0, 0);
+      liste.push({ quand: demain.getTime(), titre: "Messages du directeur", texte: nl + " message(s) non lu(s) dans AKWA SCHOOL." });
+    }
+    try { N.programmerRappels(JSON.stringify(liste)); } catch (e) { /* rappels facultatifs */ }
+  }
+
+  // ------------------------------------------------------------------ scan (photo)
+  function scanner(source) {
+    toast("Ouverture de l'appareil photo…");
+    return attendre(function (id) { N.scanner(id, source); }).then(function (r) {
+      if (!r || !r.ok) { if (r && !r.annule) { toast(r.message || "Lecture impossible.", true); } return null; }
+      if (!r.lignes || !r.lignes.length) { toast("Aucun texte lu sur la photo : reprenez-la bien à plat, bien éclairée.", true); return null; }
+      return r;
+    });
+  }
+  function scanNotes(source) {
+    var c = classe(S.notes.classe), g = grille(c), num = S.notes.ev;
+    var mats = matieres(g, num).map(function (m) { return { id: m.id, libelle: m.libelle, max: maxNote(g, m) }; });
+    var els = eleves(c.code).filter(function (e) { return e.statut === "PRESENT" && !absentEval(e.inscription_id, num); });
+    scanner(source).then(function (r) {
+      if (!r) { return; }
+      var res = AkwaScan.structurerNotes(r, els.map(function (e) { return { iid: e.inscription_id, nom: e.nom }; }), mats);
+      var trouves = res.lignes.filter(function (x) { return x.trouve; });
+      if (!trouves.length) { toast("Aucun nom d'élève de " + c.code + " reconnu sur la photo.", true); return; }
+      var h = '<h3>Feuille scannée – ' + esc(c.code) + "</h3><p class=\"mut small\">" + trouves.length + " élève(s) reconnu(s)" +
+        (res.absents.length ? ", non lus : " + esc(res.absents.join(", ")) : "") + ". Vérifiez chaque note (en rouge : douteuse), " +
+        "puis enregistrez. Une note déjà enregistrée n'est pas remplacée.</p><div style=\"overflow-x:auto\"><table class=\"t\"><tr><th>Élève</th>" +
+        mats.map(function (m) { return "<th>" + esc(m.libelle.slice(0, 10)) + "</th>"; }).join("") + "</tr>";
+      trouves.forEach(function (x) {
+        h += "<tr><td><b>" + esc(x.nom) + "</b></td>" + mats.map(function (m) {
+          var n = x.notes[m.id], deja = noteAff(x.iid, m.id);
+          var val = deja !== null && deja !== undefined ? nb(deja) : n ? nb(n.v) : "";
+          return '<td><input class="c' + (n && n.douteux ? " err" : "") + '" style="width:58px;padding:6px" inputmode="decimal" data-scan="' +
+            esc(x.iid) + "|" + m.id + "|" + m.max + '" value="' + esc(val) + '"' + (deja !== null && deja !== undefined ? " disabled" : "") + "></td>";
+        }).join("") + "</tr>";
+      });
+      h += '</table></div><div class="rang" style="margin-top:12px"><button class="btn" data-a="fermer">Annuler</button><span class="esp"></span>' +
+        '<button class="btn pri" data-a="scan-notes-ok">Enregistrer les notes</button></div>';
+      fenetre(h);
+      actionsFenetre["scan-notes-ok"] = function () { enregistrerScanNotes(num); };
+    });
+  }
+  function enregistrerScanNotes(num) {
+    var champs = Array.prototype.slice.call(document.querySelectorAll("input[data-scan]:not([disabled])"));
+    var ops = [], mauvais = 0;
+    champs.forEach(function (i) {
+      var p = i.getAttribute("data-scan").split("|"), v = lireNombre(i.value), max = Number(p[2]);
+      if (v === null) { return; }
+      if (isNaN(v) || v < 0 || v > max) { i.classList.add("err"); mauvais++; return; }
+      i.classList.remove("err");
+      var c = classe(S.notes.classe), m = matieres(grille(c), num).filter(function (x) { return x.id === Number(p[1]); })[0];
+      ops.push({ op: "note", inscription_id: idDe(p[0]), matiere_id: Number(p[1]), valeur: v, avant: null, libelle: m ? m.libelle : "" });
+    });
+    if (mauvais) { toast(mauvais + " note(s) hors barème : corrigez-les (en rouge).", true); return; }
+    if (local()) {
+      try { ops.forEach(function (o) { appliquerLocal(o); }); sauverBase(); } catch (e) { toast(e.message || String(e), true); return; }
+    } else {
+      ops.forEach(function (o) {
+        var deja = opNote(o.inscription_id, o.matiere_id);
+        if (deja) { retirerSansSauver(deja.uid); }
+        ajouterOp(o);
+      });
+    }
+    fermer();
+    toast(ops.length + " note(s) enregistrée(s)" + (local() ? "." : " : envoyées à la prochaine synchronisation."));
+    rendre();
+  }
+  function scanExtrait(source) {
+    scanner(source).then(function (r) {
+      if (!r) { return; }
+      var d = AkwaScan.structurerExtrait(r), n = 0;
+      Object.keys(d).forEach(function (k) {
+        var el = document.getElementById("f_" + k);
+        if (el && d[k]) { el.value = d[k]; el.classList.add("lu"); n++; }
+      });
+      var msg = document.getElementById("msgScan");
+      if (msg) { msg.textContent = n ? n + " champ(s) rempli(s) d'après l'extrait : vérifiez-les avant d'enregistrer." :
+        "Rien n'a pu être lu sur l'extrait : reprenez la photo bien à plat."; }
+    });
+  }
+
   var actions = {
     vue: function (b) { S.plus = "menu"; aller(b.getAttribute("data-v")); },
     "plus-aller": function (b) { S.plus = b.getAttribute("data-p"); aller("plus"); },
@@ -2095,6 +2365,10 @@
     "abs-enregistrer": enregistrerAbsence,
     "abs-suppr": function (b) { var a = absencesAffichees(S.abs.kind).slice(0, 150)[Number(b.getAttribute("data-x"))]; if (a) { supprimerAbsence(S.abs.kind, a); } },
     appel: function (b) { appel(idDe(b.getAttribute("data-i")), b.getAttribute("data-n")); },
+    "appel-valider": validerAppel,
+    "demande-absence": envoyerDemandeAbsence,
+    "scan-notes": function (b) { scanNotes(b.getAttribute("data-s")); },
+    "scan-extrait": function (b) { scanExtrait(b.getAttribute("data-s")); },
     presence: function (b) { basculerPresence(idDe(b.getAttribute("data-i"))); },
     plus: function (b) { S.plus = b.getAttribute("data-p"); if (S.vue !== "plus") { S.vue = "plus"; } rendre(); window.scrollTo(0, 0); },
     "op-annuler": function (b) { retirerOp(b.getAttribute("data-u")); rendre(); },
@@ -2156,6 +2430,11 @@
     },
     "imprimer-direct": function (b) { imprimer(b.getAttribute("data-d"), { classe: S.notes.classe }); },
     exporter: function (b) { exporter(b.getAttribute("data-d"), b.getAttribute("data-m")); },
+    "secours-nouveau": function () {
+      demanderAdminLocal("Nouveau code de secours", "L'ancien code ne servira plus.").then(function (ok) {
+        if (ok) { montrerSecours(N.nouveauCodeSecours()); }
+      });
+    },
     "admin-changer": function () {
       var a0 = document.getElementById("adm0").value, a1 = document.getElementById("adm1").value, m = document.getElementById("msgAdm");
       if (a1.length < 6) { m.textContent = "6 caractères au moins."; m.className = "small bad"; return; }
@@ -2241,4 +2520,5 @@
     preparerBase();
   }
   rendre();
+  if (N && S.inst) { setTimeout(programmerRappels, 1500); }
 })();

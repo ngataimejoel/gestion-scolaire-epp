@@ -21,12 +21,12 @@ from epp.core.db import open_database
 from epp.domain import repo
 from epp.ui import logo as logo_app
 from epp.ui import theme
-from epp.ui.navigation import (PAGES, VOLETS, BarreLaterale, Recherche, Tiroir, info_page, info_volet,  # noqa: F401
+from epp.ui.navigation import (PAGES, PAGES_ECOLE, VOLETS, BarreLaterale, Recherche, Tiroir, info_page, info_volet,  # noqa: F401
                                volet_de)
 from epp.ui.dialogs.acces import (DialogueActivation, DialogueConnexion, DialogueMotDePasse,
                                   DialoguePremierLancement)
 from epp.ui.synchro import PARAM_AUTO, GestionSynchro
-from epp.ui.widgets import Contexte, afficher_erreur, bouton
+from epp.ui.widgets import Contexte, afficher_erreur, bouton, info
 
 log = logging.getLogger(__name__)
 
@@ -105,7 +105,8 @@ class FenetrePrincipale(QMainWindow):
                 self.synchro.demarrer()
             except OSError:
                 log.exception("Synchronisation des téléphones : démarrage automatique impossible")
-        self.aller("accueil")
+        self.aller("accueil" if self._volet_permis("accueil") else "notes_bulletins")
+        QTimer.singleShot(600, self._messages_recus)
         self.timer_licence = QTimer(self)
         self.timer_licence.timeout.connect(self.verifier_licence)
         self.timer_licence.start(VERIF_LICENCE_MS)
@@ -170,6 +171,8 @@ class FenetrePrincipale(QMainWindow):
     # ------------------------------------------------------------------ navigation
     def _permis(self, cle: str) -> bool:
         p = info_page(cle)
+        if p and self.ctx.session and self.ctx.session.restreint and cle in PAGES_ECOLE:
+            return False
         return bool(p) and (not p[4] or self.ctx.peut(p[4]))
 
     def _volet_permis(self, cle: str) -> bool:
@@ -234,6 +237,24 @@ class FenetrePrincipale(QMainWindow):
             self.pile.addWidget(zone)
         return True
 
+    def _messages_recus(self) -> None:
+        """Messages du directeur pas encore lus (comptes enseignants) : affichés puis marqués lus."""
+        from epp.domain import enseignants
+        s = self.ctx.session
+        if not s or not s.user_id:
+            return
+        try:
+            nouveaux = [m for m in enseignants.messages_pour(self.ctx.db, s) if not m["lu"]]
+        except Exception:      # noqa: BLE001 - ne bloque jamais l'ouverture
+            log.exception("Messages du directeur illisibles")
+            return
+        if not nouveaux:
+            return
+        texte = "\n\n".join(f"{m['titre']} ({m['auteur']}, {m['cree_le'][:16]})\n{m['texte']}" for m in reversed(nouveaux))
+        info(self, "Messages du directeur", texte)
+        for m in nouveaux:
+            enseignants.marquer_lu(self.ctx.db, s, m["id"])
+
     def aller(self, cle: str) -> None:
         """Ouvre une page (clé de PAGES) ou un volet (clé de VOLETS : son dernier onglet ouvert)."""
         if not info_page(cle):
@@ -295,6 +316,10 @@ class FenetrePrincipale(QMainWindow):
         try:
             if self.ctx.peut("eleves.lire") or self.ctx.peut("personnel.lire"):
                 for r in accueil.rechercher(self.ctx.db, self.ctx.annee, texte):
+                    s = self.ctx.session
+                    if s.restreint and r["type"] == "eleve" and not s.voit_classe(
+                            self.ctx.annee.id if self.ctx.annee else None, r.get("classe")):
+                        continue
                     if self.ctx.peut("eleves.lire" if r["type"] == "eleve" else "personnel.lire"):
                         out.append(r)
         except Exception:      # noqa: BLE001 - la recherche ne doit jamais bloquer la saisie

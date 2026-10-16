@@ -30,6 +30,11 @@ def main(sortie: str) -> None:
     n = db.one("SELECT n.inscription_id, n.matiere_id FROM note n JOIN inscription i ON i.id=n.inscription_id "
                "WHERE i.annee_id=? LIMIT 1", (annee.id,))
     db.execute("DELETE FROM note WHERE inscription_id=? AND matiere_id=?", (n["inscription_id"], n["matiere_id"]))
+    # compte enseignant relié au maître de la classe de cet élève (sinon il ne voit aucune classe)
+    from epp.domain import repo
+    classe = repo.classe_inscription(db, n["inscription_id"])
+    db.execute("UPDATE utilisateur SET personnel_id=(SELECT personnel_id FROM affectation WHERE annee_id=? "
+               "AND classe_code=?) WHERE id=?", (annee.id, classe["code"], uid))
     srv = ServeurSynchro(db.path, port=0, port_decouverte=0, hote="127.0.0.1",
                          etat_licence=lambda: licence.Etat("essai", jours_restants=7))
     srv.demarrer()
