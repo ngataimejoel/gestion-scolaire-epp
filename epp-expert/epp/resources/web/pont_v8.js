@@ -23,7 +23,7 @@
   enregistrer(){clearTimeout(minuterie);minuterie=null;return appel('enregistrer',APP.etatJSON()).then(err=>{if(err)toast(err)})},
   verifierAdmin(p){return appel('verifierAdmin',p)},
   nomSession(){return (D.session&&D.session.nom)||'Directeur (administrateur)'},
-  bandeau(){$('#crumb').insertAdjacentHTML('beforeend',`<span class="sp"></span><span class="sub" style="margin-left:auto;display:flex;gap:8px;align-items:center">${ic('users')}${esc(APP.nomSession())}<button class="btn sm" data-act="deconnexion">Déconnexion</button></span>`)}
+  bandeau(){$('#crumb').insertAdjacentHTML('beforeend',`<span class="sp"></span><span class="sub" style="margin-left:auto;display:flex;gap:8px;align-items:center">${ic('users')}${esc(APP.nomSession())}<button class="btn sm" data-act="tutoriels">${ic('help')}Tutoriels</button><button class="btn sm" data-act="deconnexion">Déconnexion</button></span>`)}
  };
  const json=t=>{try{return JSON.parse(t)}catch(e){return {erreur:'Réponse illisible de l’application.'}}};
  function loginDe(nom){const p=nom.replace(/^(M\.|Mme|Mlle)\s+/,'').split(/\s+/);return ((p[1]||'')[0]||'').toLowerCase()+(p[0]||'').toLowerCase().normalize('NFD').replace(/[^a-z]/g,'')}
@@ -37,6 +37,7 @@
   // impression : aperçu de l'application (orientation du document demandée par la page)
   window.print=function(){const a=$('#printArea');appel('imprimer',!!(a&&/landscape/.test(a.innerHTML)))};
   Object.assign(acts,{
+   tutoriels(){appel('tutoriels')},
    deconnexion(){APP.enregistrer().then(()=>appel('deconnexion'))},
    secoursNew(){askPwd('Créer un nouveau code de secours ? L’ancien ne servira plus.').then(ok=>{if(ok)appel('nouveauSecours').then(r=>{r=json(r);r.erreur?toast(r.erreur):montrerCode(r.code)})})},
    pwdOubli(){closeDlg();setTimeout(()=>modal(`${ic('key')} Mot de passe oublié`,`<p class="sub" style="margin-top:0">Saisissez le code de secours (remis à la création du compte, ou dans Paramètres), puis le nouveau mot de passe.</p>${field('Code de secours','<input name="code" autofocus autocomplete="off" placeholder="XXXX-XXXX-XXXX">',1)}${field('Nouveau mot de passe','<input name="nw" type="password" required minlength="6">',1)}`,

@@ -174,7 +174,7 @@ def test_menu_selon_le_role(app, demo, messages):
     w.aller("sauvegarde")                         # onglet sans droit : pas ouvert, et masqué
     assert "sauvegarde" not in w.pages
     w.aller("administration")
-    assert w.onglets_admin is not None and not w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("sauvegarde"))
+    assert w.onglets_admin is not None and not w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("donnees"))
     w.timer_licence.stop()
 
 

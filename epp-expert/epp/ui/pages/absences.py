@@ -438,33 +438,38 @@ class PageAbsences(Page):
     sous_titre = "Retards, absences et demandes d'autorisation d'absence"
     permission = "absences.lire"
     ecoute = ("absences", "eleves", "personnel", "*")
+    parties = ("eleve", "personnel", "autorisations")
 
     def __init__(self, ctx):
         super().__init__(ctx)
-        self.actions.addWidget(bouton("Journal des absences", self._journal))
+        self.actions.addWidget(bouton("Journal des absences" if "autorisations" not in self.parties[:1]
+                                      else "Registre des autorisations", self._journal))
         self.onglets = QTabWidget()
-        self.o_el = OngletAbsences(self, "eleve")
-        self.o_pe = OngletAbsences(self, "personnel")
-        self.o_au = OngletAutorisations(self)
-        self.onglets.addTab(self.o_el, "Élèves")
-        self.onglets.addTab(self.o_pe, "Personnel")
-        self.onglets.addTab(self.o_au, "Autorisations d'absence")
+        self.o_el = OngletAbsences(self, "eleve") if "eleve" in self.parties else None
+        self.o_pe = OngletAbsences(self, "personnel") if "personnel" in self.parties else None
+        self.o_au = OngletAutorisations(self) if "autorisations" in self.parties else None
+        for o, t in ((self.o_el, "Élèves"), (self.o_pe, "Personnel"), (self.o_au, "Autorisations d'absence")):
+            if o is not None:
+                self.onglets.addTab(o, t)
+        if len(self.parties) == 1:
+            self.onglets.tabBar().hide()
         self.corps.addWidget(self.onglets, 1)
 
     def rafraichir(self):
         for o in (self.o_el, self.o_pe, self.o_au):
-            o.rafraichir()
+            if o is not None:
+                o.rafraichir()
 
     def _journal(self):
         from epp.ui.dialogs.export import exporter_rapport
-        i = self.onglets.currentIndex()
-        if i == 2:
+        o = self.onglets.currentWidget()
+        if o is self.o_au:
             exporter_rapport(self, "AUTORISATIONS", {}, "Registre des autorisations d'absence")
         else:
-            o = self.o_el if i == 0 else self.o_pe
+            el = o is self.o_el
             m = o.mois.currentData()
-            exporter_rapport(self, "ABS_ELEVES" if i == 0 else "ABS_PERSONNEL", {"mois": m} if m else {},
-                             "Journal des absences " + ("des élèves" if i == 0 else "du personnel"))
+            exporter_rapport(self, "ABS_ELEVES" if el else "ABS_PERSONNEL", {"mois": m} if m else {},
+                             "Journal des absences " + ("des élèves" if el else "du personnel"))
 
     def imprimer_fiche(self, ref: str) -> None:
         """Fiche(s) par numéro, matricule ou recherche, au format choisi."""
@@ -481,3 +486,17 @@ class PageAbsences(Page):
             service._droits_format(self.s, f)
             return service._ecrire(au.document(self.db, self.annee, demandes), f, ch, "Autorisations")
         enregistrer(self, nom, produire, formats_autorises(self.ctx))
+
+
+class PageAppel(PageAbsences):
+    """Absences › Appel du jour (modèle v8) : élèves et personnel."""
+    titre = "Appel du jour"
+    sous_titre = "Absences et retards des élèves et du personnel"
+    parties = ("eleve", "personnel")
+
+
+class PageAutorisations(PageAbsences):
+    """Absences › Autorisations (modèle v8)."""
+    titre = "Autorisations"
+    sous_titre = "Demandes d'autorisation d'absence des élèves et du personnel"
+    parties = ("autorisations",)

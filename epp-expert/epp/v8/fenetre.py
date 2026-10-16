@@ -117,6 +117,10 @@ class Pont(QObject):
         return json.dumps({"licence": licence_pour_page(e), "message": e.message})
 
     @Slot()
+    def tutoriels(self) -> None:
+        QTimer.singleShot(0, self.f.tutoriels)
+
+    @Slot()
     def deconnexion(self) -> None:
         self.f.action_fin = "deconnexion"
         QTimer.singleShot(0, self.f.close)
@@ -144,6 +148,23 @@ class Fenetre(QMainWindow):
         page.write_text(page_html(st.lire(), session, licence_pour_page(etat_licence)), encoding="utf-8")
         self.vue.load(QUrl.fromLocalFile(str(page)))
         self.resize(1366, 820)
+
+    def tutoriels(self) -> None:
+        """Les vidéos tutoriels (Aide d'AKWA SCHOOL), dans une fenêtre à part."""
+        from PySide6.QtWidgets import QDialog, QHBoxLayout, QListWidget
+        from epp.ui.video import LecteurTutoriel, tutoriels
+        d = QDialog(self)
+        d.setWindowTitle("Tutoriels vidéo")
+        lay = QHBoxLayout(d)
+        liste, lecteur = QListWidget(), LecteurTutoriel()
+        videos = tutoriels()
+        liste.addItems([v.stem.split("_", 1)[-1] for v in videos])
+        liste.setFixedWidth(280)
+        liste.currentRowChanged.connect(lambda i: 0 <= i < len(videos) and lecteur.ouvrir(videos[i]))
+        lay.addWidget(liste)
+        lay.addWidget(lecteur, 1)
+        d.resize(1200, 640)
+        d.exec()
 
     def imprimer(self, paysage: bool) -> None:
         imp = QPrinter(QPrinter.HighResolution)
