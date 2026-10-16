@@ -187,14 +187,36 @@ def etablissement(db: Database) -> dict:
     return {r["cle"]: r["valeur"] or "" for r in db.query("SELECT cle, valeur FROM parametre")}
 
 
-def save_etablissement(db: Database, s: Session, data: dict) -> None:
-    """Enregistre les paramètres de l'établissement. Les logos passent par set_logo (contrôle de l'image)."""
+# Identité de l'école : figée après la première saisie, modifiable ensuite avec l'accord d'un administrateur.
+IDENTITE_ECOLE = ("pays", "devise_pays", "ministere", "dren", "iepp", "ecole_nom", "ecole_code", "code_dren",
+                  "code_iepp", "localite", "secteur")
+VERROU_IDENTITE = "identite_verrouillee"
+
+
+def identite_verrouillee(db: Database) -> bool:
+    return db.get_param(VERROU_IDENTITE) == "OUI"
+
+
+def save_etablissement(db: Database, s: Session, data: dict, autorise_par: str | None = None) -> None:
+    """Enregistre les paramètres de l'établissement. Les logos passent par set_logo (contrôle de l'image).
+
+    Une fois l'identité de l'école saisie, la changer exige l'accord d'un administrateur (autorise_par : son
+    identifiant, rendu par security.verifier_admin)."""
     s.require("parametres.modifier")
-    data = {k: v for k, v in data.items() if k not in LOGOS}
+    data = {k: v for k, v in data.items() if k not in LOGOS and k != VERROU_IDENTITE}
+    actuel = etablissement(db)
+    changes = [k for k in IDENTITE_ECOLE if k in data and actuel.get(k) and (data[k] or "") != actuel[k]]
+    if changes and identite_verrouillee(db) and not autorise_par:
+        raise AccessDenied("Les informations de l'école sont verrouillées après la première saisie : "
+                           "leur modification exige le mot de passe d'un administrateur.")
     with db.transaction():
         for k, v in data.items():
             db.set_param(k, v)
-    log(db, s.login, "MODIF_PARAMETRES", "etablissement", ", ".join(data))
+        if any(data.get(k) for k in IDENTITE_ECOLE):
+            db.set_param(VERROU_IDENTITE, "OUI")
+    details = ", ".join(data) + (f" (identité modifiée avec l'accord de {autorise_par})" if changes and autorise_par
+                                 else "")
+    log(db, s.login, "MODIF_PARAMETRES", "etablissement", details)
 
 
 # ============================================================== élèves et inscriptions
