@@ -1,5 +1,6 @@
 // Tests de la remise en ordre des scans (feuille de notes, extrait de naissance) : node outils/test_scan.js
 "use strict";
+/* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require("assert");
 const S = require("../android/app/src/main/assets/www/scan.js");
 
