@@ -393,14 +393,14 @@ def test_cle_publique_du_telephone_identique_a_l_ordinateur():
     assert f'CLE_PUBLIQUE = "{cle}"' in java
 
 
-def test_structure_par_defaut_du_telephone_identique_a_l_ordinateur():
+def test_interface_du_telephone_identique_a_akwa_school_v8():
     import importlib.util
     from pathlib import Path
     racine = Path(__file__).resolve().parents[1]
-    spec = importlib.util.spec_from_file_location("defauts_telephone", racine / "outils" / "defauts_telephone.py")
+    spec = importlib.util.spec_from_file_location("interface_android_v8", racine / "outils" / "interface_android_v8.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
-    assert m.FICHIER.read_text(encoding="utf-8") == m.contenu(), "relancez python outils/defauts_telephone.py"
+    assert m.FICHIER.read_text(encoding="utf-8") == m.contenu(), "relancez python outils/interface_android_v8.py"
 
 
 def test_synchronisation_par_fichier(ecole):

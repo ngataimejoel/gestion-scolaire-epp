@@ -42,10 +42,6 @@ jobs:
       - name: Installer les dépendances
         run: python -m pip install -r requirements-dev.txt
 
-      - name: Tests du scan du téléphone (Node)
-        working-directory: epp-expert
-        run: node outils/test_scan.js
-
       - name: Tests du service d'activation (Node)
         working-directory: epp-expert/activation
         run: |
@@ -189,7 +185,7 @@ jobs:
           outils=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
           "$outils/apksigner" verify --print-certs AkwaSchool.apk
           "$outils/aapt2" dump badging AkwaSchool.apk | head -3
-          unzip -l AkwaSchool.apk | grep -E "assets/www/(index.html|app.js|style.css|logo.png)"
+          unzip -l AkwaSchool.apk | grep -E "assets/www/(index.html|pont_android.js)"
           ls -l AkwaSchool.apk
 
       - uses: actions/upload-artifact@v4

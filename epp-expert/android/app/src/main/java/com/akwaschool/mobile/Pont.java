@@ -856,4 +856,10 @@ public class Pont {
     public void imprimer(String html, String titre) {
         activite.runOnUiThread(() -> ((MainActivity) activite).imprimer(html, titre));
     }
+
+    /** Imprime la page de l'interface v8 (zone d'impression préparée par la page), A4 portrait ou paysage. */
+    @JavascriptInterface
+    public void imprimerPage(boolean paysage) {
+        activite.runOnUiThread(() -> ((MainActivity) activite).imprimerPage(paysage));
+    }
 }

@@ -65,8 +65,8 @@ sans doublon). Les données du téléphone sont archivées sur lui. Dissocier pe
 |---|---|
 | Protocole (ordinateur) | `epp/synchro/protocole.py`, `serveur.py` (HTTP 8765, découverte UDP 8766), `donnees.py` |
 | Page Téléphones | `epp/ui/pages/telephones.py`, `epp/ui/synchro.py` |
-| Téléphone | `android/` : interface `app/src/main/assets/www/` (reprise du prototype v7), pont Java `Pont.java`, protocole `synchro/` (Java pur) |
-| Téléphone seul | `noyau/` (Java pur : licence Ed25519, lecture xls/xlsx/csv, classeurs Excel, sauvegarde chiffrée), `www/documents.js` (impressions, exports), `www/defauts.js` (généré par `outils/defauts_telephone.py`) |
+| Téléphone | `android/` : interface v8 `app/src/main/assets/www/index.html` (copie de `epp/resources/web/akwa_v8.html` par `outils/interface_android_v8.py`, identique à AKWA SCHOOL v8), pont `www/pont_android.js` ↔ `Pont.java` (données `etat_v8.json`, mot de passe, licence, fichiers, impression). Échange avec l'ordinateur : sauvegarde v8 (Import, export & sauvegarde) |
+| Téléphone seul | `noyau/` (Java pur : licence Ed25519) ; synchronisation Wi-Fi `synchro/` gardée dans le code mais plus utilisée par l'interface v8 |
 | Tests | `tests/test_synchro.py`, `android/test-jvm/TestSynchro.java` (client Java contre le vrai serveur), `TestNoyau.java` + `outils/fixtures_noyau.py` (lecture comparée au code Python), en CI |
 
 ## Construction et publication

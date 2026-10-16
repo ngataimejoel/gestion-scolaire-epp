@@ -14,20 +14,26 @@ import android.print.PrintManager;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.FrameLayout;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 /**
- * Écran unique : l'interface AKWA SCHOOL (HTML du dossier assets/www, reprise du prototype v7) dans une WebView.
- * Le réseau, le chiffrement et le stockage passent par le pont Java « AkwaNative » (classe Pont).
+ * Écran unique : l'interface AKWA SCHOOL v8 (assets/www/index.html, la même que l'application Windows AKWA SCHOOL v8)
+ * dans une WebView. Le stockage, le mot de passe, la licence, les fichiers et l'impression passent par le pont Java
+ * « AkwaNative » (classe Pont, script assets/www/pont_android.js).
  */
 public class MainActivity extends Activity {
     private WebView web;
     private Pont pont;
     /** Page en cours d'impression : gardée tant qu'Android la met en page. */
     private WebView aImprimer;
+    /** Fichier demandé par la page (champ « choisir un fichier » : import Excel, restauration, logo). */
+    private ValueCallback<Uri[]> choixPage;
+    static final int FICHIER_PAGE = 45;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     @Override
@@ -38,7 +44,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(false);                 // seules les pages de l'application (assets) sont chargées
-        s.setAllowContentAccess(false);
+        s.setAllowContentAccess(true);               // fichiers choisis par l'utilisateur (sélecteur d'Android)
         s.setAllowFileAccessFromFileURLs(false);
         s.setAllowUniversalAccessFromFileURLs(false);
         s.setMediaPlaybackRequiresUserGesture(true);
@@ -53,6 +59,23 @@ public class MainActivity extends Activity {
                     return false;
                 }
                 ouvrirAilleurs(u);
+                return true;
+            }
+        });
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView v, ValueCallback<Uri[]> retour, FileChooserParams p) {
+                if (choixPage != null) {
+                    choixPage.onReceiveValue(null);
+                }
+                choixPage = retour;
+                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+                try {
+                    startActivityForResult(i, FICHIER_PAGE);
+                } catch (ActivityNotFoundException e) {
+                    choixPage = null;
+                    retour.onReceiveValue(null);
+                }
                 return true;
             }
         });
@@ -140,10 +163,25 @@ public class MainActivity extends Activity {
         w.loadDataWithBaseURL("file:///android_asset/www/", html, "text/html", "utf-8", null);
     }
 
+    /** Imprime la page elle-même (sa zone d'impression), comme l'application Windows : imprimante ou PDF. */
+    void imprimerPage(boolean paysage) {
+        PrintManager pm = (PrintManager) getSystemService(PRINT_SERVICE);
+        PrintAttributes.MediaSize a4 = PrintAttributes.MediaSize.ISO_A4;
+        pm.print("AKWA SCHOOL", web.createPrintDocumentAdapter("AKWA SCHOOL"), new PrintAttributes.Builder()
+                .setMediaSize(paysage ? a4.asLandscape() : a4.asPortrait()).build());
+    }
+
     @Override
     protected void onActivityResult(int demande, int resultat, Intent donnees) {
         super.onActivityResult(demande, resultat, donnees);
-        if (demande == Pont.CHOISIR || demande == Pont.ENREGISTRER) {
+        if (demande == FICHIER_PAGE) {
+            ValueCallback<Uri[]> r = choixPage;
+            choixPage = null;
+            if (r != null) {
+                Uri u = resultat == RESULT_OK && donnees != null ? donnees.getData() : null;
+                r.onReceiveValue(u == null ? null : new Uri[]{u});
+            }
+        } else if (demande == Pont.CHOISIR || demande == Pont.ENREGISTRER) {
             pont.resultatActivite(demande, resultat == RESULT_OK, donnees == null ? null : donnees.getData());
         } else if (demande == Scan.SCANNER || demande == Scan.GALERIE) {
             pont.resultatScan(demande, resultat == RESULT_OK, donnees);
