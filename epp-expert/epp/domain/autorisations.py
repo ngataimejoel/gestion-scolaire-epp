@@ -13,7 +13,7 @@ import re
 from datetime import date
 
 from epp.core.db import Database
-from epp.core.security import Session, log
+from epp.core.security import AccessDenied, Session, log
 from epp.domain import calculs, calendrier, repo
 from epp.domain.repo import Annee, ValidationError
 
@@ -195,10 +195,23 @@ def recalculer(db: Database, annee: Annee) -> int:
 
 
 # =================================================================== enregistrement
+def _verifier_enseignant(db: Database, s: Session, data: dict) -> None:
+    """Compte enseignant : ses propres demandes, ou celles des élèves de sa classe."""
+    if not s.restreint:
+        return
+    if data.get("kind") == "personnel":
+        if not s.personnel_id or int(data.get("personnel_id") or 0) != s.personnel_id:
+            raise AccessDenied("Vous ne pouvez demander une autorisation d'absence que pour vous-même.")
+    elif data.get("inscription_id"):
+        ci = repo.classe_inscription(db, int(data["inscription_id"]))
+        s.verifier_classe(ci["annee_id"], ci["code"])
+
+
 def enregistrer(db: Database, s: Session, annee: Annee, aid: int | None, data: dict) -> int:
     """Crée ou modifie une demande. Accorder ou refuser demande le droit absences.autoriser ; sans ce droit,
     la demande est enregistrée « en attente »."""
     s.require("absences.modifier")
+    _verifier_enseignant(db, s, data)
     d = _valider(db, annee, data, aid)
     ancien = db.one("SELECT * FROM autorisation_absence WHERE id=?", (aid,)) if aid else None
     if aid and ancien is None:

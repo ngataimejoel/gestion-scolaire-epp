@@ -31,6 +31,7 @@ PERMISSIONS: dict[str, str] = {
     "parametres.modifier": "Modifier les paramètres de l'établissement et des années",
     "fin_annee.valider": "Valider les décisions de fin d'année (admis, redoublants, sorties)",
     "utilisateurs.gerer": "Gérer les utilisateurs et les rôles",
+    "enseignants.gerer": "Créer les comptes enseignants, valider les notes et suivre les classes",
     "sauvegarde.creer": "Créer des sauvegardes",
     "sauvegarde.restaurer": "Restaurer une sauvegarde",
     "import.excel": "Importer des fichiers Excel",
@@ -56,7 +57,11 @@ PERMISSIONS_AJOUTEES: dict[str, list[str]] = {
     "fin_annee.valider": ["DIRECTEUR"],
     "export.word": ["DIRECTEUR", "SECRETARIAT"],
     "absences.autoriser": ["DIRECTEUR"],
+    "enseignants.gerer": ["DIRECTEUR"],
 }
+
+# Rôle limité aux classes que la fiche du personnel liée au compte tient (table affectation)
+ROLE_ENSEIGNANT = "ENSEIGNANT"
 
 
 class AccessDenied(PermissionError):
@@ -99,6 +104,25 @@ class Session:
     role_code: str
     role_libelle: str
     permissions: set[str] = field(default_factory=set)
+    personnel_id: int | None = None
+    restreint: bool = False                  # compte enseignant : sa classe seulement
+    classes_annee: dict[int, frozenset] = field(default_factory=dict)
+
+    def classes(self, annee_id: int | None) -> frozenset | None:
+        """Classes accessibles pour l'année (None = toutes)."""
+        if not self.restreint:
+            return None
+        return self.classes_annee.get(annee_id or 0, frozenset())
+
+    def voit_classe(self, annee_id: int | None, code: str | None) -> bool:
+        cl = self.classes(annee_id)
+        return cl is None or code in cl
+
+    def verifier_classe(self, annee_id: int | None, code: str | None) -> None:
+        if not self.voit_classe(annee_id, code):
+            cl = self.classes(annee_id)
+            raise AccessDenied("Votre compte enseignant donne accès à votre classe seulement ("
+                               + (", ".join(sorted(cl)) if cl else "aucune classe ne vous est affectée") + ").")
 
     def can(self, perm: str) -> bool:
         return perm in self.permissions
@@ -170,15 +194,25 @@ def set_password(db: Database, user_id: int, password: str) -> None:
 
 def load_session(db: Database, user_id: int) -> Session:
     row = db.one(
-        "SELECT u.id, u.login, u.nom, r.id AS rid, r.code, r.libelle FROM utilisateur u "
+        "SELECT u.id, u.login, u.nom, u.personnel_id, r.id AS rid, r.code, r.libelle FROM utilisateur u "
         "JOIN role r ON r.id=u.role_id WHERE u.id=?", (user_id,))
     perms = {r[0] for r in db.query("SELECT permission FROM role_permission WHERE role_id=?", (row["rid"],))}
-    return Session(row["id"], row["login"], row["nom"], row["code"], row["libelle"], perms)
+    s = Session(row["id"], row["login"], row["nom"], row["code"], row["libelle"], perms,
+                personnel_id=row["personnel_id"], restreint=row["code"] == ROLE_ENSEIGNANT)
+    if s.restreint and s.personnel_id:
+        par_annee: dict[int, set] = {}
+        for a in db.query("SELECT annee_id, classe_code FROM affectation WHERE personnel_id=? AND classe_code "
+                          "IS NOT NULL AND classe_code<>''", (s.personnel_id,)):
+            par_annee.setdefault(a["annee_id"], set()).add(a["classe_code"])
+        s.classes_annee = {k: frozenset(v) for k, v in par_annee.items()}
+    return s
 
 
 def authenticate(db: Database, login: str, password: str) -> Session | None:
-    row = db.one("SELECT id, hash, actif FROM utilisateur WHERE login=?", (login.strip(),))
-    if row is None or not row["actif"] or not verify_password(password, row["hash"]):
+    row = db.one("SELECT u.id, u.hash, u.actif, p.actif AS p_actif FROM utilisateur u "
+                 "LEFT JOIN personnel p ON p.id=u.personnel_id WHERE u.login=?", (login.strip(),))
+    if (row is None or not row["actif"] or row["p_actif"] == 0
+            or not verify_password(password, row["hash"])):
         log(db, login or "?", "CONNEXION_ECHEC", "utilisateur", login)
         return None
     db.execute("UPDATE utilisateur SET derniere_connexion=datetime('now','localtime') WHERE id=?", (row["id"],))

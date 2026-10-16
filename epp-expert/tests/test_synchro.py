@@ -11,6 +11,7 @@ import urllib.request
 import pytest
 
 from epp.core import licence, security
+from epp.domain import repo
 from epp.synchro import protocole as P
 from epp.synchro.serveur import ServeurSynchro, lister_appareils, revoquer
 
@@ -68,7 +69,11 @@ class Client:
 def ecole(demo):
     db, annee = demo
     security.create_user(db, "admin", "Administrateur", MDP_ADMIN, "ADMIN")
-    security.create_user(db, "ens", "Enseignant CP1", "Ensei!2026", "ENSEIGNANT")
+    uid = security.create_user(db, "ens", "Enseignant CP1", "Ensei!2026", "ENSEIGNANT")
+    # compte enseignant lié à l'agent qui tient la classe du premier élève (accès limité à cette classe)
+    classe = repo.inscriptions(db, annee)[0]["classe"]
+    pid = db.scalar("SELECT personnel_id FROM affectation WHERE annee_id=? AND classe_code=?", (annee.id, classe))
+    db.execute("UPDATE utilisateur SET personnel_id=? WHERE id=?", (pid, uid))
     etat = {"e": ESSAI}
     modifs = []
     srv = ServeurSynchro(db.path, port=0, port_decouverte=0, etat_licence=lambda: etat["e"],
@@ -124,7 +129,9 @@ def test_copie_selon_les_droits(ecole):
     i = rep["instantane"]
     assert st == 200 and i["annee"]["libelle"] == annee.libelle and i["licence"]["utilisable"]
     assert "notes.modifier" in i["utilisateur"]["permissions"] and "eleves.modifier" not in i["utilisateur"]["permissions"]
-    assert len(i["eleves"]) == len(__import__("epp.domain.repo", fromlist=["x"]).inscriptions(db, annee))
+    classe = i["utilisateur"]["classes"][0]                    # compte enseignant : sa classe seulement
+    assert i["utilisateur"]["classes"] == [classe] and [c["code"] for c in i["classes"]] == [classe]
+    assert len(i["eleves"]) == len(repo.inscriptions(db, annee, classe)) and {e["classe"] for e in i["eleves"]} == {classe}
     assert i["notes"] and i["resultats"] and i["grilles"] and i["absences_eleves"]
     assert "hash" not in json.dumps(i) and "logo_ecole" not in i["ecole"]
 
@@ -191,8 +198,10 @@ def test_absences_et_suppression_protegee(ecole):
     nouvelles = [a for a in r["instantane"]["absences_eleves"] if a["inscription_id"] == iid and a["date"] == f"{an0}-11-03"]
     assert len(nouvelles) == 1                                     # renvoyée deux fois, enregistrée une fois
     pers = i["personnel"][0]["id"]
-    r = c.synchro([{"uid": _uid(), "op": "absence", "kind": "personnel", "cible": pers, "date": f"{an0}-11-04",
-                    "nature": "RETARD", "retard_min": 20, "motif": "Pluie / route coupée"}])[1]
+    op_pers = {"uid": _uid(), "op": "absence", "kind": "personnel", "cible": pers, "date": f"{an0}-11-04",
+               "nature": "RETARD", "retard_min": 20, "motif": "Pluie / route coupée"}
+    assert c.synchro([op_pers])[1]["resultats"][0]["code"] == "DROITS"     # l'enseignant : élèves de sa classe
+    r = _client(db, srv, "admin").synchro([op_pers])[1]
     assert r["resultats"][0]["ok"] and any(a["personnel_id"] == pers for a in r["instantane"]["absences_personnel"])
     bad = c.synchro([{"uid": _uid(), "op": "absence", "kind": "eleve", "cible": iid, "date": "1999-01-01",
                       "nature": "ABSENCE", "jours": 1}])[1]["resultats"][0]

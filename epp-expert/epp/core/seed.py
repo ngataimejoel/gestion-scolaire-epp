@@ -18,6 +18,7 @@ MINISTERE_DEFAUT = ("MINISTERE DE L'EDUCATION NATIONALE, DE L'ALPHABETISATION ET
                     "TECHNIQUE")
 
 DEFAULT_PARAMS = {
+    "validation_notes": "OUI",   # notes saisies par les enseignants : validées par le directeur avant de compter
     "pays": "REPUBLIQUE DE COTE D'IVOIRE",
     "devise_pays": "Union - Discipline - Travail",
     "ministere": MINISTERE_DEFAUT,

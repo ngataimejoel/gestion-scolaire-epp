@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from epp.core.db import Database
-from epp.core.security import Session, log
+from epp.core.security import AccessDenied, Session, log
 from epp.domain import calculs
 
 
@@ -435,14 +435,36 @@ def reinscrire(db: Database, s: Session, src: Annee, dst: Annee, decisions: dict
     return bilan
 
 
+# ============================================================== accès des enseignants
+def classe_inscription(db: Database, inscription_id: int) -> dict:
+    """Année, classe et calendrier d'une inscription."""
+    r = db.one("SELECT i.annee_id, c.code, c.calendrier FROM inscription i JOIN classe c ON c.id=i.classe_id "
+               "WHERE i.id=?", (inscription_id,))
+    if r is None:
+        raise ValidationError("Élève introuvable.")
+    return dict(r)
+
+
+def verifier_saisie_ouverte(db: Database, s: Session, ci: dict, eval_num: int) -> None:
+    """Compte enseignant : sa classe seulement, et pas d'évaluation dont le directeur a fermé la saisie."""
+    s.verifier_classe(ci["annee_id"], ci["code"])
+    if s.restreint:
+        e = db.one("SELECT libelle, saisie_fermee FROM evaluation WHERE annee_id=? AND calendrier=? AND num=?",
+                   (ci["annee_id"], ci["calendrier"], eval_num))
+        if e and e["saisie_fermee"]:
+            raise AccessDenied(f"La saisie des notes de « {e['libelle']} » est fermée par le directeur.")
+
+
 # ============================================================== notes
 def classes_de_grille(annee: Annee, grille_id: int) -> list[Classe]:
     return [c for c in annee.classes if c.grille_id == grille_id]
 
 
 def notes_grille(db: Database, annee: Annee, grille_id: int, eval_num: int,
-                 classe_code: str | None = None) -> tuple[list[dict], list[dict]]:
-    """Feuille de notes : (matières, lignes). Chaque ligne : inscription + présence + notes {matiere_id: valeur}."""
+                 classe_code: str | None = None, valides_seulement: bool = False) -> tuple[list[dict], list[dict]]:
+    """Feuille de notes : (matières, lignes). Chaque ligne : inscription + présence + notes {matiere_id: valeur}
+    + « attente » (matières dont la note saisie par un enseignant attend la validation du directeur).
+    valides_seulement : sans ces notes en attente (bulletins)."""
     grille = annee.grilles[grille_id]
     mats = grille.matieres.get(eval_num, [])
     codes = [c.code for c in classes_de_grille(annee, grille_id)]
@@ -451,12 +473,17 @@ def notes_grille(db: Database, annee: Annee, grille_id: int, eval_num: int,
     rows = [r for r in inscriptions(db, annee) if r["classe"] in codes]
     ids = [r["inscription_id"] for r in rows]
     notes: dict[int, dict[int, float]] = {}
+    attente: dict[int, set] = {}
     pres: dict[int, bool] = {}
     if ids:
         q = ",".join("?" * len(ids))
         mids = [m["id"] for m in mats] or [0]
         qm = ",".join("?" * len(mids))
         for n in db.query(f"SELECT * FROM note WHERE inscription_id IN ({q}) AND matiere_id IN ({qm})", (*ids, *mids)):
+            if n["en_attente"]:
+                if valides_seulement:
+                    continue
+                attente.setdefault(n["inscription_id"], set()).add(n["matiere_id"])
             notes.setdefault(n["inscription_id"], {})[n["matiere_id"]] = n["valeur"]
         for p in db.query(f"SELECT * FROM presence_eval WHERE eval_num=? AND inscription_id IN ({q})", (eval_num, *ids)):
             pres[p["inscription_id"]] = bool(p["present"])
@@ -467,7 +494,8 @@ def notes_grille(db: Database, annee: Annee, grille_id: int, eval_num: int,
         n = notes.get(iid, {})
         total, moy = calculs.moyenne_evaluation([(n.get(m["id"]), m["valeur"]) for m in mats],
                                                 grille.mode, grille.echelle, present)
-        out.append({**r, "present": present, "notes": n, "total": total, "moyenne": moy})
+        out.append({**r, "present": present, "notes": n, "total": total, "moyenne": moy,
+                    "attente": attente.get(iid, set())})
     return mats, out
 
 
@@ -495,9 +523,22 @@ def set_note(db: Database, s: Session, annee: Annee, inscription_id: int, matier
                             (inscription_id, m["eval_num"]), 1)
         if not present:
             raise ValidationError("L'élève est noté absent à cette évaluation : la saisie de notes est refusée.")
-        db.execute("INSERT INTO note(inscription_id, matiere_id, valeur) VALUES(?,?,?) "
-                   "ON CONFLICT(inscription_id, matiere_id) DO UPDATE SET valeur=excluded.valeur",
-                   (inscription_id, matiere_id, valeur))
+    verifier_saisie_ouverte(db, s, classe_inscription(db, inscription_id), m["eval_num"])
+    if valeur is not None:
+        # saisie d'un enseignant : en attente de la validation du directeur (si le paramètre est actif) ;
+        # une saisie du directeur ou du secrétariat compte tout de suite
+        attente = int(s.restreint and (db.get_param("validation_notes", "OUI") or "OUI") == "OUI")
+        avant = db.scalar("SELECT valeur FROM note WHERE inscription_id=? AND matiere_id=?",
+                          (inscription_id, matiere_id))
+        db.execute("INSERT INTO note(inscription_id, matiere_id, valeur, en_attente, saisi_par) VALUES(?,?,?,?,?) "
+                   "ON CONFLICT(inscription_id, matiere_id) DO UPDATE SET valeur=excluded.valeur, "
+                   "en_attente=excluded.en_attente, saisi_par=excluded.saisi_par",
+                   (inscription_id, matiere_id, valeur, attente, s.login))
+        if s.restreint and avant != valeur:       # journal par enseignant
+            e = db.one("SELECT e.nom, i.matricule_ecole FROM inscription i JOIN eleve e ON e.id=i.eleve_id "
+                       "WHERE i.id=?", (inscription_id,))
+            log(db, s.login, "NOTE_SAISIE", "note", f"{e['nom']} ({e['matricule_ecole']}) · {m['libelle']} "
+                f"(évaluation {m['eval_num']}) : {'' if avant is None else f'{avant:g} -> '}{valeur:g}")
     else:
         db.execute("DELETE FROM note WHERE inscription_id=? AND matiere_id=?", (inscription_id, matiere_id))
 
@@ -506,6 +547,7 @@ def set_presence(db: Database, s: Session, inscription_id: int, eval_num: int, p
                  grille_id: int | None = None) -> None:
     """« Présent ? » = NON : les notes de l'évaluation sont effacées (la moyenne vaut 0)."""
     s.require("notes.modifier")
+    verifier_saisie_ouverte(db, s, classe_inscription(db, inscription_id), eval_num)
     with db.transaction():
         db.execute("INSERT INTO presence_eval(inscription_id, eval_num, present) VALUES(?,?,?) "
                    "ON CONFLICT(inscription_id, eval_num) DO UPDATE SET present=excluded.present",
@@ -641,6 +683,7 @@ def _validate_absence(d: dict, annee: Annee) -> dict:
 def save_absence(db: Database, s: Session, kind: str, aid: int | None, annee: Annee, data: dict) -> int:
     """kind = 'eleve' (cible = inscription_id) ou 'personnel' (cible = personnel_id)."""
     s.require("absences.modifier")
+    _verifier_absence(db, s, kind, data.get("inscription_id") or data.get("personnel_id"))
     d = _validate_absence(data, annee)
     table, fk = ("absence_eleve", "inscription_id") if kind == "eleve" else ("absence_personnel", "personnel_id")
     cible = data.get(fk)
@@ -657,8 +700,22 @@ def save_absence(db: Database, s: Session, kind: str, aid: int | None, annee: An
     return aid
 
 
+def _verifier_absence(db: Database, s: Session, kind: str, cible) -> None:
+    """Compte enseignant : absences des élèves de sa classe seulement."""
+    if not s.restreint or not cible:
+        return
+    if kind != "eleve":
+        raise AccessDenied("Les absences du personnel sont saisies par le directeur.")
+    ci = classe_inscription(db, int(cible))
+    s.verifier_classe(ci["annee_id"], ci["code"])
+
+
 def delete_absence(db: Database, s: Session, kind: str, aid: int) -> None:
     s.require("absences.modifier")
+    if s.restreint:
+        cible = db.scalar(f"SELECT {'inscription_id' if kind == 'eleve' else 'personnel_id'} FROM "
+                          f"{'absence_eleve' if kind == 'eleve' else 'absence_personnel'} WHERE id=?", (aid,))
+        _verifier_absence(db, s, kind, cible)
     db.execute(f"DELETE FROM {'absence_eleve' if kind == 'eleve' else 'absence_personnel'} WHERE id=?", (aid,))
     log(db, s.login, "SUPPRESSION_ABSENCE", kind, str(aid))
 
