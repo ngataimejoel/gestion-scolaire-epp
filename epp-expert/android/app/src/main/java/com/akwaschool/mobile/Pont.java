@@ -15,6 +15,7 @@ import android.webkit.WebView;
 
 import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
+import com.akwaschool.mobile.noyau.Comptes;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
 import com.akwaschool.mobile.synchro.Client;
@@ -653,6 +654,136 @@ public class Pont {
         }
         String s = nouveauCodeSecours();
         return "{\"ok\":true,\"secours\":" + (s == null ? "null" : Protocole.jsonTexte(s)) + "}";
+    }
+
+    // ------------------------------------------------------------------ connexion et comptes des enseignants (interface v8)
+    /** Personne connectée : « admin » (directeur), identifiant d'un enseignant, ou null (écran de connexion). */
+    private volatile String connecte;
+
+    private Comptes comptes() {
+        return new Comptes(prefs.getString("comptes", null), ITERATIONS_PIN);
+    }
+
+    private boolean garder(Comptes c) {
+        return prefs.edit().putString("comptes", c.texte()).commit();
+    }
+
+    private void echec() {
+        int echecs = prefs.getInt("admin_echecs", 0) + 1;
+        SharedPreferences.Editor e = prefs.edit().putInt("admin_echecs", echecs);
+        if (echecs % 5 == 0) {
+            e.putLong("admin_bloque_jusqua", System.currentTimeMillis() + 30_000L * (echecs / 5));
+        }
+        e.commit();
+    }
+
+    private static String ok(String cle, String valeur) {
+        return "{\"ok\":true,\"" + cle + "\":" + (valeur == null ? "null" : Protocole.jsonTexte(valeur)) + "}";
+    }
+
+    /**
+     * Connexion : identifiant « admin » et mot de passe administrateur pour le directeur, ou compte d'un enseignant.
+     * Renvoie {ok, role: dir|ens, tid, login, provisoire} ou {ok:false, message}.
+     */
+    @JavascriptInterface
+    public String connecter(String login, String mdp) {
+        if (attenteAdmin() > 0) {
+            return erreur(0, "Trop d'essais : patientez " + attenteAdmin() + " s.", null);
+        }
+        String l = Comptes.normaliser(login);
+        if (l.isEmpty() || l.equals("admin")) {
+            if (!verifierAdmin(mdp)) {
+                return erreur(0, "Identifiant ou mot de passe incorrect.", null);
+            }
+            connecte = "admin";
+            return "{\"ok\":true,\"role\":\"dir\"}";
+        }
+        Comptes.Compte c = comptes().verifier(l, mdp);
+        if (c == null) {
+            echec();
+            return erreur(0, "Identifiant ou mot de passe incorrect.", null);
+        }
+        prefs.edit().putInt("admin_echecs", 0).commit();
+        connecte = c.login;
+        return "{\"ok\":true,\"role\":\"ens\",\"tid\":" + Protocole.jsonTexte(c.enseignant) + ",\"login\":"
+                + Protocole.jsonTexte(c.login) + ",\"provisoire\":" + c.provisoire() + "}";
+    }
+
+    @JavascriptInterface
+    public void deconnecter() {
+        connecte = null;
+    }
+
+    /** L'enseignant connecté remplace son mot de passe (provisoire) ; renvoie {ok, secours: code de secours}. */
+    @JavascriptInterface
+    public String choisirMotDePasse(String nouveau) {
+        String l = connecte;
+        if (l == null || l.equals("admin")) {
+            return erreur(0, "Aucun enseignant connecté.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String code = c.definir(l, nouveau);
+            return garder(c) ? ok("secours", code) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Mot de passe oublié d'un enseignant : code de secours puis nouveau mot de passe ; renvoie {ok, secours}. */
+    @JavascriptInterface
+    public String recupererCompte(String login, String code, String nouveau) {
+        if (attenteAdmin() > 0) {
+            return erreur(0, "Trop d'essais : patientez " + attenteAdmin() + " s.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String s = c.recuperer(login, code, nouveau);
+            return garder(c) ? ok("secours", s) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            echec();
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Le directeur crée le compte d'un enseignant ; renvoie {ok, mdp: mot de passe provisoire}. */
+    @JavascriptInterface
+    public String creerCompte(String tid, String login) {
+        if (!"admin".equals(connecte)) {
+            return erreur(0, "Réservé au directeur.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String mdp = c.creer(tid, login);
+            return garder(c) ? ok("mdp", mdp) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Le directeur donne un nouveau mot de passe provisoire à un enseignant ; renvoie {ok, mdp}. */
+    @JavascriptInterface
+    public String reinitCompte(String tid) {
+        if (!"admin".equals(connecte)) {
+            return erreur(0, "Réservé au directeur.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String mdp = c.reinitialiser(tid);
+            return garder(c) ? ok("mdp", mdp) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Identifiant du compte de chaque enseignant ({tid: login}), pour l'interface. */
+    @JavascriptInterface
+    public String listeComptes() {
+        StringBuilder b = new StringBuilder("{");
+        for (Comptes.Compte c : comptes().tous()) {
+            b.append(b.length() > 1 ? "," : "").append(Protocole.jsonTexte(c.enseignant)).append(':').append(Protocole.jsonTexte(c.login));
+        }
+        return b.append('}').toString();
     }
 
     // ------------------------------------------------------------------ licence du téléphone utilisé seul
