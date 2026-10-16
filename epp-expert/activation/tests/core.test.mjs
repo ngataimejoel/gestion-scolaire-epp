@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { test } from "node:test";
-import { activer, genererCodes, liberer, lister, memoire, nouveauCode, normaliserCode, revoquer, traiter,
+import { activer, envoyerRecuperation, genererCodes, liberer, lister, memoire, nouveauCode, normaliserCode, revoquer, traiter,
   verifierLicence } from "../lib/core.mjs";
 
 const { privateKey } = crypto.generateKeyPairSync("ed25519");
@@ -86,4 +86,23 @@ test("API HTTP : administration protégée par jeton", async () => {
   const a = await req("/api/activer", { method: "POST", body: JSON.stringify({ code: codes[0].code, machine: M1 }) });
   assert.equal(a.status, 200);
   assert.equal((await req("/api/activer", { method: "POST", body: "{" })).status, 400);
+});
+
+test("mot de passe oublié : code envoyé par mail aux seules versions activées, envois limités", async () => {
+  const s = memoire(), envois = [];
+  const envoyer = async (m) => { envois.push(m); };
+  const [{ code }] = await genererCodes(s, { type: "vie", nombre: 1 });
+  const { licence, signature } = await activer(s, privateKey, { code, machine: M1, ecole: "EPP OUANINOU 2" });
+  const demande = { licence, signature, email: "dir@ecole.ci", code: "123456", ecole: "EPP OUANINOU 2", login: "dir" };
+  assert.deepEqual(await envoyerRecuperation(s, privateKey, demande, envoyer), { ok: true });
+  assert.equal(envois[0].to, "dir@ecole.ci");
+  assert.match(envois[0].text, /123456/);
+  await assert.rejects(envoyerRecuperation(s, privateKey, { ...demande, signature: "x" }, envoyer), { status: 403 });
+  await assert.rejects(envoyerRecuperation(s, privateKey, { ...demande, code: "12ab" }, envoyer), { status: 400 });
+  await envoyerRecuperation(s, privateKey, demande, envoyer);
+  await envoyerRecuperation(s, privateKey, demande, envoyer);
+  await assert.rejects(envoyerRecuperation(s, privateKey, demande, envoyer), { status: 429 });
+  const r = await traiter(new Request("http://x/api/recuperation", { method: "POST", body: JSON.stringify(demande) }),
+    { store: s, privateKey });
+  assert.equal(r.status, 503);   // service de mail non configuré
 });

@@ -587,6 +587,132 @@ public class Pont {
         }
     }
 
+    // ------------------------------------------------------------------ mot de passe administrateur oublié
+    private static final String ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+    private String empreinte(String code) throws GeneralSecurityException {
+        byte[] sel = Protocole.aleatoire(16);
+        return Protocole.b64(sel) + ":" + Protocole.b64(Protocole.pbkdf2(code.toCharArray(), sel, ITERATIONS_PIN));
+    }
+
+    private static boolean correspond(String code, String stocke) {
+        if (stocke == null || code == null) {
+            return false;
+        }
+        try {
+            String[] x = stocke.split(":");
+            return Protocole.egaux(Protocole.unb64(x[1]),
+                    Protocole.pbkdf2(code.toCharArray(), Protocole.unb64(x[0]), ITERATIONS_PIN));
+        } catch (GeneralSecurityException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Nouveau code de secours (12 caractères) : renvoyé une seule fois, à noter ; seule son empreinte est gardée. */
+    @JavascriptInterface
+    public String nouveauCodeSecours() {
+        byte[] a = Protocole.aleatoire(12);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < 12; i++) {
+            b.append(ALPHABET.charAt((a[i] & 0xFF) % 32));
+        }
+        try {
+            prefs.edit().putString("secours", empreinte(b.toString())).commit();
+        } catch (GeneralSecurityException e) {
+            return null;
+        }
+        return b.substring(0, 4) + "-" + b.substring(4, 8) + "-" + b.substring(8);
+    }
+
+    @JavascriptInterface
+    public String emailRecuperation() {
+        return prefs.getString("email", "");
+    }
+
+    @JavascriptInterface
+    public void definirEmailRecuperation(String email) {
+        prefs.edit().putString("email", email == null ? "" : email.trim()).apply();
+    }
+
+    /** Fait envoyer un code à 6 chiffres à l'adresse enregistrée (Internet, téléphone activé). */
+    @JavascriptInterface
+    public void envoyerCodeMail(String id, String ecole) {
+        reseau.execute(() -> {
+            String email = prefs.getString("email", "");
+            String lic = prefs.getString("licence", null), sig = prefs.getString("signature", null);
+            if (email.isEmpty()) {
+                rendre(id, erreur(0, "Aucune adresse mail n'est enregistrée sur ce téléphone : utilisez le code de "
+                        + "secours.", null));
+                return;
+            }
+            if (lic == null || sig == null) {
+                rendre(id, erreur(0, "L'envoi par mail demande un téléphone activé : utilisez le code de secours.",
+                        null));
+                return;
+            }
+            try {
+                String code = String.format(java.util.Locale.ROOT, "%06d",
+                        new java.security.SecureRandom().nextInt(1_000_000));
+                String corps = "{\"licence\":" + Protocole.jsonTexte(lic) + ",\"signature\":" + Protocole.jsonTexte(sig)
+                        + ",\"email\":" + Protocole.jsonTexte(email) + ",\"code\":" + Protocole.jsonTexte(code)
+                        + ",\"ecole\":" + Protocole.jsonTexte(ecole == null ? "" : ecole) + ",\"login\":\"admin\"}";
+                Client.Reponse r = Client.post(Licence.URL_ACTIVATION + "/api/recuperation",
+                        corps.getBytes(StandardCharsets.UTF_8), "application/json", null);
+                if (r.statut != 200) {
+                    String m = r.statut == 0 ? null : Protocole.champTexte(r.texte(), "erreur");
+                    rendre(id, erreur(r.statut, m != null ? m : "Pas de connexion Internet : utilisez le code de "
+                            + "secours.", null));
+                    return;
+                }
+                prefs.edit().putString("recup", empreinte(code))
+                        .putLong("recup_expire", System.currentTimeMillis() + 15 * 60_000L).putInt("recup_essais", 0)
+                        .commit();
+                int at = email.indexOf('@');
+                String masque = (at > 2 ? email.substring(0, 2) + "•••" : "•••") + email.substring(Math.max(at, 0));
+                rendre(id, "{\"ok\":true,\"email\":" + Protocole.jsonTexte(masque) + "}");
+            } catch (GeneralSecurityException | RuntimeException e) {
+                rendre(id, erreur(0, "Envoi impossible : " + e.getMessage(), null));
+            }
+        });
+    }
+
+    /**
+     * Nouveau mot de passe administrateur avec le code de secours ou le code reçu par mail. Renvoie
+     * {ok, secours: nouveau code} (le code de secours ne sert qu'une fois) ou {ok:false, message}.
+     */
+    @JavascriptInterface
+    public String recupererAdmin(String code, String nouveau) {
+        if (attenteAdmin() > 0) {
+            return erreur(0, "Trop d'essais : patientez " + attenteAdmin() + " s.", null);
+        }
+        String c = code == null ? "" : code.toUpperCase(java.util.Locale.ROOT).replaceAll("[^0-9A-Z]", "");
+        boolean secours = c.length() == 12 && correspond(c, prefs.getString("secours", null));
+        boolean mail = !secours && c.length() == 6 && prefs.getInt("recup_essais", 0) < 5
+                && System.currentTimeMillis() <= prefs.getLong("recup_expire", 0)
+                && correspond(c, prefs.getString("recup", null));
+        if (!secours && !mail) {
+            int echecs = prefs.getInt("admin_echecs", 0) + 1;
+            SharedPreferences.Editor e = prefs.edit().putInt("admin_echecs", echecs)
+                    .putInt("recup_essais", prefs.getInt("recup_essais", 0) + 1);
+            if (echecs % 5 == 0) {
+                e.putLong("admin_bloque_jusqua", System.currentTimeMillis() + 30_000L * (echecs / 5));
+            }
+            e.commit();
+            return erreur(0, "Code incorrect ou expiré.", null);
+        }
+        if (nouveau == null || nouveau.length() < 6) {
+            return erreur(0, "Le nouveau mot de passe doit compter 6 caractères au moins.", null);
+        }
+        try {
+            prefs.edit().putString("admin", empreinte(nouveau)).putInt("admin_echecs", 0).remove("recup")
+                    .remove("recup_expire").commit();
+        } catch (GeneralSecurityException e) {
+            return erreur(0, "Enregistrement impossible.", null);
+        }
+        String s = secours ? nouveauCodeSecours() : null;
+        return "{\"ok\":true,\"secours\":" + (s == null ? "null" : Protocole.jsonTexte(s)) + "}";
+    }
+
     // ------------------------------------------------------------------ licence du téléphone utilisé seul
     private String machine() {
         String id = Settings.Secure.getString(activite.getContentResolver(), Settings.Secure.ANDROID_ID);

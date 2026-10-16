@@ -182,7 +182,9 @@
       fenetre('<h3>' + ic("key") + " " + esc(titre) + '</h3><p class="mut small">' + esc(texte) + "</p>" +
         '<label class="f">Mot de passe administrateur</label><input class="c" id="mdpAdmin" type="password" autocomplete="off">' +
         '<p class="small bad" id="msgAdmin"></p><div class="rang" style="margin-top:6px"><button class="btn" data-a="admin-non">Annuler</button>' +
+        '<button class="btn sm" data-a="admin-oubli">Mot de passe oublié ?</button>' +
         '<span class="esp"></span><button class="btn pri" data-a="admin-oui">Valider</button></div>', function () { if (!fini) { fini = true; ok(false); } });
+      actionsFenetre["admin-oubli"] = function () { fini = true; recupererAdminLocal().then(ok); };
       actionsFenetre["admin-oui"] = function () {
         var v = document.getElementById("mdpAdmin").value, m = document.getElementById("msgAdmin");
         if (!v) { return; }
@@ -194,6 +196,48 @@
         m.textContent = att > 0 ? "Mot de passe incorrect. Trop d'essais : patientez " + att + " s." : "Mot de passe incorrect.";
       };
       actionsFenetre["admin-non"] = function () { fini = true; fermer(); ok(false); };
+    });
+  }
+  /** Code de secours du mot de passe administrateur : affiché une seule fois, à noter. */
+  function montrerSecours(code) {
+    if (!code) { return; }
+    fenetre('<h3>' + ic("key") + ' Code de secours</h3><p class="small">Il permet de choisir un nouveau mot de passe administrateur en cas ' +
+      "d'oubli, même sans Internet. Notez-le et rangez-le en lieu sûr : il ne sera plus affiché. Il ne sert qu'une fois.</p>" +
+      '<p style="font-size:22px;font-weight:700;letter-spacing:2px;text-align:center;margin:12px 0">' + esc(code) + "</p>" +
+      '<div class="rang"><span class="esp"></span><button class="btn pri" data-a="secours-ok">C\'est noté</button></div>');
+    actionsFenetre["secours-ok"] = fermer;
+  }
+  /** Mot de passe administrateur oublié (téléphone seul) : code de secours ou code reçu par mail. Promesse (vrai si changé). */
+  function recupererAdminLocal() {
+    return new Promise(function (ok) {
+      var fini = false;
+      fenetre('<h3>' + ic("key") + ' Mot de passe oublié</h3><p class="mut small">Saisissez votre code de secours, ou recevez un code par mail ' +
+        "(Internet nécessaire, adresse enregistrée dans Plus › Sécurité).</p>" +
+        '<button class="btn sm" data-a="recup-mail">Recevoir un code par mail</button>' +
+        '<label class="f">Code</label><input class="c" id="recCode" autocomplete="off" autocapitalize="characters">' +
+        '<label class="f">Nouveau mot de passe (6 caractères au moins)</label><input class="c" id="recMdp1" type="password">' +
+        '<label class="f">Confirmez</label><input class="c" id="recMdp2" type="password"><p class="small" id="msgRec"></p>' +
+        '<div class="rang"><button class="btn" data-a="recup-non">Annuler</button><span class="esp"></span>' +
+        '<button class="btn pri" data-a="recup-oui">Valider</button></div>', function () { if (!fini) { fini = true; ok(false); } });
+      var m = function (t, mal) { var e = document.getElementById("msgRec"); e.textContent = t; e.className = "small " + (mal ? "bad" : "ok"); };
+      actionsFenetre["recup-mail"] = function () {
+        m("Envoi en cours…");
+        attendre(function (id) { N.envoyerCodeMail(id, (inst().ecole || {}).ecole_nom || ""); }).then(function (r) {
+          if (r && r.ok) { m("Code envoyé à " + r.email + ". Il est valable 15 minutes."); } else { m((r && r.message) || "Envoi impossible.", true); }
+        });
+      };
+      actionsFenetre["recup-oui"] = function () {
+        var a = document.getElementById("recMdp1").value;
+        if (a.length < 6) { m("6 caractères au moins.", true); return; }
+        if (a !== document.getElementById("recMdp2").value) { m("Les deux mots de passe ne sont pas identiques.", true); return; }
+        var r = JSON.parse(N.recupererAdmin(document.getElementById("recCode").value, a));
+        if (!r.ok) { m(r.message, true); return; }
+        fini = true;
+        toast("Mot de passe administrateur changé.");
+        if (r.secours) { montrerSecours(r.secours); } else { fermer(); }
+        ok(true);
+      };
+      actionsFenetre["recup-non"] = function () { fini = true; fermer(); ok(false); };
     });
   }
   function confirmer(titre, texte, bouton, danger) {
@@ -1865,7 +1909,12 @@
         "modifier la fiche d'un élève, créer une sauvegarde. Il déverrouille aussi le téléphone en cas d'oubli du code PIN.</p>" +
         '<label class="f">Mot de passe actuel</label><input class="c" id="adm0" type="password"><label class="f">Nouveau mot de passe (6 caractères au moins)</label>' +
         '<input class="c" id="adm1" type="password"><label class="f">Confirmez</label><input class="c" id="adm2" type="password"><p class="small" id="msgAdm"></p>' +
-        '<button class="btn pri" data-a="admin-changer">Changer le mot de passe</button></div>' : "");
+        '<button class="btn pri" data-a="admin-changer">Changer le mot de passe</button></div>' +
+        '<div class="card"><h3>Mot de passe oublié</h3><p class="mut small">Un code de secours (hors ligne) ou un code envoyé à cette adresse ' +
+        "mail (Internet, téléphone activé) permet de choisir un nouveau mot de passe administrateur.</p>" +
+        '<label class="f">Adresse mail</label><input class="c" id="recEmail" type="email" value="' + esc(N.emailRecuperation ? N.emailRecuperation() : "") + '">' +
+        '<div class="rang" style="margin-top:6px"><button class="btn" data-a="email-recup">Enregistrer l\'adresse</button>' +
+        '<button class="btn" data-a="secours-nouveau">Nouveau code de secours</button></div></div>' : "");
   }
 
   // =================================================================== bienvenue, création de l'école, association, PIN
@@ -1911,6 +1960,7 @@
     if (mdp.length < 6) { m.textContent = "Le mot de passe administrateur compte 6 caractères au moins."; return; }
     if (mdp !== document.getElementById("n_mdp2").value) { m.textContent = "Les deux mots de passe ne sont pas identiques."; return; }
     if (!N.definirAdmin(mdp, null)) { m.textContent = "Un mot de passe administrateur existe déjà sur ce téléphone : utilisez-le, ou restaurez une sauvegarde."; return; }
+    montrerSecours(N.nouveauCodeSecours());
     var niv = Array.prototype.slice.call(document.querySelectorAll(".n_niv:checked")).map(function (x) { return x.value; });
     var e = D.ecole || {};
     var b = { version: 1, mode: "autonome", cree_le: new Date().toISOString(), compteur: 1000,
@@ -2389,6 +2439,17 @@
     },
     "imprimer-direct": function (b) { imprimer(b.getAttribute("data-d"), { classe: S.notes.classe }); },
     exporter: function (b) { exporter(b.getAttribute("data-d"), b.getAttribute("data-m")); },
+    "email-recup": function () {
+      var v = document.getElementById("recEmail").value.trim();
+      if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast("Adresse mail invalide.", true); return; }
+      N.definirEmailRecuperation(v);
+      toast(v ? "Adresse enregistrée." : "Adresse retirée.");
+    },
+    "secours-nouveau": function () {
+      demanderAdminLocal("Nouveau code de secours", "L'ancien code ne servira plus.").then(function (ok) {
+        if (ok) { montrerSecours(N.nouveauCodeSecours()); }
+      });
+    },
     "admin-changer": function () {
       var a0 = document.getElementById("adm0").value, a1 = document.getElementById("adm1").value, m = document.getElementById("msgAdm");
       if (a1.length < 6) { m.textContent = "6 caractères au moins."; m.className = "small bad"; return; }

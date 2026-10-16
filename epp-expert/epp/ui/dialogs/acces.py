@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QButtonGroup, QDialog, QFileDialog, QFormLayout, 
                                QMessageBox, QRadioButton, QStackedWidget, QVBoxLayout, QWidget)
 
 from epp import APP_NAME, __version__
-from epp.core import licence, security
+from epp.core import licence, recuperation, security
 from epp.ui import logo as logo_app
 from epp.ui import theme
 from epp.ui.video import BandeauVideo
@@ -107,10 +107,11 @@ class DialogueConnexion(_EcranScinde):
             QTimer.singleShot(0, self.mdp.setFocus)
 
     def _oubli(self):
-        QMessageBox.information(self, "Mot de passe oublié",
-                                "Pour des raisons de sécurité, les mots de passe ne sont pas récupérables.\n\n"
-                                "Demandez à un administrateur de l'application de vous attribuer un mot de passe "
-                                "provisoire (Paramètres › Utilisateurs). Vous le changerez à la connexion.")
+        d = DialogueRecuperation(self.db, self.login.text().strip(), self)
+        if d.exec():
+            self.login.setText(d.login.text().strip())
+            self.mdp.clear()
+            self.mdp.setFocus()
 
     def _valider(self):
         if not self.b_ok.isEnabled():
@@ -135,6 +136,84 @@ class DialogueConnexion(_EcranScinde):
         self.accept()
 
 
+# =================================================================== mot de passe oublié
+def afficher_code_secours(parent, login: str, code: str) -> None:
+    """Code de secours à noter ou imprimer : il ne sera plus jamais affiché."""
+    from PySide6.QtGui import QTextDocument
+    from PySide6.QtPrintSupport import QPrintDialog, QPrinter
+    texte = (f"Code de secours du compte « {login} » : {code}\n\nIl permet de choisir un nouveau mot de passe en cas "
+             "d'oubli, même sans Internet (« Mot de passe oublié ? » à la connexion). Notez-le ou imprimez-le et "
+             "rangez-le en lieu sûr : il ne sera plus affiché. Il ne sert qu'une fois ; un nouveau code vous sera "
+             "alors donné.")
+    m = QMessageBox(QMessageBox.Information, "Code de secours", texte, parent=parent)
+    m.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    b_imp = m.addButton("Imprimer", QMessageBox.ActionRole)
+    m.addButton("C'est noté", QMessageBox.AcceptRole)
+    while True:
+        m.exec()
+        if m.clickedButton() is not b_imp:
+            return
+        pr = QPrinter()
+        if QPrintDialog(pr, parent).exec():
+            doc = QTextDocument()
+            doc.setPlainText(f"AKWA SCHOOL\n\n{texte}")
+            doc.print_(pr)
+
+
+class DialogueRecuperation(QDialog):
+    """Mot de passe oublié : code reçu par mail (Internet) ou code de secours (hors ligne)."""
+
+    def __init__(self, db, login: str = "", parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Mot de passe oublié")
+        v = QVBoxLayout(self)
+        v.addWidget(label("Saisissez votre code de secours, ou recevez un code par mail à l'adresse enregistrée sur "
+                          "votre compte (Internet nécessaire). Sans l'un ni l'autre, demandez à un administrateur "
+                          "un mot de passe provisoire.", wrap=True))
+        f = QFormLayout()
+        self.login = QLineEdit(login)
+        self.code = QLineEdit()
+        self.code.setPlaceholderText("code de secours (XXXX-XXXX-XXXX) ou code reçu par mail")
+        self.nouveau = _champ_mdp(f"au moins {security.MIN_PASSWORD} caractères")
+        self.confirm = _champ_mdp()
+        f.addRow("Identifiant", self.login)
+        f.addRow("", bouton("Recevoir un code par mail", self._mail))
+        f.addRow("Code", self.code)
+        f.addRow("Nouveau mot de passe", self.nouveau)
+        f.addRow("Confirmation", self.confirm)
+        v.addLayout(f)
+        self.msg = label("", wrap=True)
+        v.addWidget(self.msg)
+        v.addLayout(ligne(None, bouton("Annuler", self.reject), bouton("Valider", self._ok, "primaire")))
+
+    def _mail(self):
+        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            adresse = recuperation.envoyer_code_mail(self.db, self.login.text())
+        except (recuperation.RecuperationErreur, licence.LicenceErreur) as e:
+            self.msg.setText(str(e))
+            return
+        finally:
+            QGuiApplication.restoreOverrideCursor()
+        self.msg.setText(f"Code envoyé à {adresse}. Il est valable 15 minutes.")
+        self.code.setFocus()
+
+    def _ok(self):
+        if self.nouveau.text() != self.confirm.text():
+            self.msg.setText("La confirmation ne correspond pas au nouveau mot de passe.")
+            return
+        try:
+            secours = recuperation.reinitialiser(self.db, self.login.text(), self.code.text(), self.nouveau.text())
+        except (recuperation.RecuperationErreur, ValueError) as e:
+            self.msg.setText(str(e))
+            return
+        if secours:
+            afficher_code_secours(self, self.login.text().strip(), secours)
+        QMessageBox.information(self, "Mot de passe oublié", "Votre mot de passe a été changé : connectez-vous.")
+        self.accept()
+
+
 # =================================================================== mot de passe
 class DialogueMotDePasse(QDialog):
     """Changement de mot de passe ; « impose » après un mot de passe provisoire."""
@@ -155,20 +234,42 @@ class DialogueMotDePasse(QDialog):
             f.addRow("Mot de passe actuel", self.ancien)
         f.addRow("Nouveau mot de passe", self.nouveau)
         f.addRow("Confirmation", self.confirm)
+        u = db.one("SELECT email, secours_hash FROM utilisateur WHERE id=?", (session.user_id,))
+        self.email = QLineEdit((u["email"] if u else "") or "")
+        self.email.setPlaceholderText("pour recevoir un code en cas d'oubli (facultatif)")
+        f.addRow("Adresse mail", self.email)
+        self.sans_secours = not (u and u["secours_hash"])
         v.addLayout(f)
-        v.addLayout(ligne(None, bouton("Annuler", self.reject), bouton("Enregistrer", self._ok, "primaire")))
+        v.addLayout(ligne(bouton("Nouveau code de secours…", self._secours), None, bouton("Annuler", self.reject),
+                          bouton("Enregistrer", self._ok, "primaire")))
+
+    def _secours(self):
+        afficher_code_secours(self, self.session.login,
+                              recuperation.nouveau_code_secours(self.db, self.session.user_id))
+        self.sans_secours = False
 
     def _ok(self):
+        if not self.ancien_connu and not self.nouveau.text() and not self.ancien.text():   # adresse mail seule
+            try:
+                recuperation.definir_email(self.db, self.session.user_id, self.email.text())
+            except ValueError as e:
+                afficher_erreur(self, e)
+                return
+            self.accept()
+            return
         if self.nouveau.text() != self.confirm.text():
             QMessageBox.warning(self, "Mot de passe", "La confirmation ne correspond pas au nouveau mot de passe.")
             return
         try:
+            recuperation.definir_email(self.db, self.session.user_id, self.email.text())
             security.changer_mon_mot_de_passe(self.db, self.session, self.ancien_connu or self.ancien.text(),
                                               self.nouveau.text())
         except ValueError as e:
             afficher_erreur(self, e)
             return
         QMessageBox.information(self, "Mot de passe", "Votre mot de passe a été modifié.")
+        if self.sans_secours:
+            self._secours()
         self.accept()
 
 
@@ -349,6 +450,7 @@ class DialoguePremierLancement(_EcranScinde):
         try:
             with self.db.transaction():
                 uid = security.create_user(self.db, self.login.text(), self.nom.text(), self.mdp.text(), "ADMIN")
+                secours = recuperation.nouveau_code_secours(self.db, uid)
                 repo.save_etablissement(self.db, sysd, {
                     "ecole_nom": self.ecole.text().strip(), "ecole_code": self.code_ecole.text().strip(),
                     "iepp": self.iepp.text().strip(), "dren": self.dren.text().strip(),
@@ -370,4 +472,5 @@ class DialoguePremierLancement(_EcranScinde):
         QGuiApplication.restoreOverrideCursor()
         security.log(self.db, session.login, "PREMIER_LANCEMENT", "application", self.resume.splitlines()[0])
         self.session = session
+        afficher_code_secours(self, session.login, secours)
         self.accept()
