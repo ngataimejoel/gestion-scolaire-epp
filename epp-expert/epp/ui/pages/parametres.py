@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (QComboBox, QDialog, QFileDialog, QFormLayout, QGr
                                QLabel, QLineEdit, QPlainTextEdit, QScrollArea, QTableWidget,
                                QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget)
 
-from epp.core import recuperation, security, seed
+from epp.core import security, seed
 from epp.domain import calendrier, repo
 from epp.ui import theme
 from epp.ui.pages.base import Page
@@ -437,10 +437,6 @@ class DialogueUtilisateur(QDialog):
         f.addRow("Identifiant", self.login)
         f.addRow("Nom complet", self.nom)
         f.addRow("Rôle", self.role)
-        email = u and self.page.db.scalar("SELECT email FROM utilisateur WHERE id=?", (u["id"],))
-        self.email = QLineEdit(email or "")
-        self.email.setPlaceholderText("code envoyé en cas de mot de passe oublié (facultatif)")
-        f.addRow("Adresse mail", self.email)
         if not u:
             f.addRow("Mot de passe", self.mdp)
         v.addLayout(f)
@@ -457,9 +453,6 @@ class DialogueUtilisateur(QDialog):
         else:
             security.ajouter_utilisateur(p.db, p.s, self.login.text(), self.nom.text(), self.mdp.text(),
                                          self.role.currentData())
-        uid = self.u["id"] if self.u else p.db.scalar("SELECT id FROM utilisateur WHERE login=?",
-                                                       (self.login.text().strip(),))
-        recuperation.definir_email(p.db, uid, self.email.text())
         self.accept()
 
 

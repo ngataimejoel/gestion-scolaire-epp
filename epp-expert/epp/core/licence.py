@@ -242,31 +242,6 @@ def activer(code: str, ecole: str = "", url: str | None = None, timeout: float =
     return etat()
 
 
-def envoyer_code_recuperation(email: str, code: str, ecole: str, login: str, url: str | None = None,
-                              timeout: float = 20) -> None:
-    """Fait envoyer par le service en ligne le code de récupération du mot de passe (version activée seulement)."""
-    cfg = _config()
-    url = (url or cfg["url"]).rstrip("/")
-    lic = _lire_json(FICHIER)
-    if not url or not verifier(lic.get("licence", ""), lic.get("signature", "")):
-        raise LicenceErreur("L'envoi par mail demande une version activée : utilisez le code de secours.")
-    corps = {"licence": lic["licence"], "signature": lic["signature"], "email": email, "code": code,
-             "ecole": ecole, "login": login}
-    req = urllib.request.Request(f"{url}/api/recuperation", data=json.dumps(corps).encode("utf-8"), method="POST",
-                                 headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=timeout):
-            pass
-    except urllib.error.HTTPError as e:
-        try:
-            msg = json.loads(e.read().decode("utf-8")).get("erreur")
-        except ValueError:
-            msg = None
-        raise LicenceErreur(msg or f"L'envoi du mail a échoué ({e.code}).") from None
-    except (urllib.error.URLError, TimeoutError, OSError):
-        raise LicenceErreur("Pas de connexion Internet : utilisez le code de secours.") from None
-
-
 def verrouillee(e: Etat) -> bool:
     """Vrai quand l'application ne doit afficher que l'écran d'activation."""
     return not e.utilisable

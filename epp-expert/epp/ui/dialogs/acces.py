@@ -161,43 +161,29 @@ def afficher_code_secours(parent, login: str, code: str) -> None:
 
 
 class DialogueRecuperation(QDialog):
-    """Mot de passe oublié : code reçu par mail (Internet) ou code de secours (hors ligne)."""
+    """Mot de passe oublié : code de secours (hors ligne)."""
 
     def __init__(self, db, login: str = "", parent=None):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Mot de passe oublié")
         v = QVBoxLayout(self)
-        v.addWidget(label("Saisissez votre code de secours, ou recevez un code par mail à l'adresse enregistrée sur "
-                          "votre compte (Internet nécessaire). Sans l'un ni l'autre, demandez à un administrateur "
-                          "un mot de passe provisoire.", wrap=True))
+        v.addWidget(label("Saisissez le code de secours remis à la création de votre compte. Sans ce code, demandez "
+                          "à un administrateur un mot de passe provisoire (Paramètres › Utilisateurs).", wrap=True))
         f = QFormLayout()
         self.login = QLineEdit(login)
         self.code = QLineEdit()
-        self.code.setPlaceholderText("code de secours (XXXX-XXXX-XXXX) ou code reçu par mail")
+        self.code.setPlaceholderText("XXXX-XXXX-XXXX")
         self.nouveau = _champ_mdp(f"au moins {security.MIN_PASSWORD} caractères")
         self.confirm = _champ_mdp()
         f.addRow("Identifiant", self.login)
-        f.addRow("", bouton("Recevoir un code par mail", self._mail))
-        f.addRow("Code", self.code)
+        f.addRow("Code de secours", self.code)
         f.addRow("Nouveau mot de passe", self.nouveau)
         f.addRow("Confirmation", self.confirm)
         v.addLayout(f)
         self.msg = label("", wrap=True)
         v.addWidget(self.msg)
         v.addLayout(ligne(None, bouton("Annuler", self.reject), bouton("Valider", self._ok, "primaire")))
-
-    def _mail(self):
-        QGuiApplication.setOverrideCursor(Qt.WaitCursor)
-        try:
-            adresse = recuperation.envoyer_code_mail(self.db, self.login.text())
-        except (recuperation.RecuperationErreur, licence.LicenceErreur) as e:
-            self.msg.setText(str(e))
-            return
-        finally:
-            QGuiApplication.restoreOverrideCursor()
-        self.msg.setText(f"Code envoyé à {adresse}. Il est valable 15 minutes.")
-        self.code.setFocus()
 
     def _ok(self):
         if self.nouveau.text() != self.confirm.text():
@@ -208,8 +194,7 @@ class DialogueRecuperation(QDialog):
         except (recuperation.RecuperationErreur, ValueError) as e:
             self.msg.setText(str(e))
             return
-        if secours:
-            afficher_code_secours(self, self.login.text().strip(), secours)
+        afficher_code_secours(self, self.login.text().strip(), secours)
         QMessageBox.information(self, "Mot de passe oublié", "Votre mot de passe a été changé : connectez-vous.")
         self.accept()
 
@@ -234,11 +219,7 @@ class DialogueMotDePasse(QDialog):
             f.addRow("Mot de passe actuel", self.ancien)
         f.addRow("Nouveau mot de passe", self.nouveau)
         f.addRow("Confirmation", self.confirm)
-        u = db.one("SELECT email, secours_hash FROM utilisateur WHERE id=?", (session.user_id,))
-        self.email = QLineEdit((u["email"] if u else "") or "")
-        self.email.setPlaceholderText("pour recevoir un code en cas d'oubli (facultatif)")
-        f.addRow("Adresse mail", self.email)
-        self.sans_secours = not (u and u["secours_hash"])
+        self.sans_secours = not db.scalar("SELECT secours_hash FROM utilisateur WHERE id=?", (session.user_id,))
         v.addLayout(f)
         v.addLayout(ligne(bouton("Nouveau code de secours…", self._secours), None, bouton("Annuler", self.reject),
                           bouton("Enregistrer", self._ok, "primaire")))
@@ -249,19 +230,10 @@ class DialogueMotDePasse(QDialog):
         self.sans_secours = False
 
     def _ok(self):
-        if not self.ancien_connu and not self.nouveau.text() and not self.ancien.text():   # adresse mail seule
-            try:
-                recuperation.definir_email(self.db, self.session.user_id, self.email.text())
-            except ValueError as e:
-                afficher_erreur(self, e)
-                return
-            self.accept()
-            return
         if self.nouveau.text() != self.confirm.text():
             QMessageBox.warning(self, "Mot de passe", "La confirmation ne correspond pas au nouveau mot de passe.")
             return
         try:
-            recuperation.definir_email(self.db, self.session.user_id, self.email.text())
             security.changer_mon_mot_de_passe(self.db, self.session, self.ancien_connu or self.ancien.text(),
                                               self.nouveau.text())
         except ValueError as e:

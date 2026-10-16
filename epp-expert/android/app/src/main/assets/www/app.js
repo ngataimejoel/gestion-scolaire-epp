@@ -207,25 +207,18 @@
       '<div class="rang"><span class="esp"></span><button class="btn pri" data-a="secours-ok">C\'est noté</button></div>');
     actionsFenetre["secours-ok"] = fermer;
   }
-  /** Mot de passe administrateur oublié (téléphone seul) : code de secours ou code reçu par mail. Promesse (vrai si changé). */
+  /** Mot de passe administrateur oublié (téléphone seul) : code de secours. Promesse (vrai si changé). */
   function recupererAdminLocal() {
     return new Promise(function (ok) {
       var fini = false;
-      fenetre('<h3>' + ic("key") + ' Mot de passe oublié</h3><p class="mut small">Saisissez votre code de secours, ou recevez un code par mail ' +
-        "(Internet nécessaire, adresse enregistrée dans Plus › Sécurité).</p>" +
-        '<button class="btn sm" data-a="recup-mail">Recevoir un code par mail</button>' +
-        '<label class="f">Code</label><input class="c" id="recCode" autocomplete="off" autocapitalize="characters">' +
+      fenetre('<h3>' + ic("key") + ' Mot de passe oublié</h3><p class="mut small">Saisissez le code de secours remis à la création de l\'école ' +
+        "(ou depuis Plus › Sécurité).</p>" +
+        '<label class="f">Code de secours</label><input class="c" id="recCode" autocomplete="off" autocapitalize="characters">' +
         '<label class="f">Nouveau mot de passe (6 caractères au moins)</label><input class="c" id="recMdp1" type="password">' +
         '<label class="f">Confirmez</label><input class="c" id="recMdp2" type="password"><p class="small" id="msgRec"></p>' +
         '<div class="rang"><button class="btn" data-a="recup-non">Annuler</button><span class="esp"></span>' +
         '<button class="btn pri" data-a="recup-oui">Valider</button></div>', function () { if (!fini) { fini = true; ok(false); } });
       var m = function (t, mal) { var e = document.getElementById("msgRec"); e.textContent = t; e.className = "small " + (mal ? "bad" : "ok"); };
-      actionsFenetre["recup-mail"] = function () {
-        m("Envoi en cours…");
-        attendre(function (id) { N.envoyerCodeMail(id, (inst().ecole || {}).ecole_nom || ""); }).then(function (r) {
-          if (r && r.ok) { m("Code envoyé à " + r.email + ". Il est valable 15 minutes."); } else { m((r && r.message) || "Envoi impossible.", true); }
-        });
-      };
       actionsFenetre["recup-oui"] = function () {
         var a = document.getElementById("recMdp1").value;
         if (a.length < 6) { m("6 caractères au moins.", true); return; }
@@ -234,7 +227,7 @@
         if (!r.ok) { m(r.message, true); return; }
         fini = true;
         toast("Mot de passe administrateur changé.");
-        if (r.secours) { montrerSecours(r.secours); } else { fermer(); }
+        montrerSecours(r.secours);
         ok(true);
       };
       actionsFenetre["recup-non"] = function () { fini = true; fermer(); ok(false); };
@@ -1910,11 +1903,9 @@
         '<label class="f">Mot de passe actuel</label><input class="c" id="adm0" type="password"><label class="f">Nouveau mot de passe (6 caractères au moins)</label>' +
         '<input class="c" id="adm1" type="password"><label class="f">Confirmez</label><input class="c" id="adm2" type="password"><p class="small" id="msgAdm"></p>' +
         '<button class="btn pri" data-a="admin-changer">Changer le mot de passe</button></div>' +
-        '<div class="card"><h3>Mot de passe oublié</h3><p class="mut small">Un code de secours (hors ligne) ou un code envoyé à cette adresse ' +
-        "mail (Internet, téléphone activé) permet de choisir un nouveau mot de passe administrateur.</p>" +
-        '<label class="f">Adresse mail</label><input class="c" id="recEmail" type="email" value="' + esc(N.emailRecuperation ? N.emailRecuperation() : "") + '">' +
-        '<div class="rang" style="margin-top:6px"><button class="btn" data-a="email-recup">Enregistrer l\'adresse</button>' +
-        '<button class="btn" data-a="secours-nouveau">Nouveau code de secours</button></div></div>' : "");
+        '<div class="card"><h3>Mot de passe oublié</h3><p class="mut small">Le code de secours permet de choisir un nouveau mot de passe ' +
+        "administrateur, sans Internet. Il ne sert qu'une fois.</p>" +
+        '<button class="btn" data-a="secours-nouveau">Nouveau code de secours</button></div>' : "");
   }
 
   // =================================================================== bienvenue, création de l'école, association, PIN
@@ -2439,12 +2430,6 @@
     },
     "imprimer-direct": function (b) { imprimer(b.getAttribute("data-d"), { classe: S.notes.classe }); },
     exporter: function (b) { exporter(b.getAttribute("data-d"), b.getAttribute("data-m")); },
-    "email-recup": function () {
-      var v = document.getElementById("recEmail").value.trim();
-      if (v && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { toast("Adresse mail invalide.", true); return; }
-      N.definirEmailRecuperation(v);
-      toast(v ? "Adresse enregistrée." : "Adresse retirée.");
-    },
     "secours-nouveau": function () {
       demanderAdminLocal("Nouveau code de secours", "L'ancien code ne servira plus.").then(function (ok) {
         if (ok) { montrerSecours(N.nouveauCodeSecours()); }

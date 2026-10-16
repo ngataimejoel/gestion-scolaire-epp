@@ -142,43 +142,6 @@ export function jetonAdminValide(req, attendu) {
   return crypto.timingSafeEqual(a, b);
 }
 
-// Mot de passe oublié : le logiciel (version activée) fait envoyer un code à l'adresse du compte. Seules les
-// installations munies d'une licence signée par ce service peuvent l'utiliser ; envois limités par adresse et
-// par licence pour qu'il ne serve pas à envoyer des mails en masse.
-export const LIMITE_MAIL_HEURE = 3;
-export const LIMITE_LICENCE_JOUR = 20;
-const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
-export async function envoyerRecuperation(store, privateKey, demande, envoyer, maintenant = new Date()) {
-  const { licence, signature, email, code } = demande || {};
-  const contenu = verifierLicence(privateKey, licence || "", signature || "");
-  if (!contenu) throw new ErreurActivation(403, "Licence invalide : l'envoi par mail demande une version activée.");
-  if (contenu.expire_le && new Date(contenu.expire_le) < maintenant) {
-    throw new ErreurActivation(403, "Licence expirée : renouvelez-la ou utilisez le code de secours.");
-  }
-  if (typeof email !== "string" || email.length > 120 || !EMAIL.test(email)) throw new ErreurActivation(400, "Adresse mail invalide.");
-  if (typeof code !== "string" || !/^\d{6}$/.test(code)) throw new ErreurActivation(400, "Code invalide.");
-  const nettoyer = (t, n) => String(t || "").replace(/[\r\n<>]/g, " ").slice(0, n);
-  const ecole = nettoyer(demande.ecole, 80), login = nettoyer(demande.login, 40);
-  const empreinte = crypto.createHash("sha256").update(email.toLowerCase()).digest("hex").slice(0, 32);
-  const heure = maintenant.toISOString().slice(0, 13), jour = heure.slice(0, 10);
-  const compter = async (cle, max) => {
-    const n = ((await store.get(cle)) || { n: 0 }).n;
-    if (n >= max) throw new ErreurActivation(429, "Trop de demandes : réessayez plus tard ou utilisez le code de secours.");
-    await store.set(cle, { n: n + 1 });
-  };
-  await compter(`recup/mail/${empreinte}/${heure}`, LIMITE_MAIL_HEURE);
-  await compter(`recup/licence/${contenu.code || "?"}/${jour}`, LIMITE_LICENCE_JOUR);
-  await envoyer({
-    to: email,
-    subject: "AKWA SCHOOL : code pour changer votre mot de passe",
-    text: `Bonjour,\n\nVotre code pour choisir un nouveau mot de passe${login ? ` (compte « ${login} »` +
-      `${ecole ? `, ${ecole}` : ""})` : ""} : ${code}\n\nIl est valable 15 minutes. Si vous n'avez rien demandé, ` +
-      "ignorez ce message : votre mot de passe reste inchangé.\n\nAKWA SCHOOL – Gestion scolaire EPP",
-  });
-  return { ok: true };
-}
-
 export function memoire() {
   const m = new Map();
   return {
@@ -191,16 +154,12 @@ export function memoire() {
 }
 
 // Traitement HTTP commun (Netlify et serveur local de test)
-export async function traiter(req, { store, privateKey, jetonAdmin, envoyerMail }) {
+export async function traiter(req, { store, privateKey, jetonAdmin }) {
   const url = new URL(req.url);
   const json = (corps, status = 200) => Response.json(corps, { status });
   try {
     if (url.pathname.endsWith("/api/activer") && req.method === "POST") {
       return json(await activer(store, privateKey, await req.json()));
-    }
-    if (url.pathname.endsWith("/api/recuperation") && req.method === "POST") {
-      if (!envoyerMail) return json({ erreur: "L'envoi de mails n'est pas encore configuré : utilisez le code de secours." }, 503);
-      return json(await envoyerRecuperation(store, privateKey, await req.json(), envoyerMail));
     }
     if (url.pathname.endsWith("/api/sante")) return json({ ok: true, cle_publique: clePubliqueBrute(privateKey) });
     if (url.pathname.includes("/api/admin/")) {

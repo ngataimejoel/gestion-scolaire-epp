@@ -336,11 +336,7 @@ MIGRATIONS: dict[int, list] = {           # instruction SQL ou fonction(connexio
         _ajouter_colonne("note", "saisi_par", "TEXT"),
         _ajouter_colonne("evaluation", "saisie_fermee", "INTEGER NOT NULL DEFAULT 0"),
         _ajouter_colonne("evaluation", "fin_saisie", "TEXT")] + _ENSEIGNANT_SQL,   # accès des enseignants
-    10: [_ajouter_colonne("utilisateur", "email", "TEXT"),      # récupération du mot de passe
-         _ajouter_colonne("utilisateur", "secours_hash", "TEXT"),
-         _ajouter_colonne("utilisateur", "recup_hash", "TEXT"),
-         _ajouter_colonne("utilisateur", "recup_expire", "TEXT"),
-         _ajouter_colonne("utilisateur", "recup_essais", "INTEGER NOT NULL DEFAULT 0")],
+    10: [_ajouter_colonne("utilisateur", "secours_hash", "TEXT")],   # code de secours (mot de passe oublié)
 }
 
 

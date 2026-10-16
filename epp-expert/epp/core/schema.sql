@@ -236,11 +236,7 @@ CREATE TABLE IF NOT EXISTS utilisateur (
     derniere_connexion TEXT,
     cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     personnel_id INTEGER REFERENCES personnel(id) ON DELETE SET NULL,  -- version 9 : compte d'un enseignant
-    email TEXT,                                -- version 10 : récupération du mot de passe
-    secours_hash TEXT,                         -- code de secours (hors ligne)
-    recup_hash TEXT,                           -- code envoyé par mail
-    recup_expire TEXT,
-    recup_essais INTEGER NOT NULL DEFAULT 0
+    secours_hash TEXT                          -- version 10 : code de secours (mot de passe oublié)
 );
 
 CREATE TABLE IF NOT EXISTS modele_rapport (
