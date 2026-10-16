@@ -108,6 +108,59 @@ public class Pont {
         }
     }
 
+    static String erreurJson(String message) {
+        return erreur(0, message, null);
+    }
+
+    // ------------------------------------------------------------------ scan et rappels (version 1.2.0)
+    /**
+     * Scan d'une feuille de notes ou d'un extrait de naissance (source « scanner » ou « galerie ») : le texte lu
+     * sur le téléphone est renvoyé ligne par ligne avec sa position, l'interface le remet en ordre.
+     */
+    @JavascriptInterface
+    public void scanner(String id, String source) {
+        activite.runOnUiThread(() -> {
+            if (demandeId != null) {
+                rendre(demandeId, erreur(0, "Opération annulée.", null));
+            }
+            demandeId = id;
+            demandeUsage = "scan";
+            Scan.lancer(activite, "galerie".equals(source), json -> {
+                demandeId = null;
+                rendre(id, json);
+            });
+        });
+    }
+
+    /** Résultat du scanner de documents ou de la galerie (appelé par MainActivity). */
+    void resultatScan(int demande, boolean ok, Intent donnees) {
+        String id = demandeId;
+        demandeId = null;
+        if (id == null) {
+            return;
+        }
+        Uri uri = ok ? Scan.image(demande, donnees) : null;
+        if (uri == null) {
+            rendre(id, "{\"ok\":false,\"annule\":true,\"message\":\"Annulé.\"}");
+            return;
+        }
+        reseau.execute(() -> Scan.lire(activite, uri, json -> rendre(id, json)));
+    }
+
+    /** Rappels en notifications : liste JSON [{quand (ms), titre, texte}] ; renvoie le nombre programmé. */
+    @JavascriptInterface
+    public int programmerRappels(String json) {
+        int n = Rappels.programmer(activite, json);
+        if (n > 0 && Build.VERSION.SDK_INT >= 33 && activite.checkSelfPermission(
+                "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
+                && !prefs.getBoolean("notif_demandee", false)) {
+            prefs.edit().putBoolean("notif_demandee", true).apply();
+            activite.runOnUiThread(() -> activite.requestPermissions(
+                    new String[]{"android.permission.POST_NOTIFICATIONS"}, 45));
+        }
+        return n;
+    }
+
     // ------------------------------------------------------------------ informations
     @JavascriptInterface
     public String infos() {
