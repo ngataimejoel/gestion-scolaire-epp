@@ -143,6 +143,9 @@
    attendre(id=>N.enregistrerFichier(id,nom,type,t)).then(r=>{if(r.ok)toast('Fichier enregistré : '+nom);else if(!r.annule)toast(r.message||'Enregistrement impossible.')})};
   // impression : la page elle-même (zone d'impression), en A4 portrait ou paysage ; « Enregistrer en PDF » est proposé par Android
   window.print=function(){const a=$('#printArea');N.imprimerPage(!!(a&&/landscape/.test(a.innerHTML)))};
+  // sauvegarde complète réservée à l'application activée (pas pendant l'essai)
+  const sauvegarder=acts.backup;
+  acts.backup=function(...a){if((S.school.licence||{}).type==='essai')return toast('La sauvegarde est disponible après l’activation de l’application (Paramètres › Activation).');return sauvegarder.apply(this,a)};
   Object.assign(acts,{
    verrouiller,
    secoursNew(){askPwd('Créer un nouveau code de secours ? L’ancien ne servira plus.').then(ok=>{if(ok)setTimeout(()=>montrerCode(N.nouveauCodeSecours()),50)})},
