@@ -1,5 +1,6 @@
 import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
+import com.akwaschool.mobile.noyau.Comptes;
 import com.akwaschool.mobile.noyau.Ed25519;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
@@ -150,6 +151,28 @@ public final class TestNoyau {
         Files.write(dossier.resolve("demande.akwasync"), dem.getBytes(StandardCharsets.UTF_8));
         verifie(refus(() -> FichierSynchro.ouvrirReponse(dem.getBytes(StandardCharsets.UTF_8), aid, sid, cleSync, 0))
                 .contains("demande"), "demande prise pour une réponse : expliqué");
+
+        // comptes des enseignants du téléphone
+        Comptes cp = new Comptes(null, 1000);
+        String prov = cp.creer("t3", " AKouassi ");
+        verifie(prov.matches("Prov-[2-9A-Z]{6}"), "compte créé : mot de passe provisoire");
+        verifie(cp.verifier("akouassi", prov) != null && cp.verifier("akouassi", prov).provisoire(), "connexion provisoire");
+        verifie(cp.verifier("akouassi", "faux") == null, "mauvais mot de passe refusé");
+        verifie(refus(() -> cp.creer("t4", "akouassi")).contains("déjà"), "identifiant en double refusé");
+        verifie(refus(() -> cp.creer("t3", "autre")).contains("déjà un compte"), "deuxième compte du même enseignant refusé");
+        verifie(refus(() -> cp.creer("t5", "admin")).contains("invalide"), "identifiant admin réservé");
+        String sec = cp.definir("akouassi", "monmotdepasse");
+        Comptes cr = new Comptes(cp.texte(), 1000);
+        verifie(cr.verifier("akouassi", "monmotdepasse") != null && !cr.verifier("akouassi", "monmotdepasse").provisoire(),
+                "mot de passe personnel gardé après relecture");
+        verifie(refus(() -> cr.recuperer("akouassi", "AAAA-BBBB-CCCC", "nouveau123")).contains("incorrect"), "mauvais code de secours refusé");
+        String sec2 = cr.recuperer("akouassi", sec.toLowerCase(), "nouveau123");
+        verifie(cr.verifier("akouassi", "nouveau123") != null && !sec2.equals(sec), "mot de passe oublié : code de secours, puis nouveau code");
+        verifie(refus(() -> cr.recuperer("akouassi", sec, "x123456")).contains("incorrect"), "code de secours à usage unique");
+        String prov2 = cr.reinitialiser("t3");
+        verifie(cr.verifier("akouassi", prov2).provisoire() && cr.verifier("akouassi", "nouveau123") == null, "réinitialisation par le directeur");
+        cr.supprimer("t3");
+        verifie(cr.tous().isEmpty(), "compte supprimé");
 
         if (echecs > 0) {
             System.out.println(echecs + " échec(s)");

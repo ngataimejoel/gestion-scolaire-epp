@@ -171,10 +171,11 @@ def test_menu_selon_le_role(app, demo, messages):
     assert not w.barre.groupes["administration"].isHidden()
     w.aller("personnel")
     assert "personnel" not in w.pages
-    w.aller("sauvegarde")                         # onglet sans droit : pas ouvert, et masqué
-    assert "sauvegarde" not in w.pages
+    w.aller("sauvegarde")              # partie sans droit : Import, export & sauvegarde s'ouvre sans la sauvegarde
+    assert "sauvegarde" not in w.pages and w.pages["donnees"].partie("sauvegarde") is None
+    assert w.pages["donnees"].partie("import_export") is not None
     w.aller("administration")
-    assert w.onglets_admin is not None and not w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("sauvegarde"))
+    assert w.onglets_admin is not None and w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("donnees"))
     w.timer_licence.stop()
 
 
@@ -323,13 +324,13 @@ def test_validation_et_passage_d_annee(fenetre, messages):
 
 
 def test_tutoriels_video_livres_et_listes_dans_l_aide(fenetre, messages):
-    """Les vidéos fabriquées par outils/tutoriels.py sont embarquées et proposées dans Aide › Tutoriels vidéo."""
+    """Les vidéos fabriquées par outils/tutoriels_v8.js sont embarquées et proposées dans Aide › Tutoriels vidéo."""
     import shutil
     import subprocess
 
     from epp.ui.video import tutoriels
     vids = tutoriels()
-    assert [v.stem[:2] for v in vids] == ["01", "02", "03", "04", "05", "06"]
+    assert [v.stem[:2] for v in vids] == ["01", "02", "03", "04", "05", "06", "07"]
     for v in vids:
         assert v.suffix == ".mp4" and 50_000 < v.stat().st_size < 2_000_000, v
     if shutil.which("ffprobe"):        # format lisible par Windows : H.264, 4:2:0
@@ -341,7 +342,7 @@ def test_tutoriels_video_livres_et_listes_dans_l_aide(fenetre, messages):
     p = fenetre.page("aide")
     p.rafraichir()
     noms = [p.liste.item(i).text() for i in range(p.liste.count())]
-    assert noms[0] == "01 Premiers pas" and len(noms) == 6
+    assert noms[0] == "01 Premiers pas" and len(noms) == 7
 
 
 def test_logo_de_l_application_et_bouton_de_connexion_visible(app, demo, messages):
@@ -592,7 +593,7 @@ def test_codes_dren_iepp_et_listes_officielles(fenetre):
 def test_page_telephones_association_et_retrait(fenetre, messages):
     from test_synchro import Client
     from epp.synchro import protocole as P
-    security.create_user(fenetre.ctx.db, "ens", "Enseignant", "Ensei!2026", "ENSEIGNANT")
+    _compte_enseignant(fenetre.ctx.db, fenetre.ctx.annee)
     fenetre.aller("telephones")
     p = fenetre.page("telephones")
     t = fenetre.onglets_admin
@@ -626,7 +627,7 @@ def test_page_telephones_import_d_un_fichier_du_telephone(fenetre, messages, mon
     from epp.synchro import fichier as F
     from epp.ui.pages import telephones
     db = fenetre.ctx.db
-    security.create_user(db, "ens", "Enseignant", "Ensei!2026", "ENSEIGNANT")
+    _compte_enseignant(db, fenetre.ctx.annee)
     fenetre.aller("telephones")
     p = fenetre.page("telephones")
     try:
@@ -658,3 +659,52 @@ def test_page_telephones_import_d_un_fichier_du_telephone(fenetre, messages, mon
     assert any(t == "Fichier du téléphone importé" and "1 saisie(s)" in x for _, t, x in messages), _textes(messages)
     p._importer_fichier()                                   # même fichier : refusé, rien n'est réappliqué
     assert any(t == "Fichier non importé" and "déjà reçue" in x for _, t, x in messages)
+
+
+def _compte_enseignant(db, annee):
+    """Compte « ens » lié à l'agent qui tient la première classe (accès limité à cette classe)."""
+    from epp.domain import enseignants
+    classe = annee.classes[0].code
+    pid = db.scalar("SELECT personnel_id FROM affectation WHERE annee_id=? AND classe_code=?", (annee.id, classe))
+    uid = enseignants.creer_compte(db, system_session(), pid, "ens", "Ensei!2026")
+    return uid, classe
+
+
+def test_compte_enseignant_limite_a_sa_classe(app, demo, messages):
+    """Un enseignant ne voit que sa classe et pas les pages de l'école ; le directeur gère les enseignants."""
+    from epp.domain import enseignants
+    from epp.ui.main import FenetrePrincipale
+    from epp.ui.widgets import Contexte
+    db, annee = demo
+    uid, classe = _compte_enseignant(db, annee)
+    enseignants.envoyer_message(db, system_session(), "Réunion", "Vendredi à 15 h.")
+    w = FenetrePrincipale(Contexte(db, security.load_session(db, uid), annee, ESSAI))
+    try:
+        assert not w._permis("tableau") and not w._permis("inscriptions") and not w._permis("enseignants")
+        w._messages_recus()
+        assert any("Réunion" in m[2] for m in messages) and enseignants.messages_pour(db, w.ctx.session)[0]["lu"]
+        w.aller("eleves")
+        p = w.page("eleves")
+        p.rafraichir()
+        assert [p.classe.itemData(i) for i in range(p.classe.count())] == [classe]
+        assert {r["classe"] for r in p.table.modele.lignes} == {classe}
+    finally:
+        w.timer_licence.stop()
+        w.close()
+    security.create_user(db, "dir", "Directeur", "Direct!2026", "DIRECTEUR")
+    d = FenetrePrincipale(Contexte(db, security.load_session(db, db.scalar("SELECT id FROM utilisateur WHERE login='dir'")),
+                                   annee, ESSAI))
+    try:
+        d.aller("enseignants")
+        pe = d.page("enseignants")
+        for i in range(pe.onglets.count()):
+            pe.onglets.setCurrentIndex(i)
+            pe.rafraichir()
+        assert any(r["login"] == "ens" for r in E_lignes(pe.t_comptes))
+    finally:
+        d.timer_licence.stop()
+        d.close()
+
+
+def E_lignes(t):
+    return t.modele.lignes

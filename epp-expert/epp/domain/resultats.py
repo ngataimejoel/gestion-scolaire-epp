@@ -10,7 +10,7 @@ def moyennes_par_evaluation(db: Database, annee: Annee) -> dict[int, dict[int, d
     """{inscription_id: {eval_num: {'moyenne', 'total', 'present', 'saisie'}}}"""
     notes: dict[int, dict[int, float]] = {}
     for n in db.query("SELECT n.inscription_id, n.matiere_id, n.valeur FROM note n "
-                      "JOIN inscription i ON i.id=n.inscription_id WHERE i.annee_id=?", (annee.id,)):
+                      "JOIN inscription i ON i.id=n.inscription_id WHERE i.annee_id=? AND n.en_attente=0", (annee.id,)):
         notes.setdefault(n["inscription_id"], {})[n["matiere_id"]] = n["valeur"]
     pres: dict[tuple[int, int], bool] = {}
     for p in db.query("SELECT p.* FROM presence_eval p JOIN inscription i ON i.id=p.inscription_id "

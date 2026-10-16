@@ -313,13 +313,15 @@ class PageEleves(Page):
         cl = self.classe.currentData()
         self.classe.blockSignals(True)
         self.classe.clear()
-        self.classe.addItem("Toutes les classes", "")
-        for c in a.classes:
+        if not self.restreint:
+            self.classe.addItem("Toutes les classes", "")
+        for c in self.classes_visibles():
             self.classe.addItem(c.code, c.code)
         self.classe.setCurrentIndex(max(0, self.classe.findData(cl or "")))
         self.classe.blockSignals(False)
         lignes = repo.inscriptions(self.db, a, self.filtre_classe(), self.recherche.text().strip() or None,
                                    self.statut.currentData() or None)
+        lignes = [r for r in lignes if self.voit(r["classe"])]
         self.table.set_lignes(lignes)
         nf = sum(1 for r in lignes if r["sexe"] == "F")
         self.compte.setText(f"{len(lignes)} élève(s) · {len(lignes) - nf} G · {nf} F")

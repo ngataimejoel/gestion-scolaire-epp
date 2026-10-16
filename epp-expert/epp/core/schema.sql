@@ -68,6 +68,8 @@ CREATE TABLE IF NOT EXISTS evaluation (
     num INTEGER NOT NULL,
     libelle TEXT NOT NULL,
     date TEXT,
+    saisie_fermee INTEGER NOT NULL DEFAULT 0,   -- version 9 : le directeur a fermé la saisie des notes
+    fin_saisie TEXT,                            -- version 9 : date limite de saisie (rappels des enseignants)
     UNIQUE (annee_id, calendrier, num)
 );
 
@@ -141,6 +143,8 @@ CREATE TABLE IF NOT EXISTS note (
     inscription_id INTEGER NOT NULL REFERENCES inscription(id) ON DELETE CASCADE,
     matiere_id INTEGER NOT NULL REFERENCES matiere(id) ON DELETE CASCADE,
     valeur REAL NOT NULL,
+    en_attente INTEGER NOT NULL DEFAULT 0,      -- version 9 : saisie d'un enseignant pas encore validée
+    saisi_par TEXT,
     PRIMARY KEY (inscription_id, matiere_id)
 );
 
@@ -230,7 +234,9 @@ CREATE TABLE IF NOT EXISTS utilisateur (
     actif INTEGER NOT NULL DEFAULT 1,
     doit_changer INTEGER NOT NULL DEFAULT 0,
     derniere_connexion TEXT,
-    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    personnel_id INTEGER REFERENCES personnel(id) ON DELETE SET NULL,  -- version 9 : compte d'un enseignant
+    secours_hash TEXT                          -- version 10 : code de secours (mot de passe oublié)
 );
 
 CREATE TABLE IF NOT EXISTS modele_rapport (
@@ -351,3 +357,43 @@ CREATE TABLE IF NOT EXISTS synchro_op (
     recu_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
     resultat TEXT NOT NULL                     -- JSON renvoyé au téléphone
 );
+
+-- version 9 : accès des enseignants (appel du jour, messages du directeur, blocage des comptes)
+CREATE TABLE IF NOT EXISTS appel (
+    annee_id INTEGER NOT NULL REFERENCES annee_scolaire(id) ON DELETE CASCADE,
+    classe_code TEXT NOT NULL,
+    date TEXT NOT NULL,
+    absents INTEGER NOT NULL DEFAULT 0,
+    presents INTEGER NOT NULL DEFAULT 0,
+    fait_par TEXT,
+    fait_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (annee_id, classe_code, date)
+);
+
+CREATE TABLE IF NOT EXISTS message (
+    id INTEGER PRIMARY KEY,
+    cree_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    auteur TEXT NOT NULL,
+    destinataire_id INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE,
+    titre TEXT NOT NULL,
+    texte TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS message_lu (
+    message_id INTEGER NOT NULL REFERENCES message(id) ON DELETE CASCADE,
+    utilisateur_id INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE,
+    lu_le TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+    PRIMARY KEY (message_id, utilisateur_id)
+);
+
+CREATE TRIGGER IF NOT EXISTS personnel_inactif_comptes AFTER UPDATE OF actif ON personnel WHEN NEW.actif=0
+BEGIN
+    UPDATE appareil SET actif=0 WHERE utilisateur_id IN (SELECT id FROM utilisateur WHERE personnel_id=NEW.id);
+    UPDATE utilisateur SET actif=0 WHERE personnel_id=NEW.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS personnel_suppr_comptes BEFORE DELETE ON personnel
+BEGIN
+    UPDATE appareil SET actif=0 WHERE utilisateur_id IN (SELECT id FROM utilisateur WHERE personnel_id=OLD.id);
+    UPDATE utilisateur SET actif=0 WHERE personnel_id=OLD.id;
+END;

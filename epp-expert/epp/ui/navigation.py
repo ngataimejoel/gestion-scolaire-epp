@@ -1,4 +1,4 @@
-"""Navigation de la fenêtre principale (modèle du prototype AKWA SCHOOL v6) : six volets dans une barre
+"""Navigation de la fenêtre principale (modèle du prototype AKWA SCHOOL v8) : six volets dans une barre
 latérale claire, onglets de chaque volet, recherche globale (Ctrl + K) et fiche de l'élève qui s'ouvre dans
 un panneau à droite."""
 from __future__ import annotations
@@ -15,40 +15,48 @@ from epp.ui import logo as logo_app
 PAGES = [
     ("tableau", "Tableau de bord", "", "tableau_bord:PageTableauBord", "eleves.lire"),
     ("eleves", "Élèves", "", "eleves:PageEleves", "eleves.lire"),
-    ("inscriptions", "Inscriptions", "", "inscriptions:PageInscriptions", "eleves.lire"),
     ("classes", "Classes", "", "classes:PageClasses", "eleves.lire"),
     ("personnel", "Personnel", "", "personnel:PagePersonnel", "personnel.lire"),
+    ("enseignants", "Enseignants", "", "enseignants:PageEnseignants", "enseignants.gerer"),
+    ("inscriptions", "Inscriptions", "", "inscriptions:PageInscriptions", "eleves.lire"),
     ("notes", "Saisie des notes", "", "notes:PageNotes", "notes.lire"),
-    ("resultats", "Résultats, bulletins et fin d'année", "", "resultats:PageResultats", "notes.lire"),
-    ("absences", "Absences et autorisations", "", "absences:PageAbsences", "absences.lire"),
+    ("bulletins", "Résultats & bulletins", "", "resultats_bulletins:PageResultatsBulletins", "notes.lire"),
+    ("resultats", "Fin d’année", "", "resultats:PageResultats", "notes.lire"),
+    ("absences", "Appel du jour", "", "absences:PageAppel", "absences.lire"),
+    ("autorisations", "Autorisations", "", "absences:PageAutorisations", "absences.lire"),
     ("rapports", "Rapports officiels", "", "rapports:PageRapports", "rapports.generer"),
     ("generateur", "Générateur de rapports", "", "concepteur_rapports:PageConcepteurRapports", "rapports.generer"),
     ("statistiques", "Statistiques", "", "statistiques:PageStatistiques", "eleves.lire"),
-    ("import_export", "Import et export", "", "import_export:PageImportExport", None),
-    ("sauvegarde", "Sauvegarde", "", "sauvegarde:PageSauvegarde", "sauvegarde.creer"),
+    ("donnees", "Import, export & sauvegarde", "", "donnees:PageDonnees", None),
     ("telephones", "Téléphones", "", "telephones:PageTelephones", None),
     ("parametres", "Paramètres", "", "parametres:PageParametres", None),
     ("aide", "Aide et tutoriels", "", "aide:PageAide", None),
 ]
 
-# les volets du menu : clé, libellé, raccourci, icône, pages (onglets)
+# les volets du menu (mêmes volets et sous-menus que le prototype v8) : clé, libellé, raccourci, icône, pages
 VOLETS = [
     ("accueil", "Tableau de bord", "Ctrl+1", "home", ["tableau"]),
-    ("eleves_personnel", "Élèves & personnel", "Ctrl+2", "users", ["eleves", "inscriptions", "classes", "personnel"]),
-    ("notes_bulletins", "Notes & bulletins", "Ctrl+3", "award", ["notes", "resultats"]),
-    ("absences", "Absences", "Ctrl+4", "cal", ["absences"]),
+    ("eleves_personnel", "Élèves & personnel", "Ctrl+2", "users", ["eleves", "classes", "personnel", "enseignants",
+                                                                          "inscriptions"]),
+    ("notes_bulletins", "Notes & bulletins", "Ctrl+3", "award", ["notes", "bulletins", "resultats"]),
+    ("absences", "Absences", "Ctrl+4", "cal", ["absences", "autorisations"]),
     ("administration", "Rapports & administration", "Ctrl+5", "book",
-     ["rapports", "generateur", "statistiques", "import_export", "sauvegarde", "telephones"]),
+     ["rapports", "generateur", "statistiques", "donnees", "telephones"]),
     ("parametres", "Paramètres", "Ctrl+6", "set", ["parametres"]),
     ("aide", "Aide", "F1", "help", ["aide"]),
 ]
 
 DESCRIPTIONS = {
-    "eleves_personnel": "Élèves, inscriptions, classes et personnel de l'école",
-    "notes_bulletins": "Saisie des notes, moyennes, classements, bulletins et passage en fin d'année",
+    "eleves_personnel": "Élèves, classes, personnel, comptes des enseignants et inscriptions",
+    "notes_bulletins": "Saisie des notes, résultats et bulletins, fin d'année",
+    "absences": "Appel du jour et autorisations d'absence",
     "administration": "Rapports officiels, générateur de rapports, statistiques, import, export, sauvegarde et "
                       "téléphones",
 }
+
+
+# Pages de l'école entière, cachées à un compte enseignant (limité à sa classe)
+PAGES_ECOLE = {"tableau", "inscriptions", "classes", "generateur", "statistiques", "donnees"}
 
 
 def info_page(cle: str) -> tuple | None:

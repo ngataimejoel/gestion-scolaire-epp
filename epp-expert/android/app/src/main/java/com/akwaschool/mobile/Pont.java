@@ -15,6 +15,7 @@ import android.webkit.WebView;
 
 import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
+import com.akwaschool.mobile.noyau.Comptes;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
 import com.akwaschool.mobile.synchro.Client;
@@ -106,6 +107,59 @@ public class Pont {
         } catch (JSONException e) {
             return "{\"ok\":false,\"statut\":" + statut + ",\"message\":" + Protocole.jsonTexte(message) + "}";
         }
+    }
+
+    static String erreurJson(String message) {
+        return erreur(0, message, null);
+    }
+
+    // ------------------------------------------------------------------ scan et rappels (version 1.2.0)
+    /**
+     * Scan d'une feuille de notes ou d'un extrait de naissance (source « scanner » ou « galerie ») : le texte lu
+     * sur le téléphone est renvoyé ligne par ligne avec sa position, l'interface le remet en ordre.
+     */
+    @JavascriptInterface
+    public void scanner(String id, String source) {
+        activite.runOnUiThread(() -> {
+            if (demandeId != null) {
+                rendre(demandeId, erreur(0, "Opération annulée.", null));
+            }
+            demandeId = id;
+            demandeUsage = "scan";
+            Scan.lancer(activite, "galerie".equals(source), json -> {
+                demandeId = null;
+                rendre(id, json);
+            });
+        });
+    }
+
+    /** Résultat du scanner de documents ou de la galerie (appelé par MainActivity). */
+    void resultatScan(int demande, boolean ok, Intent donnees) {
+        String id = demandeId;
+        demandeId = null;
+        if (id == null) {
+            return;
+        }
+        Uri uri = ok ? Scan.image(demande, donnees) : null;
+        if (uri == null) {
+            rendre(id, "{\"ok\":false,\"annule\":true,\"message\":\"Annulé.\"}");
+            return;
+        }
+        reseau.execute(() -> Scan.lire(activite, uri, json -> rendre(id, json)));
+    }
+
+    /** Rappels en notifications : liste JSON [{quand (ms), titre, texte}] ; renvoie le nombre programmé. */
+    @JavascriptInterface
+    public int programmerRappels(String json) {
+        int n = Rappels.programmer(activite, json);
+        if (n > 0 && Build.VERSION.SDK_INT >= 33 && activite.checkSelfPermission(
+                "android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED
+                && !prefs.getBoolean("notif_demandee", false)) {
+            prefs.edit().putBoolean("notif_demandee", true).apply();
+            activite.runOnUiThread(() -> activite.requestPermissions(
+                    new String[]{"android.permission.POST_NOTIFICATIONS"}, 45));
+        }
+        return n;
     }
 
     // ------------------------------------------------------------------ informations
@@ -534,6 +588,204 @@ public class Pont {
         }
     }
 
+    // ------------------------------------------------------------------ mot de passe administrateur oublié
+    private static final String ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+
+    private String empreinte(String code) throws GeneralSecurityException {
+        byte[] sel = Protocole.aleatoire(16);
+        return Protocole.b64(sel) + ":" + Protocole.b64(Protocole.pbkdf2(code.toCharArray(), sel, ITERATIONS_PIN));
+    }
+
+    private static boolean correspond(String code, String stocke) {
+        if (stocke == null || code == null) {
+            return false;
+        }
+        try {
+            String[] x = stocke.split(":");
+            return Protocole.egaux(Protocole.unb64(x[1]),
+                    Protocole.pbkdf2(code.toCharArray(), Protocole.unb64(x[0]), ITERATIONS_PIN));
+        } catch (GeneralSecurityException | RuntimeException e) {
+            return false;
+        }
+    }
+
+    /** Nouveau code de secours (12 caractères) : renvoyé une seule fois, à noter ; seule son empreinte est gardée. */
+    @JavascriptInterface
+    public String nouveauCodeSecours() {
+        byte[] a = Protocole.aleatoire(12);
+        StringBuilder b = new StringBuilder();
+        for (int i = 0; i < 12; i++) {
+            b.append(ALPHABET.charAt((a[i] & 0xFF) % 32));
+        }
+        try {
+            prefs.edit().putString("secours", empreinte(b.toString())).commit();
+        } catch (GeneralSecurityException e) {
+            return null;
+        }
+        return b.substring(0, 4) + "-" + b.substring(4, 8) + "-" + b.substring(8);
+    }
+
+    /**
+     * Nouveau mot de passe administrateur avec le code de secours. Renvoie {ok, secours: nouveau code} (le code
+     * ne sert qu'une fois) ou {ok:false, message}.
+     */
+    @JavascriptInterface
+    public String recupererAdmin(String code, String nouveau) {
+        if (attenteAdmin() > 0) {
+            return erreur(0, "Trop d'essais : patientez " + attenteAdmin() + " s.", null);
+        }
+        String c = code == null ? "" : code.toUpperCase(java.util.Locale.ROOT).replaceAll("[^0-9A-Z]", "");
+        if (!(c.length() == 12 && correspond(c, prefs.getString("secours", null)))) {
+            int echecs = prefs.getInt("admin_echecs", 0) + 1;
+            SharedPreferences.Editor e = prefs.edit().putInt("admin_echecs", echecs);
+            if (echecs % 5 == 0) {
+                e.putLong("admin_bloque_jusqua", System.currentTimeMillis() + 30_000L * (echecs / 5));
+            }
+            e.commit();
+            return erreur(0, "Code de secours incorrect.", null);
+        }
+        if (nouveau == null || nouveau.length() < 6) {
+            return erreur(0, "Le nouveau mot de passe doit compter 6 caractères au moins.", null);
+        }
+        try {
+            prefs.edit().putString("admin", empreinte(nouveau)).putInt("admin_echecs", 0).commit();
+        } catch (GeneralSecurityException e) {
+            return erreur(0, "Enregistrement impossible.", null);
+        }
+        String s = nouveauCodeSecours();
+        return "{\"ok\":true,\"secours\":" + (s == null ? "null" : Protocole.jsonTexte(s)) + "}";
+    }
+
+    // ------------------------------------------------------------------ connexion et comptes des enseignants (interface v8)
+    /** Personne connectée : « admin » (directeur), identifiant d'un enseignant, ou null (écran de connexion). */
+    private volatile String connecte;
+
+    private Comptes comptes() {
+        return new Comptes(prefs.getString("comptes", null), ITERATIONS_PIN);
+    }
+
+    private boolean garder(Comptes c) {
+        return prefs.edit().putString("comptes", c.texte()).commit();
+    }
+
+    private void echec() {
+        int echecs = prefs.getInt("admin_echecs", 0) + 1;
+        SharedPreferences.Editor e = prefs.edit().putInt("admin_echecs", echecs);
+        if (echecs % 5 == 0) {
+            e.putLong("admin_bloque_jusqua", System.currentTimeMillis() + 30_000L * (echecs / 5));
+        }
+        e.commit();
+    }
+
+    private static String ok(String cle, String valeur) {
+        return "{\"ok\":true,\"" + cle + "\":" + (valeur == null ? "null" : Protocole.jsonTexte(valeur)) + "}";
+    }
+
+    /**
+     * Connexion : identifiant « admin » et mot de passe administrateur pour le directeur, ou compte d'un enseignant.
+     * Renvoie {ok, role: dir|ens, tid, login, provisoire} ou {ok:false, message}.
+     */
+    @JavascriptInterface
+    public String connecter(String login, String mdp) {
+        if (attenteAdmin() > 0) {
+            return erreur(0, "Trop d'essais : patientez " + attenteAdmin() + " s.", null);
+        }
+        String l = Comptes.normaliser(login);
+        if (l.isEmpty() || l.equals("admin")) {
+            if (!verifierAdmin(mdp)) {
+                return erreur(0, "Identifiant ou mot de passe incorrect.", null);
+            }
+            connecte = "admin";
+            return "{\"ok\":true,\"role\":\"dir\"}";
+        }
+        Comptes.Compte c = comptes().verifier(l, mdp);
+        if (c == null) {
+            echec();
+            return erreur(0, "Identifiant ou mot de passe incorrect.", null);
+        }
+        prefs.edit().putInt("admin_echecs", 0).commit();
+        connecte = c.login;
+        return "{\"ok\":true,\"role\":\"ens\",\"tid\":" + Protocole.jsonTexte(c.enseignant) + ",\"login\":"
+                + Protocole.jsonTexte(c.login) + ",\"provisoire\":" + c.provisoire() + "}";
+    }
+
+    @JavascriptInterface
+    public void deconnecter() {
+        connecte = null;
+    }
+
+    /** L'enseignant connecté remplace son mot de passe (provisoire) ; renvoie {ok, secours: code de secours}. */
+    @JavascriptInterface
+    public String choisirMotDePasse(String nouveau) {
+        String l = connecte;
+        if (l == null || l.equals("admin")) {
+            return erreur(0, "Aucun enseignant connecté.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String code = c.definir(l, nouveau);
+            return garder(c) ? ok("secours", code) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Mot de passe oublié d'un enseignant : code de secours puis nouveau mot de passe ; renvoie {ok, secours}. */
+    @JavascriptInterface
+    public String recupererCompte(String login, String code, String nouveau) {
+        if (attenteAdmin() > 0) {
+            return erreur(0, "Trop d'essais : patientez " + attenteAdmin() + " s.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String s = c.recuperer(login, code, nouveau);
+            return garder(c) ? ok("secours", s) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            echec();
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Le directeur crée le compte d'un enseignant ; renvoie {ok, mdp: mot de passe provisoire}. */
+    @JavascriptInterface
+    public String creerCompte(String tid, String login) {
+        if (!"admin".equals(connecte)) {
+            return erreur(0, "Réservé au directeur.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String mdp = c.creer(tid, login);
+            return garder(c) ? ok("mdp", mdp) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Le directeur donne un nouveau mot de passe provisoire à un enseignant ; renvoie {ok, mdp}. */
+    @JavascriptInterface
+    public String reinitCompte(String tid) {
+        if (!"admin".equals(connecte)) {
+            return erreur(0, "Réservé au directeur.", null);
+        }
+        try {
+            Comptes c = comptes();
+            String mdp = c.reinitialiser(tid);
+            return garder(c) ? ok("mdp", mdp) : erreur(0, "Enregistrement impossible.", null);
+        } catch (Comptes.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        }
+    }
+
+    /** Identifiant du compte de chaque enseignant ({tid: login}), pour l'interface. */
+    @JavascriptInterface
+    public String listeComptes() {
+        StringBuilder b = new StringBuilder("{");
+        for (Comptes.Compte c : comptes().tous()) {
+            b.append(b.length() > 1 ? "," : "").append(Protocole.jsonTexte(c.enseignant)).append(':').append(Protocole.jsonTexte(c.login));
+        }
+        return b.append('}').toString();
+    }
+
     // ------------------------------------------------------------------ licence du téléphone utilisé seul
     private String machine() {
         String id = Settings.Secure.getString(activite.getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -734,5 +986,11 @@ public class Pont {
     @JavascriptInterface
     public void imprimer(String html, String titre) {
         activite.runOnUiThread(() -> ((MainActivity) activite).imprimer(html, titre));
+    }
+
+    /** Imprime la page de l'interface v8 (zone d'impression préparée par la page), A4 portrait ou paysage. */
+    @JavascriptInterface
+    public void imprimerPage(boolean paysage) {
+        activite.runOnUiThread(() -> ((MainActivity) activite).imprimerPage(paysage));
     }
 }

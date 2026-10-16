@@ -4,6 +4,9 @@
     <!-- réseau local uniquement : synchronisation avec l'ordinateur de l'école par le Wi-Fi -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- rappels de l'enseignant (notes à saisir avant la date limite, messages du directeur) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="false"
@@ -34,6 +37,14 @@
                 <data android:mimeType="application/octet-stream" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".Rappels"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <!-- fichiers confiés à WhatsApp ou à la messagerie par « Partager » (lecture seule, au cas par cas) -->
         <provider

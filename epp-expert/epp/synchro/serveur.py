@@ -378,6 +378,9 @@ def revoquer(db: Database, s: security.Session, appareil_id: int) -> None:
     if a is None:
         return
     if a["utilisateur_id"] != s.user_id:
-        s.require("utilisateurs.gerer")
+        role = db.scalar("SELECT r.code FROM utilisateur u JOIN role r ON r.id=u.role_id WHERE u.id=?",
+                         (a["utilisateur_id"],))
+        s.require("enseignants.gerer" if role == security.ROLE_ENSEIGNANT and s.can("enseignants.gerer")
+                  else "utilisateurs.gerer")
     db.execute("UPDATE appareil SET actif=0 WHERE id=?", (appareil_id,))
     security.log(db, s.login, "REVOCATION_TELEPHONE", "appareil", f"{appareil_id} « {a['nom']} »")
