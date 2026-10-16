@@ -60,7 +60,7 @@
  function ecran(html,onok){
   let v=document.getElementById('akwaVerrou');
   if(!v){v=document.createElement('div');v.id='akwaVerrou';document.body.appendChild(v)}
-  v.innerHTML=`<form class="bx" novalidate><h1>AKWA <b>SCHOOL</b></h1>${html}<p class="err" id="vErr" hidden></p></form>`;
+  v.innerHTML=`<form class="bx" novalidate><h1>AKWA <b>SCHOOL</b></h1>${html}<p class="err" id="vErr" hidden></p><p class="sub" style="text-align:center;font-size:12px">Version ${esc(json(N.infos()).version||'')} · interface v8</p></form>`;
   const f=v.querySelector('form');
   f.addEventListener('submit',e=>{e.preventDefault();onok(new FormData(f),m=>{const p=f.querySelector('#vErr');p.textContent=m;p.hidden=!m})});
   const a=f.querySelector('[autofocus]')||f.querySelector('input');if(a)setTimeout(()=>a.focus(),50);
