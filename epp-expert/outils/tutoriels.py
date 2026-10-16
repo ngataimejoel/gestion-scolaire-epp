@@ -1,4 +1,6 @@
-"""Fabrique les vidéos de démonstration (Aide › Tutoriels vidéo) à partir de l'application elle-même.
+"""Ancienne fabrique des vidéos (écrans Qt). Les vidéos actuelles viennent de l'interface v8 : outils/tutoriels_v8.js.
+
+Fabrique les vidéos de démonstration (Aide › Tutoriels vidéo) à partir de l'application elle-même.
 
 L'outil ouvre l'application sans écran sur l'école de démonstration fictive, rejoue chaque tutoriel
 (pages, fenêtres remplies, aperçus), capture chaque étape avec une légende, puis assemble les images

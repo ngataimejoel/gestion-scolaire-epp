@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Codes d'activation – AKWA SCHOOL</title>
+<style>
+ :root{--acc:#0E6646;--acc-f:#0A4D35;--org:#E8892F;--bg:#F2F4EF;--surf:#fff;--ink:#14201A;--mut:#5A6961;--line:#DCE3DA;--ok:#11804F;--bad:#BF3A33}
+ *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 "Segoe UI",system-ui,Arial,sans-serif}
+ header{background:var(--acc-f);color:#fff;padding:14px 16px;border-bottom:4px solid var(--org)}header b{font-size:18px}header span{opacity:.8;margin-left:8px}
+ main{max-width:1000px;margin:0 auto;padding:16px}
+ .card{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+ h2{font-size:16px;margin:0 0 10px}.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+ label{display:flex;flex-direction:column;font-size:13px;color:var(--mut);gap:4px}
+ input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);min-width:0}
+ button{font:inherit;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#fff;cursor:pointer}
+ button.pri{background:var(--acc);border-color:var(--acc);color:#fff}button.dng{color:var(--bad)}button.sm{padding:4px 9px;font-size:13px}
+ table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line)}th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase}
+ .tw{overflow-x:auto}.code{font-family:Consolas,monospace;font-weight:600;white-space:nowrap}
+ .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#E9EDE6}.tag.ok{background:#E1F0E8;color:var(--ok)}.tag.bad{background:#F8E3E1;color:var(--bad)}
+ #msg{min-height:22px;color:var(--mut)}#msg.err{color:var(--bad)}#nouveaux{white-space:pre-wrap;font-family:Consolas,monospace;background:#F8FAF6;border:1px dashed var(--acc);border-radius:8px;padding:10px}
+ [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header><b>AKWA SCHOOL</b><span>Codes d'activation (fournisseur)</span></header>
+<main>
+ <section class="card" id="connexion">
+  <h2>Connexion</h2>
+  <form class="bar" id="fConnexion">
+   <label style="flex:1;min-width:220px">Mot de passe du générateur (jeton)<input type="password" id="jeton" autocomplete="current-password" required></label>
+   <button class="pri">Se connecter</button>
+  </form>
+  <p style="color:var(--mut);font-size:13px;margin:10px 0 0">Le mot de passe n'est gardé que dans cet onglet, jamais enregistré sur le site. Fermez l'onglet pour vous déconnecter.</p>
+ </section>
+ <div id="espace" hidden>
+  <section class="card">
+   <h2>Créer des codes</h2>
+   <form class="bar" id="fGenerer">
+    <label>Durée<select id="type"><option value="1an">1 an</option><option value="vie">À vie</option></select></label>
+    <label>Nombre<input type="number" id="nombre" value="1" min="1" max="500" style="width:90px"></label>
+    <label style="flex:1;min-width:200px">Note (école, client…)<input id="note" maxlength="200" placeholder="Ex. EPP OUANINOU 2"></label>
+    <button class="pri">Créer</button>
+   </form>
+   <div id="blocNouveaux" hidden style="margin-top:12px"><div id="nouveaux"></div><div class="bar" style="margin-top:8px"><button class="sm" id="copier">Copier les codes</button></div></div>
+  </section>
+  <section class="card">
+   <div class="bar" style="justify-content:space-between;margin-bottom:10px">
+    <h2 style="margin:0">Codes créés <span id="compte" class="tag"></span></h2>
+    <div class="bar"><input id="filtre" placeholder="Chercher un code, une école…"><button class="sm" id="exporter">Exporter (CSV)</button><button class="sm" id="actualiser">Actualiser</button><button class="sm" id="deconnexion">Déconnexion</button></div>
+   </div>
+   <div class="tw"><table><thead><tr><th>Code</th><th>Durée</th><th>Note</th><th>État</th><th>École</th><th>Activé le</th><th>Expire le</th><th></th></tr></thead><tbody id="liste"></tbody></table></div>
+  </section>
+ </div>
+ <p id="msg"></p>
+</main>
+<script>
+(function(){
+ const $=s=>document.querySelector(s);let jeton='',codes=[];
+ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ const date=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
+ const TYPES={'1an':'1 an',vie:'À vie'};
+ function msg(t,err){const m=$('#msg');m.textContent=t||'';m.className=err?'err':''}
+ async function api(action,corps){
+  const r=await fetch('/api/admin/'+action,{method:corps?'POST':'GET',headers:{Authorization:'Bearer '+jeton,'Content-Type':'application/json'},body:corps?JSON.stringify(corps):undefined});
+  const j=await r.json().catch(()=>({}));
+  if(r.status===401){deconnecter();throw new Error('Mot de passe incorrect.')}
+  if(!r.ok)throw new Error(j.erreur||('Erreur '+r.status));
+  return j;
+ }
+ function etat(c){return c.revoque?'<span class="tag bad">Annulé</span>':c.utilise?'<span class="tag ok">Utilisé</span>':'<span class="tag">Libre</span>'}
+ function afficher(){
+  const q=$('#filtre').value.trim().toLowerCase();
+  const L=codes.filter(c=>!q||[c.code,c.note,c.ecole].join(' ').toLowerCase().includes(q));
+  $('#compte').textContent=L.length+' / '+codes.length;
+  $('#liste').innerHTML=L.map(c=>`<tr><td class="code">${esc(c.code)}</td><td>${esc(TYPES[c.type]||c.type)}</td><td>${esc(c.note)}</td><td>${etat(c)}</td><td>${esc(c.ecole)}</td><td>${date(c.active_le)}</td><td>${c.type==='vie'&&c.utilise?'Jamais':date(c.expire_le)}</td><td style="white-space:nowrap">${c.utilise&&!c.revoque?`<button class="sm" data-a="liberer" data-c="${esc(c.code)}" title="Changement d'ordinateur : le code pourra être activé ailleurs">Libérer</button> `:''}${c.revoque?'':`<button class="sm dng" data-a="revoquer" data-c="${esc(c.code)}">Annuler</button>`}</td></tr>`).join('')||'<tr><td colspan="8" style="color:var(--mut)">Aucun code.</td></tr>';
+ }
+ async function charger(){msg('Chargement…');codes=(await api('codes')).codes||[];afficher();msg('')}
+ function deconnecter(){jeton='';try{sessionStorage.removeItem('jeton')}catch(e){}$('#espace').hidden=true;$('#connexion').hidden=false}
+ async function connecter(j){jeton=j;try{await charger();try{sessionStorage.setItem('jeton',j)}catch(e){}$('#connexion').hidden=true;$('#espace').hidden=false}catch(e){msg(e.message,true)}}
+ $('#fConnexion').addEventListener('submit',e=>{e.preventDefault();connecter($('#jeton').value.trim())});
+ $('#fGenerer').addEventListener('submit',async e=>{e.preventDefault();
+  try{msg('Création…');const r=await api('codes',{type:$('#type').value,nombre:Number($('#nombre').value),note:$('#note').value.trim()});
+   $('#nouveaux').textContent=r.codes.map(c=>c.code+'  ('+TYPES[c.type]+(c.note?' – '+c.note:'')+')').join('\n');$('#blocNouveaux').hidden=false;
+   await charger();msg(r.codes.length+' code(s) créé(s).')}catch(err){msg(err.message,true)}});
+ $('#copier').addEventListener('click',()=>{navigator.clipboard.writeText($('#nouveaux').textContent).then(()=>msg('Codes copiés.'),()=>msg('Sélectionnez les codes pour les copier.',true))});
+ $('#liste').addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const a=b.dataset.a,c=b.dataset.c;
+  if(!confirm(a==='liberer'?`Libérer ${c} ? Il pourra être activé sur un autre ordinateur.`:`Annuler ${c} ? Il ne pourra plus être activé.`))return;
+  try{await api(a,{code:c});await charger();msg(a==='liberer'?'Code libéré.':'Code annulé.')}catch(err){msg(err.message,true)}});
+ $('#filtre').addEventListener('input',afficher);
+ $('#actualiser').addEventListener('click',()=>charger().catch(e=>msg(e.message,true)));
+ $('#deconnexion').addEventListener('click',()=>{deconnecter();msg('Déconnecté.')});
+ $('#exporter').addEventListener('click',()=>{const L=[['Code','Durée','Note','État','École','Créé le','Activé le','Expire le'],...codes.map(c=>[c.code,TYPES[c.type]||c.type,c.note,c.revoque?'Annulé':c.utilise?'Utilisé':'Libre',c.ecole,date(c.cree_le),date(c.active_le),date(c.expire_le)])];
+  const csv='﻿'+L.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='codes-akwa-school.csv';a.click()});
+ try{const j=sessionStorage.getItem('jeton');if(j)connecter(j)}catch(e){}
+})();
+</script>
+</body>
+</html>

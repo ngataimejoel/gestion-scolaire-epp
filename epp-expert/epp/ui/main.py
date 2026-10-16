@@ -35,6 +35,8 @@ ADMINISTRATION = "administration"
 ADMIN_VOLETS = info_volet(ADMINISTRATION)[4]
 
 VERIF_LICENCE_MS = 15 * 60 * 1000
+# parties de la page « Import, export & sauvegarde » (modèle v8), ouvertes par leur ancienne clé
+PARTIES_DONNEES = {"sauvegarde": 0, "import_export": 1}
 
 
 def classe_page(chemin: str):
@@ -257,6 +259,13 @@ class FenetrePrincipale(QMainWindow):
 
     def aller(self, cle: str) -> None:
         """Ouvre une page (clé de PAGES) ou un volet (clé de VOLETS : son dernier onglet ouvert)."""
+        if cle in PARTIES_DONNEES:
+            self.aller("donnees")
+            p = self.pages.get("donnees")
+            partie = p.partie(cle) if p else None
+            if partie is not None:
+                p.onglets.setCurrentWidget(partie)
+            return
         if not info_page(cle):
             v = info_volet(cle)
             if not v:
@@ -291,6 +300,8 @@ class FenetrePrincipale(QMainWindow):
 
     def page(self, cle: str):
         self.aller(cle)
+        if cle in PARTIES_DONNEES:
+            return self.pages["donnees"].partie(cle) if "donnees" in self.pages else None
         return self.pages.get(cle)
 
     # ------------------------------------------------------------------ recherche et fiche
