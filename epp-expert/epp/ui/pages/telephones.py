@@ -1,11 +1,16 @@
 """Téléphones : synchronisation avec l'application Android AKWA SCHOOL par le Wi-Fi de l'école (sans Internet,
-sans abonnement). Démarrage du serveur, association d'un téléphone par code, liste des téléphones associés."""
+sans abonnement), ou par fichier quand le téléphone est ailleurs (WhatsApp, e-mail). Démarrage du serveur,
+association d'un téléphone par code, import d'un fichier du téléphone, liste des téléphones associés."""
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QCheckBox, QComboBox, QFormLayout, QHBoxLayout, QLabel
+from pathlib import Path
 
-from epp.core import security
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QHBoxLayout,
+                               QLabel, QLineEdit, QVBoxLayout)
+
+from epp.core import licence, paths, security
+from epp.synchro import fichier as F
 from epp.synchro import protocole
 from epp.synchro.serveur import lister_appareils, revoquer
 from epp.ui import theme
@@ -16,7 +21,7 @@ from epp.ui.widgets import Carte, Col, Tableau, bouton, confirmer, info, label, 
 
 class PageTelephones(Page):
     titre = "Téléphones"
-    sous_titre = "Application Android AKWA SCHOOL synchronisée par le Wi-Fi de l'école, sans Internet"
+    sous_titre = "Application Android AKWA SCHOOL : synchronisée par le Wi-Fi de l'école, ou par fichier (WhatsApp, e-mail)"
     permission = None
     besoin_annee = False
 
@@ -81,6 +86,17 @@ class PageTelephones(Page):
         c3.lay.addStretch(1)
         h.addWidget(c3, 2)
         self.corps.addLayout(h)
+
+        # ---------------------------------------------------------------- par fichier
+        c5 = Carte("Téléphone hors du Wi-Fi de l'école : synchronisation par fichier")
+        c5.lay.addWidget(label(
+            "Le téléphone (déjà associé) crée un fichier chiffré (.akwasync) qu'on vous envoie par WhatsApp ou e-mail. "
+            "Importez-le ici : ses saisies sont appliquées avec les mêmes droits et contrôles que par le Wi-Fi, puis un "
+            "fichier de réponse est créé. Renvoyez-le au téléphone : il l'ouvre avec AKWA SCHOOL et reçoit les données à "
+            "jour. La synchronisation par le Wi-Fi n'a pas besoin d'être démarrée.", discret=True, wrap=True))
+        self.b_fichier = bouton("Importer un fichier du téléphone…", self._importer_fichier, "primaire")
+        c5.lay.addLayout(ligne(self.b_fichier, None))
+        self.corps.addWidget(c5)
 
         # ---------------------------------------------------------------- appareils
         c4 = Carte("Téléphones associés")
@@ -215,3 +231,92 @@ class PageTelephones(Page):
         self.rafraichir()
         info(self, "Téléphone retiré", f"« {r['nom']} » est retiré. Pour l'utiliser de nouveau, associez-le avec "
                                        "un nouveau code.")
+
+    # ------------------------------------------------------------------ synchronisation par fichier
+    @protege
+    def _importer_fichier(self):
+        dossier = Path.home() / "Downloads"
+        ch, _ = QFileDialog.getOpenFileName(self, "Fichier envoyé par le téléphone", str(dossier if dossier.is_dir() else
+                                                                                         Path.home()),
+                                            "Fichiers du téléphone AKWA SCHOOL (*.akwasync);;Tous les fichiers (*)")
+        if not ch:
+            return
+        data = Path(ch).read_bytes()
+        imp = F.ImportFichier(self.db.path, licence.etat,
+                              quand_modifie=lambda q, nom, n: self.synchro.recu.emit(q, nom, n))
+        try:
+            ap = imp.examiner(data)
+        except F.FichierInvalide as e:
+            info(self, "Fichier non reconnu", str(e))
+            return
+        if ap.get("erreur"):
+            info(self, "Fichier non importé", ap["erreur"])
+            return
+        mdp = self._confirmer_import(ap)
+        if mdp is None:
+            return
+        nom, reponse, rep = imp.importer(data, mdp or None)
+        defaut = Path(ch).parent / nom
+        dest, _ = QFileDialog.getSaveFileName(self, "Réponse à renvoyer au téléphone", str(defaut),
+                                              "Réponse AKWA SCHOOL (*.akwasync)")
+        dest = Path(dest) if dest else paths.exports_dir() / nom      # les saisies sont appliquées : la réponse est gardée
+        if dest.suffix.lower() != F.EXTENSION:
+            dest = dest.with_suffix(F.EXTENSION)
+        dest.write_bytes(reponse)
+        security.log(self.db, self.s.login, "IMPORT_FICHIER_TELEPHONE", "appareil", f"« {ap['appareil']} » : {Path(ch).name}")
+        self.rafraichir()
+        info(self, "Fichier du téléphone importé",
+             f"{F.resume_reponse(rep)}\n\nRenvoyez maintenant au téléphone « {ap['appareil']} » le fichier :\n{dest}\n\n"
+             "(par WhatsApp ou e-mail) : il l'ouvre avec AKWA SCHOOL pour recevoir les données à jour.")
+
+    def _confirmer_import(self, ap: dict) -> str | None:
+        """Aperçu du fichier et mot de passe administrateur (facultatif, sauf premier envoi d'un téléphone utilisé
+        seul) : renvoie le mot de passe vérifié, « » sans mot de passe, ou None si l'import est annulé."""
+        noms = {"note": "note(s)", "presence": "présence(s) aux évaluations", "absence": "absence(s) ou retard(s)",
+                "suppr_absence": "suppression(s) d'absence", "eleve": "inscription(s) ou fiche(s) d'élève"}
+        detail = ", ".join(f"{n} {noms.get(k, k)}" for k, n in sorted(ap["par_type"].items())) or "aucune saisie"
+        texte = (f"Téléphone « {ap['appareil']} » (compte {ap['compte']}), fichier créé le "
+                 f"{(ap.get('cree_le') or '?').replace('T', ' à ')[:19]}.\n\nContenu : {detail}.")
+        f = ap.get("fusion")
+        if f:
+            texte += (f"\n\nPremier envoi d'un téléphone utilisé seul : {f['eleves']} élève(s), {f['classes']} classe(s), "
+                      f"{f['notes']} note(s), ajoutés à l'année en cours sans rien remplacer. Le mot de passe d'un "
+                      "administrateur est obligatoire.")
+        else:
+            texte += ("\n\nLes corrections de notes et les suppressions demandent le mot de passe d'un administrateur : "
+                      "laissez vide pour les laisser en attente sur le téléphone.")
+        d = QDialog(self)
+        d.setWindowTitle("Importer le fichier du téléphone")
+        v = QVBoxLayout(d)
+        v.addWidget(label(texte, wrap=True))
+        champ = QLineEdit()
+        champ.setEchoMode(QLineEdit.Password)
+        champ.setPlaceholderText("Mot de passe d'un administrateur" + ("" if f else " (facultatif)"))
+        v.addWidget(champ)
+        erreur = label("")
+        erreur.setStyleSheet(f"color: {theme.DANGER};")
+        v.addWidget(erreur)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.button(QDialogButtonBox.Ok).setText("Importer")
+        bb.button(QDialogButtonBox.Cancel).setText("Annuler")
+        v.addWidget(bb)
+        resultat: list[str] = []
+
+        def valider():
+            mdp = champ.text()
+            if not mdp and f:
+                erreur.setText("Le mot de passe d'un administrateur est obligatoire pour ce premier envoi.")
+                return
+            if mdp and not security.verifier_admin(self.db, self.s, mdp, f"import du fichier du téléphone « {ap['appareil']} »"):
+                erreur.setText("Mot de passe incorrect.")
+                champ.selectAll()
+                champ.setFocus()
+                return
+            resultat.append(mdp)
+            d.accept()
+
+        bb.accepted.connect(valider)
+        bb.rejected.connect(d.reject)
+        d.setMinimumWidth(460)
+        d.exec()
+        return resultat[0] if resultat else None

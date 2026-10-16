@@ -20,11 +20,26 @@
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- « Ouvrir avec AKWA SCHOOL » depuis WhatsApp ou Gmail : réponse de l'ordinateur (.akwasync) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/octet-stream" />
+            </intent-filter>
         </activity>
+
+        <!-- fichiers confiés à WhatsApp ou à la messagerie par « Partager » (lecture seule, au cas par cas) -->
+        <provider
+            android:name=".Partage"
+            android:authorities="com.akwaschool.mobile.partage"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

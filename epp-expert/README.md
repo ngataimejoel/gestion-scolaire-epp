@@ -27,8 +27,8 @@ python -m venv .venv
 
 ## Application Android
 
-`android/` : application AKWA SCHOOL pour téléphone, synchronisée avec l'ordinateur de l'école par le Wi-Fi
-(sans Internet). L'APK est construit par la même CI et joint aux versions publiées. Détails : `docs/ANDROID.md`.
+`android/` : application AKWA SCHOOL pour téléphone, utilisable seule (sans ordinateur) ou synchronisée à la
+demande avec l'ordinateur de l'école par le Wi-Fi (sans Internet). L'APK est construit par la même CI et joint aux versions publiées. Détails : `docs/ANDROID.md`.
 
 ## Données
 

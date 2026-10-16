@@ -179,11 +179,7 @@ public final class Client {
      */
     public static String synchroniser(String adresse, long appareilId, byte[] cle, long seq, String requete)
             throws Erreur {
-        String r0 = requete.trim();
-        if (!r0.startsWith("{")) {
-            throw new Erreur(0, "Requête invalide.", null);
-        }
-        String json = "{\"seq\":" + seq + (r0.equals("{}") ? "}" : "," + r0.substring(1));
+        String json = avecSeq(requete, seq);
         try {
             byte[] msg = Protocole.sceller(cle, json.getBytes(StandardCharsets.UTF_8), Protocole.aadRequete(appareilId));
             Reponse r = post(base(adresse) + "/api/synchro", msg, "application/octet-stream", String.valueOf(appareilId));
@@ -198,5 +194,14 @@ public final class Client {
         } catch (GeneralSecurityException e) {
             throw new Erreur(0, "Réponse de l'ordinateur non authentique.", null);
         }
+    }
+
+    /** Requête de l'interface complétée par son numéro (compteur anti-rejeu). */
+    public static String avecSeq(String requete, long seq) throws Erreur {
+        String r0 = requete == null ? "" : requete.trim();
+        if (!r0.startsWith("{")) {
+            throw new Erreur(0, "Requête invalide.", null);
+        }
+        return "{\"seq\":" + seq + (r0.replaceAll("\\s", "").equals("{}") ? "}" : "," + r0.substring(1));
     }
 }

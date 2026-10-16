@@ -25,8 +25,10 @@ from typing import Callable
 
 from epp import APP_MARQUE, __version__
 from epp.core import licence, security
-from epp.core.db import Database
+from epp.core.db import AnneeCloturee, Database
+from epp.domain.repo import ValidationError
 from epp.synchro import donnees
+from epp.synchro.fusion import Fusion
 from epp.synchro import protocole as P
 
 log = logging.getLogger(__name__)
@@ -224,23 +226,38 @@ class ServeurSynchro:
         return 200, {"appareil_id": aid, "donnees": P.b64(P.sceller(cle, P.json_octets(contenu), P.AAD_APPAIRAGE))}
 
     def synchroniser(self, appareil_id: int, message: bytes) -> tuple[int, dict | bytes]:
+        statut, rep, cle, seq = self.recevoir(appareil_id, message)
+        if statut != 200:
+            return statut, rep
+        return 200, P.sceller(cle, P.json_octets(rep), P.aad_reponse(appareil_id, seq))
+
+    def recevoir(self, appareil_id: int, message: bytes, admin: str | None = None,
+                 lire_seulement: bool = False) -> tuple[int, dict, bytes | None, int]:
+        """Déchiffre et traite une requête du téléphone : (statut, réponse en clair, clé, numéro).
+        admin : mot de passe saisi sur l'ordinateur (import d'un fichier), utilisé si le téléphone n'en envoie pas.
+        lire_seulement : déchiffre sans rien appliquer (aperçu d'un fichier avant import) ; la réponse est la
+        requête elle-même."""
         db = self.db
         a = db.one("SELECT * FROM appareil WHERE id=?", (appareil_id,))
         if a is None or not a["actif"]:
             return 401, {"erreur": "Ce téléphone n'est plus associé à l'ordinateur de l'école : associez-le à "
-                                   "nouveau.", "code": "REVOQUE"}
+                                   "nouveau.", "code": "REVOQUE"}, None, 0
         cle = P.unb64(a["cle"])
         try:
             req = json.loads(P.ouvrir(cle, message, P.aad_requete(appareil_id)).decode("utf-8"))
         except (P.ErreurProtocole, ValueError):
-            return 400, {"erreur": "Message illisible : associez ce téléphone à nouveau.", "code": "CLE"}
+            return 400, {"erreur": "Message illisible : associez ce téléphone à nouveau.", "code": "CLE"}, None, 0
         seq = int(req.get("seq") or 0)
         if seq <= a["dernier_seq"]:
-            return 409, {"erreur": "Requête déjà reçue (rejeu refusé).", "code": "REJEU"}
+            return 409, {"erreur": "Requête déjà reçue (rejeu refusé). Le téléphone a envoyé depuis une "
+                                   "synchronisation plus récente.", "code": "REJEU"}, None, seq
+        if lire_seulement:
+            return 200, {"appareil": dict(a), "requete": req}, cle, seq
         db.execute("UPDATE appareil SET dernier_seq=?, dernier_contact=datetime('now','localtime') WHERE id=?",
                    (seq, appareil_id))
-        rep = self._traiter(dict(a), req)
-        return 200, P.sceller(cle, P.json_octets(rep), P.aad_reponse(appareil_id, seq))
+        if admin and not req.get("admin"):
+            req["admin"] = admin
+        return 200, self._traiter(dict(a), req), cle, seq
 
     def _traiter(self, a: dict, req: dict) -> dict:
         db = self.db
@@ -252,6 +269,22 @@ class ServeurSynchro:
         s = licence.restreindre(security.load_session(db, a["utilisateur_id"]), etat)
         if not etat.utilisable:
             return {"erreur": etat.message, "code": "LICENCE", "instantane": donnees.instantane(db, s, etat)}
+        rapport = None
+        if isinstance(req.get("fusion"), dict):
+            # première synchronisation d'un téléphone utilisé seul : sa base est ajoutée à l'année active
+            if not security.verifier_admin(db, s, req.get("admin") or "", f"données du téléphone « {a['nom']} »"):
+                return {"erreur": "Envoyer les données du téléphone demande le mot de passe d'un administrateur de "
+                                  "l'ordinateur." if not req.get("admin") else "Mot de passe administrateur incorrect.",
+                        "code": "ADMIN_REQUIS"}
+            try:
+                rapport = Fusion(db, s, a).appliquer(req["fusion"])
+            except (ValidationError, AnneeCloturee) as e:
+                return {"erreur": str(e), "code": "FUSION"}
+            if self.quand_modifie:
+                try:
+                    self.quand_modifie({"eleves", "notes", "absences"}, a["nom"], rapport["eleves_ajoutes"])
+                except Exception:      # noqa: BLE001
+                    log.exception("Notification de l'interface impossible")
         ops = req.get("ops") or []
         if not isinstance(ops, list):
             ops = []
@@ -266,7 +299,10 @@ class ServeurSynchro:
                 self.quand_modifie(set(app.modifie), a["nom"], ok)
             except Exception:      # noqa: BLE001 - l'affichage de l'ordinateur ne bloque pas la synchronisation
                 log.exception("Notification de l'interface impossible")
-        return {"resultats": res, "instantane": donnees.instantane(db, s, etat)}
+        out = {"resultats": res, "instantane": donnees.instantane(db, s, etat)}
+        if rapport is not None:
+            out["fusion"] = rapport
+        return out
 
     def presentation(self) -> dict:
         return {"service": APP_MARQUE, "version": __version__, "protocole": P.VERSION_PROTOCOLE,

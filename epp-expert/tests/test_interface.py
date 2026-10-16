@@ -618,3 +618,43 @@ def test_page_telephones_association_et_retrait(fenetre, messages):
         fenetre.synchro.arreter()
     assert not fenetre.synchro.en_marche
     assert not [m for m in messages if m[0] == "critical"], _textes(messages)
+
+
+def test_page_telephones_import_d_un_fichier_du_telephone(fenetre, messages, monkeypatch, tmp_path):
+    """Téléphone hors du Wi-Fi : son fichier est importé depuis la page Téléphones et la réponse enregistrée."""
+    from test_synchro import Client
+    from epp.synchro import fichier as F
+    from epp.ui.pages import telephones
+    db = fenetre.ctx.db
+    security.create_user(db, "ens", "Enseignant", "Ensei!2026", "ENSEIGNANT")
+    fenetre.aller("telephones")
+    p = fenetre.page("telephones")
+    try:
+        p.compte.setCurrentIndex(p.compte.findText("ens", Qt.MatchContains))
+        p._code()
+        c = Client(fenetre.synchro.srv.port)
+        assert c.appairer(fenetre.synchro.srv.code.code)[0] == 200
+        i = c.synchro()[1]["instantane"]
+        sid = fenetre.synchro.srv.serveur_id
+    finally:
+        fenetre.synchro.arreter()
+    el = i["eleves"][0]
+    g = next(g for g in i["grilles"] if g["id"] == next(x for x in i["classes"] if x["code"] == el["classe"])["grille_id"])
+    iid, mid = el["inscription_id"], g["matieres"]["1"][0]["id"]
+    db.execute("DELETE FROM note WHERE inscription_id=? AND matiere_id=?", (iid, mid))
+    op = {"uid": "fichier-1", "op": "note", "inscription_id": iid, "matiere_id": mid, "valeur": 7, "avant": None}
+    demande = tmp_path / "AKWA-TEL-DEMANDE-2.akwasync"
+    demande.write_bytes(F.demande(c.cle, sid, c.appareil_id, 2, {"ops": [op]}, "Tecno"))
+    reponse = tmp_path / "reponse.akwasync"
+    monkeypatch.setattr(telephones.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(demande), "")))
+    monkeypatch.setattr(telephones.QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(reponse), "")))
+    vus = []
+    monkeypatch.setattr(p, "_confirmer_import", lambda ap: vus.append(ap) or "")
+    p._importer_fichier()                                   # sans Wi-Fi démarré
+    assert vus and vus[0]["ops"] == 1 and "ens" in vus[0]["compte"]
+    assert db.scalar("SELECT valeur FROM note WHERE inscription_id=? AND matiere_id=?", (iid, mid)) == 7
+    rep = F.ouvrir_reponse(c.cle, c.appareil_id, reponse.read_bytes())
+    assert rep["resultats"][0]["ok"] and rep["instantane"]["notes"][str(iid)][str(mid)] == 7
+    assert any(t == "Fichier du téléphone importé" and "1 saisie(s)" in x for _, t, x in messages), _textes(messages)
+    p._importer_fichier()                                   # même fichier : refusé, rien n'est réappliqué
+    assert any(t == "Fichier non importé" and "déjà reçue" in x for _, t, x in messages)

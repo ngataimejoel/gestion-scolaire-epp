@@ -128,3 +128,5 @@ table.t td{padding:6px;border-bottom:1px solid var(--line)}
 .bandeau.ok{background:var(--acc-pale);color:var(--acc)}
 @media (min-width:600px){.kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+label.chip{display:inline-flex;align-items:center;margin:0 6px 6px 0}
+tr[data-a]{cursor:pointer}
