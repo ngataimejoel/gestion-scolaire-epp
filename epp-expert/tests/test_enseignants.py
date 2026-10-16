@@ -102,3 +102,17 @@ def test_fiche_du_personnel_desactivee_bloque_le_compte_et_les_telephones(ecole)
     assert db.scalar("SELECT actif FROM appareil WHERE utilisateur_id=?", (uid,)) == 0
     with pytest.raises(ValueError, match="désactivée"):
         enseignants.activer(db, d, uid, True)
+
+
+def test_rapport_des_notes_par_classe_avec_synthese_par_sexe(demo, tmp_path):
+    from epp.core.security import system_session
+    from epp.reports import engine, service, store
+    db, annee = demo
+    classe = annee.classes[0].code
+    doc = engine.build_document(db, annee, store.definition(db, "NOTES_CLASSE"), {"classe": classe, "compo": 1})
+    notes, synthese = doc.blocks[1], doc.blocks[2]
+    assert [h.text for h in notes.header[0]][-2:] == ["Rang", "Résultat"]
+    lignes = {r.cells[0]: r.cells[1:] for r in synthese.rows}
+    assert lignes["INSCRITS"][2] == len(repo.inscriptions(db, annee, classe))
+    assert lignes["ADMIS"][2] + lignes["NON ADMIS"][2] == lignes["PRÉSENTS"][2]
+    assert service.generer(db, system_session(), annee, "NOTES_CLASSE", {"compo": 1}, tmp_path / "n.pdf").exists()

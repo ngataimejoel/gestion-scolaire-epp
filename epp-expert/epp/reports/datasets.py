@@ -254,11 +254,16 @@ def _notes(ctx: Contexte) -> list[dict]:
         return []
     num = int(ctx.params.get("compo") or 1)
     mats, rows = repo.notes_grille(ctx.db, ctx.annee, g.id, num, ctx.params.get("classe"))
+    cl = ctx.annee.classe(ctx.params.get("classe")) if ctx.params.get("classe") else None
+    moys = sorted((r["moyenne"] for r in rows if r["present"] and r["moyenne"] is not None), reverse=True)
     out = []
     for n, r in enumerate(rows, 1):
+        moy = r["moyenne"] if r["present"] else None
         d = {"numero": n, "matricule_ecole": r["matricule_ecole"], "nom": r["nom"], "sexe": r["sexe"],
              "classe": r["classe"], "statut": r["statut"], "present": "OUI" if r["present"] else "NON",
-             "total": r["total"], "moyenne": r["moyenne"]}
+             "total": r["total"], "moyenne": r["moyenne"],
+             "rang": (moys.index(moy) + 1) if moy is not None else None,
+             "admis": ("" if moy is None or cl is None else "ADMIS" if moy >= cl.seuil else "NON ADMIS")}
         for i, m in enumerate(mats):
             d[f"note_{i}"] = r["notes"].get(m["id"])
         out.append(d)
@@ -281,7 +286,8 @@ SOURCES: dict[str, Source] = {s.code: s for s in [
     Source("notes", "Feuille de notes", "Notes par matière pour une classe et une évaluation.",
            [C("numero", "N°", "entier"), C("matricule_ecole", "Matricule école"), C("nom", "Nom et prénoms"),
             C("sexe", "Sexe"), C("classe", "Classe"), C("statut", "Statut"), C("present", "Présent ?"),
-            C("total", "Total", "decimal"), C("moyenne", "Moyenne", "decimal")],
+            C("total", "Total", "decimal"), C("moyenne", "Moyenne", "decimal"), C("rang", "Rang", "entier"),
+            C("admis", "Résultat")],
            _notes, ["classe", "compo"], _notes_champs),
     Source("personnel", "Personnel", "Une ligne par agent, avec la classe tenue dans l'année.", PERSONNEL_CHAMPS,
            _personnel),

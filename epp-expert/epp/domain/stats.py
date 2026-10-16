@@ -44,6 +44,8 @@ METRIQUES: dict[str, tuple[str, str]] = {
     "compo_absents": ("Absents", "n"),
     "compo_admis": ("Admis", "n"),
     "compo_taux": ("Taux d'admis", "p"),
+    "compo_non_admis": ("Non admis", "n"),
+    "compo_taux_presence": ("Taux de présence", "p"),
     "mois_jours_absence": ("Jours d'absence du mois", "d"),
     "mois_retards": ("Retards du mois", "n"),
     "mois_frequentation": ("Taux de fréquentation", "p"),
@@ -55,6 +57,8 @@ METRIQUES: dict[str, tuple[str, str]] = {
 DERIVEES = {
     "taux_admission": lambda c, ctx: calculs.taux(c["admis"], c["presents"]),
     "compo_taux": lambda c, ctx: calculs.taux(c["compo_admis"], c["compo_presents"]),
+    "compo_non_admis": lambda c, ctx: c["compo_presents"] - c["compo_admis"],
+    "compo_taux_presence": lambda c, ctx: calculs.taux(c["compo_presents"], c["compo_inscrits"]),
     "eval_taux": lambda c, ctx: calculs.taux(c["eval_moyenne"], c["eval_composes"]),
     "mois_frequentation": lambda c, ctx: calculs.taux_frequentation(
         c["mois_jours_absence"], c["inscrits"], ctx.get("jours_mois")),

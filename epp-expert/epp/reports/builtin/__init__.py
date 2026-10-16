@@ -256,6 +256,25 @@ FEUILLE_NOTES = _modele(
         "filtres": [], "tri": [], "regroupement": "", "agregats": {"moyenne": "moyenne"}, "renumeroter": True},
         SIGNATURE])
 
+NOTES_CLASSE = _modele(
+    "RAPPORT DES NOTES – CLASSE DE {classe}", sous_titre="{compo_libelle} – année scolaire {annee}",
+    orientation="paysage", parametres=["classe", "compo"], repeter_par="classe",
+    sections=[
+        {"type": "tableau", "titre": "", "source": "notes", "colonnes": [
+            _col("numero"), _col("matricule_ecole"), _col("nom"), _col("sexe"), _col("present"), _col("*notes*"),
+            _col("total"), _col("moyenne"), _col("rang"), _col("admis")],
+         "filtres": [], "tri": [], "regroupement": "", "agregats": {"moyenne": "moyenne"}, "renumeroter": True},
+        {"type": "tableau_croise", "titre": "SYNTHÈSE PAR SEXE", "lignes": "metriques", "classes": "parametre",
+         "metriques": [{"metrique": "compo_inscrits", "titre": "INSCRITS"},
+                       {"metrique": "compo_presents", "titre": "PRÉSENTS"},
+                       {"metrique": "compo_absents", "titre": "ABSENTS"},
+                       {"metrique": "compo_taux_presence", "titre": "TAUX DE PRÉSENCE (%)"},
+                       {"metrique": "compo_admis", "titre": "ADMIS"},
+                       {"metrique": "compo_non_admis", "titre": "NON ADMIS"},
+                       {"metrique": "compo_taux", "titre": "TAUX D'ADMISSION (%)"}],
+         "sexes": ["M", "F", "T"], "total": False},
+        SIGNATURE])
+
 TABLEAU_DE_BORD = _modele(
     "TABLEAU DE BORD", sections=[
         {"type": "cles_valeurs", "titre": "INDICATEURS CLÉS", "source": "tableau_de_bord", "elements": [
@@ -446,6 +465,9 @@ TEMPLATES = [
     ("AUTORISATIONS", "Registre des autorisations d'absence", OFFICIEL,
      "Demandes d'autorisation d'absence des élèves et du personnel, avec la décision du directeur.", AUTORISATIONS),
     ("FEUILLE_NOTES", "Feuille de notes", OFFICIEL, "Notes d'une classe pour une évaluation (NOTES).", FEUILLE_NOTES),
+    ("NOTES_CLASSE", "Rapport des notes par classe", OFFICIEL,
+     "Notes, moyenne, rang et résultat de chaque élève, puis synthèse par sexe : présents, admis, taux.",
+     NOTES_CLASSE),
     ("AGES", "Élèves par âge, niveau et sexe", OFFICIEL,
      "Âges par niveau et par sexe : ensemble des élèves, avec extrait et sans extrait de naissance.", AGES),
     ("TABLEAU_DE_BORD", "Tableau de bord", OFFICIEL, "Indicateurs, tableau par classe, alertes et graphiques.",
