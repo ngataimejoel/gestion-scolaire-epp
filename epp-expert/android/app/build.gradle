@@ -1,0 +1,55 @@
+plugins {
+    id "com.android.application"
+}
+
+// Version : celle de l'application Windows (epp/__init__.py), pour qu'un même numéro désigne les deux.
+def versionWindows = (file("../../epp/__init__.py").text =~ /__version__ = "([0-9.]+)"/)[0][1]
+def parties = versionWindows.tokenize(".").collect { it as int } + [0, 0, 0]
+
+android {
+    namespace "com.akwaschool.mobile"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.akwaschool.mobile"
+        minSdk 26
+        targetSdk 35
+        versionCode parties[0] * 10000 + parties[1] * 100 + parties[2]
+        versionName versionWindows
+    }
+
+    // Signature : clé privée de l'école fournie par les secrets GitHub si elle existe
+    // (ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD),
+    // sinon clé de publication du dépôt (signature/akwa-school.p12) : les mises à jour s'installent
+    // par-dessus l'application déjà installée, sans perdre les données du téléphone.
+    signingConfigs {
+        publication {
+            def ks = System.getenv("ANDROID_KEYSTORE_FILE")
+            storeFile ks ? file(ks) : file("../signature/akwa-school.p12")
+            storeType "pkcs12"
+            storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: "akwa-school"
+            keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: "akwa-school"
+            keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: "akwa-school"
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.publication
+        }
+        debug {
+            signingConfig signingConfigs.publication
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

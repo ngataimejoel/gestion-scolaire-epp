@@ -1,0 +1,282 @@
+"""Utilisateurs, rôles, autorisations et hachage des mots de passe."""
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import os
+from dataclasses import dataclass, field
+
+from epp.core.db import Database
+
+ITERATIONS = 240_000
+MIN_PASSWORD = 6
+
+# Autorisations disponibles (code -> libellé affiché)
+PERMISSIONS: dict[str, str] = {
+    "eleves.lire": "Consulter les élèves",
+    "eleves.modifier": "Ajouter / modifier les élèves et inscriptions",
+    "eleves.supprimer": "Supprimer des élèves",
+    "notes.lire": "Consulter les notes et résultats",
+    "notes.modifier": "Saisir les notes",
+    "personnel.lire": "Consulter le personnel",
+    "personnel.modifier": "Ajouter / modifier le personnel",
+    "personnel.supprimer": "Supprimer du personnel",
+    "absences.lire": "Consulter les absences",
+    "absences.modifier": "Saisir les absences",
+    "absences.autoriser": "Accorder ou refuser les autorisations d'absence",
+    "rapports.generer": "Générer, imprimer et exporter les rapports",
+    "modeles.gerer": "Créer et modifier ses modèles de rapports",
+    "modeles.partages": "Modifier ou supprimer les modèles partagés et intégrés",
+    "parametres.modifier": "Modifier les paramètres de l'établissement et des années",
+    "fin_annee.valider": "Valider les décisions de fin d'année (admis, redoublants, sorties)",
+    "utilisateurs.gerer": "Gérer les utilisateurs et les rôles",
+    "sauvegarde.creer": "Créer des sauvegardes",
+    "sauvegarde.restaurer": "Restaurer une sauvegarde",
+    "import.excel": "Importer des fichiers Excel",
+    "export.excel": "Exporter vers Excel",
+    "export.word": "Exporter vers Word",
+}
+
+DEFAULT_ROLES: dict[str, tuple[str, list[str]]] = {
+    "ADMIN": ("Administrateur", list(PERMISSIONS)),
+    "DIRECTEUR": ("Directeur / responsable d'établissement",
+                  [p for p in PERMISSIONS if p != "utilisateurs.gerer"]),
+    "SECRETARIAT": ("Secrétariat", [
+        "eleves.lire", "eleves.modifier", "personnel.lire", "absences.lire", "absences.modifier",
+        "notes.lire", "rapports.generer", "export.excel", "export.word", "sauvegarde.creer"]),
+    "ENSEIGNANT": ("Enseignant", [
+        "eleves.lire", "notes.lire", "notes.modifier", "absences.lire", "absences.modifier",
+        "rapports.generer"]),
+}
+
+
+# Permissions ajoutées après la première version : {permission: rôles qui la reçoivent}
+PERMISSIONS_AJOUTEES: dict[str, list[str]] = {
+    "fin_annee.valider": ["DIRECTEUR"],
+    "export.word": ["DIRECTEUR", "SECRETARIAT"],
+    "absences.autoriser": ["DIRECTEUR"],
+}
+
+
+class AccessDenied(PermissionError):
+    pass
+
+
+def hash_password(password: str) -> str:
+    salt = os.urandom(16)
+    dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, ITERATIONS)
+    return "pbkdf2_sha256${}${}${}".format(
+        ITERATIONS, base64.b64encode(salt).decode(), base64.b64encode(dk).decode())
+
+
+def verify_password(password: str, stored: str) -> bool:
+    try:
+        algo, iters, salt_b64, dk_b64 = stored.split("$")
+        if algo != "pbkdf2_sha256":
+            return False
+        dk = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"),
+                                 base64.b64decode(salt_b64), int(iters))
+        return hmac.compare_digest(dk, base64.b64decode(dk_b64))
+    except (ValueError, TypeError):
+        return False
+
+
+def check_password_policy(password: str) -> str | None:
+    """Renvoie un message d'erreur, ou None si le mot de passe est acceptable."""
+    if len(password) < MIN_PASSWORD:
+        return f"Le mot de passe doit comporter au moins {MIN_PASSWORD} caractères."
+    if password.isdigit() and len(set(password)) == 1:
+        return "Le mot de passe est trop simple."
+    return None
+
+
+@dataclass
+class Session:
+    user_id: int
+    login: str
+    nom: str
+    role_code: str
+    role_libelle: str
+    permissions: set[str] = field(default_factory=set)
+
+    def can(self, perm: str) -> bool:
+        return perm in self.permissions
+
+    def require(self, perm: str) -> None:
+        if not self.can(perm):
+            raise AccessDenied(
+                f"Votre profil ({self.role_libelle}) ne permet pas cette opération : "
+                f"« {PERMISSIONS.get(perm, perm)} ».")
+
+
+def system_session() -> Session:
+    """Session technique (import initial, tests, ligne de commande)."""
+    return Session(0, "systeme", "Système", "ADMIN", "Administrateur", set(PERMISSIONS))
+
+
+def ensure_roles(db: Database) -> None:
+    for code, (libelle, perms) in DEFAULT_ROLES.items():
+        rid = db.scalar("SELECT id FROM role WHERE code=?", (code,))
+        if rid is None:
+            rid = db.execute("INSERT INTO role(code, libelle, systeme) VALUES(?,?,1)",
+                             (code, libelle)).lastrowid
+            db.executemany("INSERT OR IGNORE INTO role_permission(role_id, permission) VALUES(?,?)",
+                           [(rid, p) for p in perms])
+    # permissions apparues avec une mise à jour : données une seule fois aux rôles prévus
+    # (un administrateur qui les retire ensuite n'est pas contredit)
+    for perm, roles in PERMISSIONS_AJOUTEES.items():
+        if db.meta(f"permission_ajoutee:{perm}"):
+            continue
+        for code in roles:
+            rid = db.scalar("SELECT id FROM role WHERE code=?", (code,))
+            if rid:
+                db.execute("INSERT OR IGNORE INTO role_permission(role_id, permission) VALUES(?,?)", (rid, perm))
+        db.set_meta(f"permission_ajoutee:{perm}", "1")
+    admin_id = db.scalar("SELECT id FROM role WHERE code='ADMIN'")
+    db.executemany("INSERT OR IGNORE INTO role_permission(role_id, permission) VALUES(?,?)",
+                   [(admin_id, p) for p in PERMISSIONS])
+
+
+def has_users(db: Database) -> bool:
+    return bool(db.scalar("SELECT COUNT(*) FROM utilisateur"))
+
+
+def create_user(db: Database, login: str, nom: str, password: str, role_code: str,
+                doit_changer: bool = False) -> int:
+    login = login.strip()
+    if not login:
+        raise ValueError("L'identifiant est obligatoire.")
+    err = check_password_policy(password)
+    if err:
+        raise ValueError(err)
+    if db.scalar("SELECT id FROM utilisateur WHERE login=?", (login,)):
+        raise ValueError(f"L'identifiant « {login} » existe déjà.")
+    role_id = db.scalar("SELECT id FROM role WHERE code=?", (role_code,))
+    if role_id is None:
+        raise ValueError(f"Rôle inconnu : {role_code}")
+    return db.execute(
+        "INSERT INTO utilisateur(login, nom, role_id, hash, doit_changer) VALUES(?,?,?,?,?)",
+        (login, nom.strip() or login, role_id, hash_password(password), int(doit_changer))).lastrowid
+
+
+def set_password(db: Database, user_id: int, password: str) -> None:
+    err = check_password_policy(password)
+    if err:
+        raise ValueError(err)
+    db.execute("UPDATE utilisateur SET hash=?, doit_changer=0 WHERE id=?",
+               (hash_password(password), user_id))
+
+
+def load_session(db: Database, user_id: int) -> Session:
+    row = db.one(
+        "SELECT u.id, u.login, u.nom, r.id AS rid, r.code, r.libelle FROM utilisateur u "
+        "JOIN role r ON r.id=u.role_id WHERE u.id=?", (user_id,))
+    perms = {r[0] for r in db.query("SELECT permission FROM role_permission WHERE role_id=?", (row["rid"],))}
+    return Session(row["id"], row["login"], row["nom"], row["code"], row["libelle"], perms)
+
+
+def authenticate(db: Database, login: str, password: str) -> Session | None:
+    row = db.one("SELECT id, hash, actif FROM utilisateur WHERE login=?", (login.strip(),))
+    if row is None or not row["actif"] or not verify_password(password, row["hash"]):
+        log(db, login or "?", "CONNEXION_ECHEC", "utilisateur", login)
+        return None
+    db.execute("UPDATE utilisateur SET derniere_connexion=datetime('now','localtime') WHERE id=?", (row["id"],))
+    s = load_session(db, row["id"])
+    log(db, s.login, "CONNEXION", "utilisateur", s.login)
+    return s
+
+
+def admin_count(db: Database) -> int:
+    return db.scalar(
+        "SELECT COUNT(*) FROM utilisateur u JOIN role r ON r.id=u.role_id "
+        "WHERE r.code='ADMIN' AND u.actif=1", default=0)
+
+
+def verifier_admin(db: Database, s: Session, password: str, motif: str = "") -> str | None:
+    """Mot de passe d'un administrateur actif (opération protégée) : renvoie son identifiant, ou None.
+
+    Chaque tentative est inscrite au journal, réussie ou non."""
+    for r in db.query("SELECT u.login, u.hash FROM utilisateur u JOIN role r ON r.id=u.role_id "
+                      "WHERE r.code='ADMIN' AND u.actif=1 ORDER BY u.login"):
+        if password and verify_password(password, r["hash"]):
+            log(db, s.login, "AUTORISATION_ADMIN", "utilisateur", f"{r['login']} : {motif}")
+            return r["login"]
+    log(db, s.login, "AUTORISATION_ADMIN_ECHEC", "utilisateur", motif)
+    return None
+
+
+def log(db: Database, utilisateur: str, action: str, objet: str = "", details: str = "") -> None:
+    db.execute("INSERT INTO journal(utilisateur, action, objet, details) VALUES(?,?,?,?)",
+               (utilisateur, action, objet, details))
+
+
+# ---------------------------------------------------------------------- gestion des utilisateurs
+def lister_utilisateurs(db: Database) -> list[dict]:
+    return [dict(r) for r in db.query(
+        "SELECT u.id, u.login, u.nom, u.actif, u.doit_changer, u.derniere_connexion, u.cree_le, "
+        "r.code AS role, r.libelle AS role_libelle FROM utilisateur u JOIN role r ON r.id=u.role_id "
+        "ORDER BY u.login")]
+
+
+def lister_roles(db: Database) -> list[dict]:
+    return [dict(r) for r in db.query("SELECT id, code, libelle FROM role ORDER BY id")]
+
+
+def ajouter_utilisateur(db: Database, s: Session, login: str, nom: str, password: str, role_code: str) -> int:
+    """Création par un administrateur : l'utilisateur devra changer son mot de passe à la connexion."""
+    s.require("utilisateurs.gerer")
+    uid = create_user(db, login, nom, password, role_code, doit_changer=True)
+    log(db, s.login, "AJOUT_UTILISATEUR", "utilisateur", f"{login} ({role_code})")
+    return uid
+
+
+def _proteger_dernier_admin(db: Database, user_id: int) -> None:
+    row = db.one("SELECT r.code, u.actif FROM utilisateur u JOIN role r ON r.id=u.role_id WHERE u.id=?", (user_id,))
+    if row and row["code"] == "ADMIN" and row["actif"] and admin_count(db) <= 1:
+        raise ValueError("Impossible : c'est le dernier administrateur actif de l'application.")
+
+
+def modifier_utilisateur(db: Database, s: Session, user_id: int, nom: str | None = None,
+                         role_code: str | None = None, actif: bool | None = None) -> None:
+    s.require("utilisateurs.gerer")
+    row = db.one("SELECT u.login, r.code FROM utilisateur u JOIN role r ON r.id=u.role_id WHERE u.id=?", (user_id,))
+    if row is None:
+        raise ValueError("Utilisateur introuvable.")
+    if (role_code and role_code != row["code"]) or actif is False:
+        _proteger_dernier_admin(db, user_id)
+    if user_id == s.user_id and actif is False:
+        raise ValueError("Vous ne pouvez pas désactiver votre propre compte.")
+    with db.transaction():
+        if nom is not None and nom.strip():
+            db.execute("UPDATE utilisateur SET nom=? WHERE id=?", (nom.strip(), user_id))
+        if role_code:
+            rid = db.scalar("SELECT id FROM role WHERE code=?", (role_code,))
+            if rid is None:
+                raise ValueError(f"Rôle inconnu : {role_code}")
+            db.execute("UPDATE utilisateur SET role_id=? WHERE id=?", (rid, user_id))
+        if actif is not None:
+            db.execute("UPDATE utilisateur SET actif=? WHERE id=?", (int(actif), user_id))
+    log(db, s.login, "MODIF_UTILISATEUR", "utilisateur", f"{row['login']} role={role_code} actif={actif}")
+
+
+def reinitialiser_mot_de_passe(db: Database, s: Session, user_id: int, password: str) -> None:
+    """Mot de passe provisoire donné par un administrateur, à changer à la prochaine connexion."""
+    s.require("utilisateurs.gerer")
+    set_password(db, user_id, password)
+    db.execute("UPDATE utilisateur SET doit_changer=1 WHERE id=?", (user_id,))
+    log(db, s.login, "REINIT_MOT_DE_PASSE", "utilisateur", str(user_id))
+
+
+def changer_mon_mot_de_passe(db: Database, s: Session, ancien: str, nouveau: str) -> None:
+    stored = db.scalar("SELECT hash FROM utilisateur WHERE id=?", (s.user_id,))
+    if not stored or not verify_password(ancien, stored):
+        raise ValueError("Le mot de passe actuel est incorrect.")
+    if ancien == nouveau:
+        raise ValueError("Le nouveau mot de passe doit être différent de l'actuel.")
+    set_password(db, s.user_id, nouveau)
+    log(db, s.login, "CHANGEMENT_MOT_DE_PASSE", "utilisateur", s.login)
+
+
+def doit_changer(db: Database, user_id: int) -> bool:
+    return bool(db.scalar("SELECT doit_changer FROM utilisateur WHERE id=?", (user_id,), 0))
