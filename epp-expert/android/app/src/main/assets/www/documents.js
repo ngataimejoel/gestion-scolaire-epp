@@ -1,4 +1,4 @@
-/* AKWA SCHOOL — documents imprimables et exports CSV du téléphone.
+/* AKWA SCHOOL — documents imprimables et exports Excel (.xlsx) du téléphone.
  *
  * Chaque document est une page HTML autonome (A4, sans script) que l'application confie à Android :
  * l'utilisateur choisit une imprimante ou « Enregistrer au format PDF ». Les données viennent du contexte
@@ -209,21 +209,26 @@
 
   var GENERATEURS = { liste: liste, notes: ficheNotes, resultats: resultats, bulletins: bulletins, absences: absences };
 
-  // ------------------------------------------------------------------- exports CSV
-  function cellule(v) {
-    var s = v === null || v === undefined ? "" : String(v);
-    return /[;"\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }
-  function csvTexte(lignes) { return lignes.map(function (r) { return r.map(cellule).join(";"); }).join("\r\n") + "\r\n"; }
+  // ------------------------------------------------------------------- exports Excel (.xlsx, comme l'application Windows)
   function nomFichier(ctx, quoi) {
     var e = ((ctx.inst().ecole || {}).ecole_nom || "ECOLE").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "");
     var d = new Date();
-    return quoi + "-" + e.toUpperCase().slice(0, 30) + "-" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + ".csv";
+    return quoi + "-" + e.toUpperCase().slice(0, 30) + "-" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + ".xlsx";
   }
   var COLONNES = ["codedren", "codeiep", "iep", "codeecole", "ecole", "matricule", "nom", "prenoms", "sexe", "jour", "mois", "annee", "nationalite",
     "localite", "codesp", "sp", "pere", "mere", "nacte", "lieuacte", "residence", "niveau"];
+  function num(v) { return v === null || v === undefined || v === "" || isNaN(Number(v)) ? null : Number(v); }
+  function justifie(a) { return a.justifie === "OUI" || a.justifie === true ? "Oui" : a.justifie === "NON" || a.justifie === false ? "Non" : ""; }
+  /** En-tête officiel d'une feuille (comme epp/reports : ministère, DREN, IEPP, école à gauche ; pays et année à droite). */
+  function feuilleRapport(ctx, nom, titre, sousTitre, colonnes, lignes, paysage) {
+    var e = ctx.inst().ecole || {}, d = window.AKWA_DEFAUTS && window.AKWA_DEFAUTS.ecole || {};
+    return { nom: nom, style: "rapport", paysage: !!paysage,
+      entete: [e.ministere || d.ministere, e.dren || d.dren, e.iepp || d.iepp, e.ecole_nom].filter(Boolean),
+      droite: [e.pays || d.pays, e.devise_pays || d.devise_pays, "Année scolaire " + anneeLib(ctx)].filter(Boolean),
+      titre: titre, sous_titre: sousTitre, colonnes: colonnes, lignes: lignes };
+  }
 
-  function csvEleves(ctx) {
+  function xlsxEleves(ctx) {
     var e = ctx.inst().ecole || {}, ordre = {};
     ctx.classes().forEach(function (c, i) { ordre[c.code] = i; });
     var tete = [e.code_dren || "", e.code_iepp || "", String(e.iepp || "").replace(/^\s*IEPP\s+/i, "").trim(), e.ecole_code || e.code_ecole || "", e.ecole_nom || ""];
@@ -231,7 +236,7 @@
       return (ordre[a.classe] === undefined ? 999 : ordre[a.classe]) - (ordre[b.classe] === undefined ? 999 : ordre[b.classe]) ||
         String(a.nom || "").localeCompare(String(b.nom || ""), "fr");
     });
-    var out = [COLONNES.slice()];
+    var out = [];
     l.forEach(function (x) {
       var mots = String(x.nom || "").split(/\s+/).filter(Boolean), dn = String(x.date_naissance || "").split("-");
       var extrait = String(x.extrait || "").toUpperCase() === "OUI" && x.acte_num;
@@ -242,33 +247,58 @@
         extrait ? String(x.acte_num) : "0", extrait ? String(x.centre_etat_civil || "").toUpperCase() : "", x.pere_residence || x.mere_residence || "",
         niveau(x.classe)]));
     });
-    return out;
+    return [{ nom: "ELEVES", style: "national", colonnes: COLONNES.map(function (t) { return { titre: t }; }), lignes: out }];
   }
-  function csvResultats(ctx) {
-    var out = [["Classe", "N°", "Matricule", "Nom et prénoms", "Sexe", "Évaluation 1", "Évaluation 2", "Évaluation 3", "Évaluation 4", "Moyenne des compositions",
-      "MGA", "Rang", "Décision", "Observation"]];
-    ctx.classes().forEach(function (c) {
-      ctx.resultatsClasse(c.code).slice().sort(function (a, b) { return String(a.eleve.nom || "").localeCompare(String(b.eleve.nom || ""), "fr"); })
-        .forEach(function (r, i) {
-          out.push([c.code, i + 1, r.eleve.matricule_desps || r.eleve.matricule_ecole || "", r.eleve.nom, r.eleve.sexe].concat(r.moy.map(nb))
-            .concat([nb(r.moy_compos), nb(r.mga), r.rang || "", r.decision || "", r.observation || ""]));
-        });
+  function xlsxListes(ctx) {
+    return ctx.classes().map(function (c) {
+      var l = trierParNom(ctx.eleves(c.code));
+      return feuilleRapport(ctx, c.code, "LISTE DE LA CLASSE " + c.code, compte(l), [
+        { titre: "N°", type: "entier" }, { titre: "Matricule", type: "centre" }, { titre: "Nom et prénoms", nom: true }, { titre: "Sexe", type: "centre" },
+        { titre: "Date de naissance", type: "date" }, { titre: "Âge", type: "entier" }, { titre: "Redoublant", type: "centre" }, { titre: "Observation" }
+      ], l.map(function (e, i) {
+        return [i + 1, e.matricule_desps || e.matricule_ecole || "", e.nom, e.sexe, e.date_naissance || null, num(e.age),
+          e.redoublant === "OUI" ? "Oui" : "Non", statutCourt(e)];
+      }));
     });
-    return out;
   }
-  function csvAbsences(ctx) {
-    var out = [["Type", "Nom et prénoms", "Classe ou fonction", "Date", "Nature", "Jours", "Retard (min)", "Motif", "Justifié"]];
-    [["eleve", "Élève"], ["personnel", "Personnel"]].forEach(function (k) {
-      ctx.absences(k[0]).slice().reverse().forEach(function (a) {
+  function xlsxResultats(ctx) {
+    return ctx.classes().map(function (c) {
+      var evs = ctx.evaluations(c).slice(0, 4), std = (c.regle_mga || (c.calendrier === "CM2" ? "MOYENNE4" : "STANDARD")) !== "MOYENNE4";
+      var rows = ctx.resultatsClasse(c.code).slice().sort(function (a, b) { return String(a.eleve.nom || "").localeCompare(String(b.eleve.nom || ""), "fr"); });
+      var cols = [{ titre: "N°", type: "entier" }, { titre: "Matricule", type: "centre" }, { titre: "Nom et prénoms", nom: true }, { titre: "Sexe", type: "centre" }]
+        .concat(evs.map(function (e) { return { titre: e.libelle, type: "nombre" }; }))
+        .concat(std ? [{ titre: "Moy. des compositions", type: "nombre" }] : [])
+        .concat([{ titre: "MGA", type: "nombre" }, { titre: "Rang", type: "entier" }, { titre: "Décision", type: "centre" }, { titre: "Observation", type: "centre" }]);
+      var cl = rows.filter(function (r) { return r.mga !== null && r.eleve.statut === "PRESENT"; }), adm = cl.filter(function (r) { return r.decision === "ADMIS"; });
+      return feuilleRapport(ctx, c.code, "RÉSULTATS ANNUELS — CLASSE " + c.code, "Effectif " + rows.length + " · classés " + cl.length + " · admis " + adm.length +
+        (cl.length ? " (" + nb(adm.length / cl.length * 100) + " %)" : "") + " · moyenne d'admission " + nb(c.seuil) + "/" + nb(c.bareme), cols,
+        rows.map(function (r, i) {
+          return [i + 1, r.eleve.matricule_desps || r.eleve.matricule_ecole || "", r.eleve.nom, r.eleve.sexe]
+            .concat(evs.map(function (e, k) { return num(r.moy[k]); })).concat(std ? [num(r.moy_compos)] : [])
+            .concat([num(r.mga), r.rang || null, r.decision || "", r.observation || ""]);
+        }), true);
+    });
+  }
+  function xlsxAbsences(ctx) {
+    return [["eleve", "Élèves", "Classe"], ["personnel", "Personnel", "Fonction"]].map(function (k) {
+      var l = ctx.absences(k[0]).slice().reverse();
+      return feuilleRapport(ctx, k[1], "ABSENCES ET RETARDS — " + k[1].toUpperCase(), l.length + " enregistrement(s)", [
+        { titre: "N°", type: "entier" }, { titre: "Date", type: "date" }, { titre: "Nom et prénoms", nom: true }, { titre: k[2], type: "centre" },
+        { titre: "Nature", type: "centre" }, { titre: "Jours", type: "nombre" }, { titre: "Retard (min)", type: "entier" }, { titre: "Motif" },
+        { titre: "Justifié", type: "centre" }
+      ], l.map(function (a, i) {
         var e = k[0] === "eleve" ? ctx.eleve(a.cible) : ctx.agent(a.cible);
-        out.push([k[1], e ? e.nom : "?", e ? (k[0] === "eleve" ? e.classe : e.fonction || "") : "", dateFr(a.date), a.nature === "RETARD" ? "Retard" : "Absence",
-          a.nature === "RETARD" ? "" : nb(a.jours), a.nature === "RETARD" ? (a.retard_min || "") : "", a.motif || "",
-          a.justifie === "OUI" || a.justifie === true ? "Oui" : a.justifie === "NON" || a.justifie === false ? "Non" : ""]);
-      });
+        return [i + 1, a.date || null, e ? e.nom : "?", e ? (k[0] === "eleve" ? e.classe : e.fonction || "") : "", a.nature === "RETARD" ? "Retard" : "Absence",
+          a.nature === "RETARD" ? null : num(a.jours), a.nature === "RETARD" ? num(a.retard_min) : null, a.motif || "", justifie(a)];
+      }), true);
     });
-    return out;
   }
-  var CSV = { eleves: ["ELEVES", csvEleves], resultats: ["RESULTATS", csvResultats], absences: ["ABSENCES", csvAbsences] };
+  var EXPORTS = {
+    eleves: { prefixe: "ELEVES", titre: "Élèves (format ELEVES national)", aide: "22 colonnes de la plateforme nationale : s'importe sur l'ordinateur ou un autre téléphone.", f: xlsxEleves },
+    listes: { prefixe: "LISTES", titre: "Listes de classe", aide: "Une feuille par classe : matricule, date de naissance, âge.", f: xlsxListes },
+    resultats: { prefixe: "RESULTATS", titre: "Résultats annuels", aide: "Une feuille par classe : moyennes, MGA, rang, décision.", f: xlsxResultats },
+    absences: { prefixe: "ABSENCES", titre: "Absences et retards", aide: "Élèves et personnel, une feuille chacun.", f: xlsxAbsences }
+  };
 
   window.AkwaDocs = {
     liste: [
@@ -284,10 +314,12 @@
       var r = g(ctx, opts || {});
       return { html: html(r.titre, r.pages, r.paysage), titre: r.titre };
     },
-    csv: function (quoi, ctx) {
-      var x = CSV[quoi];
+    exports: Object.keys(EXPORTS).map(function (k) { return { id: k, titre: EXPORTS[k].titre, aide: EXPORTS[k].aide }; }),
+    /** Description du classeur Excel (lue par le téléphone : noyau/Classeur.java). */
+    classeur: function (quoi, ctx) {
+      var x = EXPORTS[quoi];
       if (!x) { throw new Error("Export inconnu : " + quoi); }
-      return { nom: nomFichier(ctx, x[0]), contenu: csvTexte(x[1](ctx)) };
+      return { nom: nomFichier(ctx, x.prefixe), description: { feuilles: x.f(ctx) } };
     }
   };
 })();

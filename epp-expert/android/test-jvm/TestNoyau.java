@@ -1,7 +1,10 @@
+import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
 import com.akwaschool.mobile.noyau.Ed25519;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
+import com.akwaschool.mobile.synchro.FichierSynchro;
+import com.akwaschool.mobile.synchro.Protocole;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -35,6 +38,19 @@ public final class TestNoyau {
 
     private static String statut(String json) {
         return json.replaceAll(".*\"statut\":\"([a-z_]+)\".*", "$1");
+    }
+
+    interface Action {
+        void faire() throws Exception;
+    }
+
+    private static String refus(Action a) {
+        try {
+            a.faire();
+            return "";
+        } catch (Exception e) {
+            return String.valueOf(e.getMessage());
+        }
     }
 
     public static void main(String[] args) throws Exception {
@@ -100,6 +116,40 @@ public final class TestNoyau {
             illisible = true;
         }
         verifie(illisible, ".xls tronqué : message d'erreur");
+
+        // ------------------------------------------------------------ classeur Excel (présentation du .exe)
+        String spec = new String(Files.readAllBytes(dossier.resolve("classeur.json")), StandardCharsets.UTF_8);
+        byte[] xlsx = Classeur.depuisJson(spec);
+        Files.write(dossier.resolve("classeur.xlsx"), xlsx);
+        List<List<String>> relu = Tableur.lire(xlsx);
+        verifie(relu.size() == 3 && relu.get(0).get(0).equals("codedren") && relu.get(1).get(5).equals("00012345A"),
+                "classeur Excel relu par le téléphone (" + relu.size() + " lignes)");
+
+        // ------------------------------------------------------------ synchronisation par fichier
+        List<String> sy = Files.readAllLines(dossier.resolve("synchro.txt"), StandardCharsets.UTF_8);
+        byte[] cleSync = Protocole.unb64(sy.get(0));
+        long aid = Long.parseLong(sy.get(1));
+        String sid = sy.get(2);
+        byte[] rep = Files.readAllBytes(dossier.resolve("reponse.akwasync"));
+        FichierSynchro.Reponse r = FichierSynchro.ouvrirReponse(rep, aid, sid, cleSync, 6);
+        Files.write(dossier.resolve("reponse.java.json"), r.json.getBytes(StandardCharsets.UTF_8));
+        verifie(r.seq == 7 && r.json.contains("\"instantane\""), "réponse de l'ordinateur ouverte");
+        verifie(refus(() -> FichierSynchro.ouvrirReponse(rep, aid, sid, cleSync, 7)).contains("plus ancienne"),
+                "réponse déjà reçue ignorée");
+        verifie(refus(() -> FichierSynchro.ouvrirReponse(rep, aid + 1, sid, cleSync, 0)).contains("autre téléphone"),
+                "réponse d'un autre téléphone refusée");
+        byte[] abime = new String(rep, StandardCharsets.UTF_8).replace("\"seq\": 7", "\"seq\": 8")
+                .getBytes(StandardCharsets.UTF_8);
+        verifie(refus(() -> FichierSynchro.ouvrirReponse(abime, aid, sid, cleSync, 0)).contains("modifié"),
+                "réponse modifiée refusée");
+        byte[] rejeu = Files.readAllBytes(dossier.resolve("reponse_rejeu.akwasync"));
+        verifie(refus(() -> FichierSynchro.ouvrirReponse(rejeu, aid, sid, cleSync, 0)).contains("déjà reçu"),
+                "refus de l'ordinateur expliqué");
+        String dem = FichierSynchro.demande(aid, sid, cleSync, 8, "{\"ops\":[{\"uid\":\"t1\",\"op\":\"note\",\"valeur\":7.5}]}",
+                "TECNO « Spark »", "2026-10-16T08:00:00");
+        Files.write(dossier.resolve("demande.akwasync"), dem.getBytes(StandardCharsets.UTF_8));
+        verifie(refus(() -> FichierSynchro.ouvrirReponse(dem.getBytes(StandardCharsets.UTF_8), aid, sid, cleSync, 0))
+                .contains("demande"), "demande prise pour une réponse : expliqué");
 
         if (echecs > 0) {
             System.out.println(echecs + " échec(s)");

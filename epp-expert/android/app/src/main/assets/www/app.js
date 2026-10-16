@@ -597,7 +597,7 @@
         (b.absences_eleves.length + b.absences_personnel.length) + " absence(s) ou retard(s)</li><li>" + b.personnel.length +
         " agent(s)</li></ul><b style=\"display:block;margin-top:8px\">Reçu</b><p class=\"small\" style=\"margin:4px 0 0\">Les données de l'école à jour. " +
         "Ensuite, le téléphone travaille avec l'ordinateur ; une copie de ses données actuelles est gardée.</p></div>" +
-        '<label class="f">Mot de passe d\'un administrateur de l\'ordinateur</label><input class="c" id="mdpSync" type="password" autocomplete="off">';
+        '<label class="f">Par le Wi-Fi : mot de passe d\'un administrateur de l\'ordinateur</label><input class="c" id="mdpSync" type="password" autocomplete="off">';
     } else {
       var t = compterOps(S.ops);
       h += '<div class="card"><b>Envoyé</b><p class="small" style="margin:4px 0 0">' + (t.length ? esc(t.join(", ")) : "Aucune saisie en attente.") +
@@ -609,22 +609,22 @@
           '<label class="f">Mot de passe d\'un administrateur de l\'ordinateur</label><input class="c" id="mdpSync" type="password" autocomplete="off">';
       }
     }
-    h += '<p class="mut small">Le téléphone et l\'ordinateur doivent être sur le même Wi-Fi, la synchronisation démarrée sur l\'ordinateur ' +
+    h += '<p class="mut small">Par le Wi-Fi : le téléphone et l\'ordinateur sur le même réseau, la synchronisation démarrée sur l\'ordinateur ' +
       "(Rapports &amp; administration › Téléphones).</p>" +
       '<div class="rang" style="margin-top:10px"><button class="btn" data-a="fermer">Plus tard</button><span class="esp"></span>' +
-      '<button class="btn pri" data-a="sync-go">' + ic("sync") + " Synchroniser maintenant</button></div>";
+      '<button class="btn pri" data-a="sync-go">' + ic("wifi") + " Synchroniser par le Wi-Fi</button></div>" +
+      '<div style="margin-top:12px">' + blocFichier(fusion, protege).replace('<div class="card">', '<div class="card" style="margin:0">') + "</div>";
     fenetre(h);
     actionsFenetre["sync-go"] = function () {
       var champ = document.getElementById("mdpSync"), mdp = champ ? champ.value : "";
-      if (fusion && !mdp) { toast("Le mot de passe d'un administrateur de l'ordinateur est nécessaire.", true); return; }
+      if (fusion && !mdp) { toast("Par le Wi-Fi, le mot de passe d'un administrateur de l'ordinateur est nécessaire.", true); return; }
       fermer();
       synchroniser(mdp || null);
     };
   }
 
-  function synchroniser(admin) {
-    if (S.occupe) { return Promise.resolve(false); }
-    var fusion = mode() === "transition";
+  /** Requête envoyée à l'ordinateur (Wi-Fi ou fichier) : saisies en attente, ou données du téléphone utilisé seul. */
+  function requeteSynchro(fusion, admin) {
     var aEnvoyer = fusion ? [] : S.ops.slice();
     var req = { ops: aEnvoyer.map(function (o) {
       var x = {}; for (var k in o) { if (k !== "libelle" && k !== "cree_le" && k !== "protege" && k !== "message") { x[k] = o[k]; } }
@@ -636,6 +636,12 @@
       for (var k in S.base) { if (k !== "utilisateur" && k !== "licence") { b[k] = S.base[k]; } }
       req.fusion = b;
     }
+    return { req: req, aEnvoyer: aEnvoyer };
+  }
+  function synchroniser(admin) {
+    if (S.occupe) { return Promise.resolve(false); }
+    var fusion = mode() === "transition";
+    var q = requeteSynchro(fusion, admin), req = q.req, aEnvoyer = q.aEnvoyer;
     S.occupe = true;
     majBadge();
     toast("Synchronisation en cours…");
@@ -643,6 +649,51 @@
       S.occupe = false;
       return traiterReponse(r, aEnvoyer, fusion);
     });
+  }
+
+  // ------------------------------------------------------------------- synchronisation par fichier (hors Wi-Fi)
+  function creerDemande(modeEnvoi) {
+    var fusion = mode() === "transition";
+    var q = requeteSynchro(fusion, null);
+    attendre(function (id) { N.creerDemande(id, JSON.stringify(q.req), modeEnvoi); }).then(function (r) {
+      if (r && r.ok) {
+        S.etat.demande = { le: new Date().toISOString(), saisies: q.aEnvoyer.length, fusion: fusion };
+        sauver();
+        rendre();
+        toast("Fichier créé. Envoyez-le à l'ordinateur de l'école ; vos saisies restent en attente jusqu'à sa réponse.");
+      } else if (r && !r.annule) { toast(r.message || "Création du fichier impossible.", true); }
+    });
+  }
+  function ouvrirReponse() {
+    attendre(function (id) { N.choisirFichier(id, "reponse"); }).then(appliquerReponseFichier);
+  }
+  function appliquerReponseFichier(r) {
+    if (!r || !r.ok) { if (r && !r.annule) { toast(r.message || "Fichier illisible.", true); } return; }
+    S.etat.demande = null;
+    S.etat.par_fichier = new Date().toISOString();
+    traiterReponse({ ok: true, reponse: r.reponse }, S.ops.slice(), mode() === "transition");
+  }
+  /** Réponse de l'ordinateur ouverte avec AKWA SCHOOL depuis WhatsApp ou la messagerie. */
+  function verifierFichierRecu() {
+    if (!S.fichierRecu || !N.aUnFichierRecu || !S.deverrouille || !S.infos.associe) { return; }
+    S.fichierRecu = false;
+    if (!N.aUnFichierRecu()) { return; }
+    confirmer("Réponse de l'ordinateur", "Appliquer la réponse de l'ordinateur de l'école reçue par fichier ? Les données du téléphone seront mises à jour.",
+      "Appliquer").then(function (ok) {
+      if (ok) { attendre(function (id) { N.ouvrirFichierRecu(id); }).then(appliquerReponseFichier); }
+    });
+  }
+  window.akwaFichierRecu = function () { S.fichierRecu = true; verifierFichierRecu(); };
+  function blocFichier(fusion, protege) {
+    var d = S.etat.demande;
+    return '<div class="card"><h3>' + ic("file") + " Sans Wi-Fi : par fichier</h3><p class=\"small\">Hors de l'école, le téléphone crée un fichier chiffré " +
+      "que vous envoyez à l'ordinateur par WhatsApp ou e-mail. Sur l'ordinateur : Téléphones › « Importer un fichier du téléphone » ; il produit une " +
+      "réponse à renvoyer au téléphone, que vous ouvrez ici (ou « Ouvrir avec AKWA SCHOOL » depuis WhatsApp).</p>" +
+      (fusion || protege ? '<p class="small warn">Le mot de passe d\'un administrateur sera demandé sur l\'ordinateur, à l\'import.</p>' : "") +
+      (d ? '<p class="small">Fichier créé le ' + esc(heureFr(d.le)) + " : en attente de la réponse de l'ordinateur.</p>" : "") +
+      '<div class="rang"><button class="btn pri" data-a="demande-partager">' + ic("file") + ' Envoyer le fichier</button><button class="btn" ' +
+      'data-a="demande-enregistrer">Enregistrer</button></div><button class="btn bloc" style="margin-top:8px" data-a="reponse-ouvrir">' +
+      "Ouvrir la réponse de l'ordinateur</button></div>";
   }
 
   function traiterReponse(r, envoyees, fusion) {
@@ -760,6 +811,7 @@
     html += "</main>" + nav();
     app.innerHTML = html;
     majBadge();
+    if (S.fichierRecu) { setTimeout(verifierFichierRecu, 0); }
   }
   function vueLicenceBloquee(l) {
     if (local()) {
@@ -809,8 +861,8 @@
       h += '<div class="card"><h3>Pour commencer</h3><p class="small">Ajoutez les classes de l\'école (Plus › Classes), puis les élèves.</p>' +
         '<button class="btn pri bloc" data-a="plus" data-p="classes">' + ic("school") + " Classes de l'école</button></div>";
     } else if (local() && !(inst().eleves || []).length) {
-      h += '<div class="card"><h3>Ajoutez les élèves</h3><p class="small">Un par un, ou importez la liste (fichier ELEVES national .xls, ' +
-        "Excel .xlsx ou CSV).</p><div class=\"rang\"><button class=\"btn pri\" data-a=\"eleve-nouveau\">" + ic("ajout") + " Ajouter un élève</button>" +
+      h += '<div class="card"><h3>Ajoutez les élèves</h3><p class="small">Un par un, ou importez la liste (fichier Excel ' +
+        ".xlsx ou .xls, comme l'export ELEVES national).</p><div class=\"rang\"><button class=\"btn pri\" data-a=\"eleve-nouveau\">" + ic("ajout") + " Ajouter un élève</button>" +
         '<button class="btn" data-a="plus" data-p="import">' + ic("file") + " Importer</button></div></div>";
     }
     h += '<div class="kpis">' +
@@ -820,7 +872,7 @@
       kpi("Moyennes annuelles", nRes || "–", nRes ? "élèves avec une MGA" : "pas encore calculées") + "</div>";
     if (S.infos.associe) {
       var l = inst().licence || {};
-      h += '<div class="card"><h3>Synchronisation</h3><dl class="kv"><dt>Dernière</dt><dd>' + esc(heureFr(S.etat.derniere)) +
+      h += '<div class="card"><h3>Synchronisation</h3><dl class="kv"><dt>Dernière</dt><dd>' + esc(heureFr(S.etat.derniere)) + (S.etat.par_fichier && S.etat.par_fichier === S.etat.derniere ? " (fichier)" : "") +
         "</dd><dt>En attente</dt><dd>" + (mode() === "transition" ? "données du téléphone" : S.ops.length + " saisie(s)") +
         "</dd><dt>Ordinateur</dt><dd>" + esc(S.infos.adresse || "") + "</dd>" +
         (l.valide_jusqua && !local() ? "<dt>Données valables</dt><dd>jusqu'au " + esc(dateFr(l.valide_jusqua)) + "</dd>" : "") +
@@ -1328,9 +1380,9 @@
       h += lignePlus("ecole", "school", "École", "Nom, IEPP, directeur, année scolaire") +
         lignePlus("classes", "school", "Classes", classes().length + " classe(s), grilles de notes");
     }
-    if (perm("eleves.modifier") && modifiable()) { h += lignePlus("import", "file", "Importer des élèves", "Fichier ELEVES national (.xls), Excel ou CSV"); }
+    if (perm("eleves.modifier") && modifiable()) { h += lignePlus("import", "file", "Importer des élèves", "Fichier Excel (.xlsx, .xls) : export ELEVES national ou liste"); }
     h += lignePlus("imprimer", "print", "Imprimer", "Listes, fiches de notes, résultats, bulletins, absences (PDF)") +
-      lignePlus("exporter", "file", "Exporter", "Élèves et résultats pour Excel");
+      lignePlus("exporter", "file", "Exporter", "Classeurs Excel : élèves, listes, résultats, absences");
     if (local()) { h += lignePlus("sauvegarde", "save", "Sauvegarde", "Copie chiffrée des données, restauration"); }
     h += lignePlus("synchro", "pc", "Ordinateur de l'école", S.infos.associe ? "Synchronisation, saisies en attente" : "Facultatif : associer et synchroniser") +
       (local() ? lignePlus("licence", "key", "Licence", S.licence ? S.licence.message : "") : "") +
@@ -1396,7 +1448,8 @@
     h += '<div class="card"><dl class="kv"><dt>Ordinateur</dt><dd>' + esc(S.infos.adresse || "") + "</dd><dt>Dernière</dt><dd>" + esc(heureFr(S.etat.derniere)) +
       "</dd>" + (S.inst ? "<dt>Compte</dt><dd>" + esc((S.inst.utilisateur || {}).nom || "") + " (" + esc((S.inst.utilisateur || {}).role || "") + ")</dd>" : "") +
       '</dl><p class="mut small">La synchronisation se fait seulement quand vous la demandez, sur le Wi-Fi de l\'école. Entre deux, le téléphone ' +
-      "fonctionne sans réseau et garde vos saisies.</p>" + '<button class="btn pri bloc" data-a="sync">' + ic("sync") + " Synchroniser maintenant</button></div>";
+      "fonctionne sans réseau et garde vos saisies.</p>" + '<button class="btn pri bloc" data-a="sync">' + ic("sync") + " Synchroniser maintenant</button></div>" +
+      blocFichier(mode() === "transition", S.ops.some(function (o) { return o.protege; }));
     var f = S.etat.fusion;
     if (f) {
       var r = f.rapport;
@@ -1496,9 +1549,9 @@
   // ------------------------------------------------------------------- import des élèves
   var IMPORT = null;
   function vueImport() {
-    var h = '<h2 style="margin-bottom:6px">Importer des élèves</h2><p class="mut small">Fichier ELEVES de l\'export national (.xls), ou tableau Excel (.xlsx) ' +
-      "ou CSV avec au moins les colonnes nom, prénoms, sexe et niveau (ou classe). Date de naissance en jour / mois / année ou en une colonne. " +
-      "Les doublons (même matricule, ou même nom et même date de naissance) sont écartés.</p>" +
+    var h = '<h2 style="margin-bottom:6px">Importer des élèves</h2><p class="mut small">Fichier Excel (.xlsx ou .xls) : l\'export ELEVES ' +
+      "national, celui de l'application Windows, ou toute liste avec au moins les colonnes nom, prénoms, sexe et niveau (ou classe). Date de naissance en jour / mois / année ou en une colonne. " +
+      "Les doublons (même matricule, ou même nom et même date de naissance) sont écartés. Un fichier .csv est aussi accepté.</p>" +
       '<button class="btn pri bloc" data-a="import-choisir">' + ic("file") + " Choisir le fichier</button>";
     if (IMPORT) {
       var ok = IMPORT.lignes.filter(function (x) { return x.etat === "ok"; });
@@ -1662,19 +1715,21 @@
     } catch (e) { toast(e.message || String(e), true); }
   }
   function vueExporter() {
-    return '<h2 style="margin-bottom:10px">Exporter</h2><div class="card"><p class="small">Fichiers CSV (séparateur point-virgule) à ouvrir avec Excel ou à ' +
-      "envoyer. La liste des élèves suit les colonnes du fichier ELEVES national : elle s'importe dans AKWA SCHOOL sur l'ordinateur ou un autre téléphone.</p>" +
-      '<div class="liste"><button class="ligne" data-a="exporter" data-d="eleves">' + ic("file") + '<span class="t"><b>Élèves (format ELEVES)</b><small>' + eleves().length +
-      ' élève(s)</small></span></button><button class="ligne" data-a="exporter" data-d="resultats">' + ic("file") +
-      '<span class="t"><b>Résultats</b><small>Moyennes par évaluation, MGA, rang, décision</small></span></button>' +
-      '<button class="ligne" data-a="exporter" data-d="absences">' + ic("file") + '<span class="t"><b>Absences et retards</b><small>Élèves et personnel</small></span></button></div></div>';
+    var l = DOCS ? DOCS.exports : [];
+    return '<h2 style="margin-bottom:10px">Exporter</h2><div class="card"><p class="small">Classeurs Excel (.xlsx) présentés comme ceux de l\'application ' +
+      "Windows. « Envoyer » les confie à WhatsApp, à la messagerie ou à Drive ; « Enregistrer » les range sur le téléphone.</p>" + l.map(function (x) {
+        return '<div class="note" style="padding:10px 0"><span class="t"><b style="white-space:normal">' + ic("file") + " " + esc(x.titre) + "</b><small>" +
+          esc(x.aide) + '</small></span></div><div class="rang" style="margin:-4px 0 8px"><button class="btn sm pri" data-a="exporter" data-d="' + x.id +
+          '" data-m="partager">Envoyer</button><button class="btn sm" data-a="exporter" data-d="' + x.id + '" data-m="enregistrer">Enregistrer</button></div>';
+      }).join("") + "</div>";
   }
-  function exporter(quoi) {
+  function exporter(quoi, modeEnvoi) {
     if (!DOCS) { return; }
     var f;
-    try { f = DOCS.csv(quoi, contexteDocs()); } catch (e) { toast(e.message || String(e), true); return; }
-    attendre(function (id) { N.enregistrerFichier(id, f.nom, "text/csv", f.contenu); }).then(function (r) {
-      if (r && r.ok) { toast("Fichier enregistré : " + f.nom); } else if (r && !r.annule) { toast(r.message || "Enregistrement impossible.", true); }
+    try { f = DOCS.classeur(quoi, contexteDocs()); } catch (e) { toast(e.message || String(e), true); return; }
+    attendre(function (id) { N.exporterClasseur(id, f.nom, JSON.stringify(f.description), modeEnvoi || "enregistrer"); }).then(function (r) {
+      if (r && r.ok) { toast((modeEnvoi === "partager" ? "Fichier prêt à envoyer : " : "Fichier enregistré : ") + f.nom); }
+      else if (r && !r.annule) { toast(r.message || "Enregistrement impossible.", true); }
     });
   }
 
@@ -1937,7 +1992,8 @@
   function rendrePremiereSynchro() {
     app.innerHTML = '<div class="ecran"><img class="logo" src="logo.png" alt=""><h2>Première synchronisation</h2>' +
       "<p>Le téléphone récupère les données de l'école auprès de l'ordinateur (" + esc(S.infos.adresse || "") + "), sur le même Wi-Fi.</p>" +
-      '<button class="btn pri" data-a="sync-direct">' + ic("sync") + " Synchroniser</button></div>";
+      '<button class="btn pri" data-a="sync-direct">' + ic("sync") + " Synchroniser</button>" +
+      '<div style="margin-top:18px;width:100%;text-align:left">' + blocFichier(false, false) + "</div></div>";
   }
 
   /** Copie de l'ordinateur (et saisies en attente) devenue base du téléphone utilisé seul. */
@@ -2024,6 +2080,9 @@
     "plus-aller": function (b) { S.plus = b.getAttribute("data-p"); aller("plus"); },
     sync: function () { ouvrirSynchro(); },
     "sync-direct": function () { synchroniser(null); },
+    "demande-partager": function () { fermer(); creerDemande("partager"); },
+    "demande-enregistrer": function () { fermer(); creerDemande("enregistrer"); },
+    "reponse-ouvrir": function () { fermer(); ouvrirReponse(); },
     fiche: function (b) { ficheEleve(idDe(b.getAttribute("data-i"))); },
     fermer: fermer,
     voile: function (b, e) { if (e.target === b) { fermer(); } },
@@ -2096,7 +2155,7 @@
       imprimer(p.doc, { classe: p.classe, evaluation: ev ? Number(ev.value) : null, mois: mo ? mo.value : null });
     },
     "imprimer-direct": function (b) { imprimer(b.getAttribute("data-d"), { classe: S.notes.classe }); },
-    exporter: function (b) { exporter(b.getAttribute("data-d")); },
+    exporter: function (b) { exporter(b.getAttribute("data-d"), b.getAttribute("data-m")); },
     "admin-changer": function () {
       var a0 = document.getElementById("adm0").value, a1 = document.getElementById("adm1").value, m = document.getElementById("msgAdm");
       if (a1.length < 6) { m.textContent = "6 caractères au moins."; m.className = "small bad"; return; }
@@ -2178,6 +2237,7 @@
     S.ops = lireJson("operations.json", []);
     S.etat = lireJson("etat.json", { derniere: null, rejets: [] });
     if (!S.etat.rejets) { S.etat.rejets = []; }
+    S.fichierRecu = !!(N.aUnFichierRecu && N.aUnFichierRecu());
     preparerBase();
   }
   rendre();

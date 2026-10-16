@@ -5,18 +5,32 @@
 Le téléphone fonctionne de deux façons, au choix de l'école :
 
 - **Seul**, sans ordinateur ni Internet : « Créer mon école » (nom, IEPP, DRENAET, année, classes avec les
-  grilles par défaut de l'application Windows), import du fichier ELEVES national (.xls, .xlsx, .csv), saisie
+  grilles par défaut de l'application Windows), import du fichier ELEVES national (.xlsx, .xls ; .csv accepté), saisie
   des élèves, des notes, de l'appel et des absences, résultats calculés comme sur l'ordinateur (moyennes, MGA,
   rang, décision), impression (liste de classe, fiche de notes, résultats annuels, bulletins, absences du mois)
-  ou PDF par Android, exports CSV, sauvegarde chiffrée (.akwa). Licence propre au téléphone : 7 jours d'essai,
+  ou PDF par Android, exports Excel (.xlsx), sauvegarde chiffrée (.akwa). Licence propre au téléphone : 7 jours d'essai,
   puis un code d'activation (même service que l'ordinateur, Internet seulement à ce moment-là). Mot de passe
   administrateur local pour corriger une note, supprimer une donnée ou modifier une fiche d'élève enregistrée.
 - **Associé** à l'ordinateur de l'école : le téléphone garde une copie de l'année en cours, limitée aux droits
   du compte choisi, et ses saisies attendent sur le téléphone.
 
 La synchronisation n'est jamais automatique : le bouton « Synchroniser maintenant » affiche ce qui sera envoyé
-et reçu, puis échange par le réseau local (Wi-Fi de l'école ou partage de connexion d'un téléphone). L'ordinateur
-doit être allumé, AKWA SCHOOL ouvert et la synchronisation démarrée (Rapports & administration › Téléphones).
+et reçu, puis propose deux chemins :
+
+- **par le Wi-Fi** (réseau de l'école ou partage de connexion d'un téléphone) : l'ordinateur doit être allumé,
+  AKWA SCHOOL ouvert et la synchronisation démarrée (Rapports & administration › Téléphones) ;
+- **par fichier**, quand le téléphone est ailleurs : il crée un fichier chiffré (.akwasync) envoyé par WhatsApp ou
+  e-mail ; sur l'ordinateur, Téléphones › « Importer un fichier du téléphone » applique les saisies (mêmes droits,
+  mêmes contrôles, mot de passe administrateur saisi sur l'ordinateur) et crée une réponse à renvoyer ; le
+  téléphone l'ouvre (bouton « Ouvrir la réponse », ou « Ouvrir avec AKWA SCHOOL » depuis WhatsApp). Un fichier
+  intercepté est illisible, modifié il est refusé, importé deux fois il n'est appliqué qu'une fois ; une réponse
+  plus ancienne que les données du téléphone est ignorée. `epp/synchro/fichier.py`, `synchro/FichierSynchro.java`.
+
+L'association reste à faire une fois sur le même réseau (le code ne circule jamais).
+
+Les exports du téléphone sont des classeurs Excel (.xlsx) présentés comme ceux de l'application Windows : ELEVES
+au format national (relu par l'import de l'ordinateur), listes de classe, résultats annuels et absences (en-tête
+officiel, une feuille par classe). Écrits par `noyau/Classeur.java`, vérifiés en CI avec openpyxl.
 
 Un téléphone utilisé seul puis associé envoie ses données à la première synchronisation (mot de passe d'un
 administrateur de l'ordinateur) : `epp/synchro/fusion.py` les ajoute à l'année active sans rien écraser
@@ -52,7 +66,7 @@ sans doublon). Les données du téléphone sont archivées sur lui. Dissocier pe
 | Protocole (ordinateur) | `epp/synchro/protocole.py`, `serveur.py` (HTTP 8765, découverte UDP 8766), `donnees.py` |
 | Page Téléphones | `epp/ui/pages/telephones.py`, `epp/ui/synchro.py` |
 | Téléphone | `android/` : interface `app/src/main/assets/www/` (reprise du prototype v7), pont Java `Pont.java`, protocole `synchro/` (Java pur) |
-| Téléphone seul | `noyau/` (Java pur : licence Ed25519, lecture xls/xlsx/csv, sauvegarde chiffrée), `www/documents.js` (impressions, exports), `www/defauts.js` (généré par `outils/defauts_telephone.py`) |
+| Téléphone seul | `noyau/` (Java pur : licence Ed25519, lecture xls/xlsx/csv, classeurs Excel, sauvegarde chiffrée), `www/documents.js` (impressions, exports), `www/defauts.js` (généré par `outils/defauts_telephone.py`) |
 | Tests | `tests/test_synchro.py`, `android/test-jvm/TestSynchro.java` (client Java contre le vrai serveur), `TestNoyau.java` + `outils/fixtures_noyau.py` (lecture comparée au code Python), en CI |
 
 ## Construction et publication

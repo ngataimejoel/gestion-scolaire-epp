@@ -392,3 +392,64 @@ def test_structure_par_defaut_du_telephone_identique_a_l_ordinateur():
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     assert m.FICHIER.read_text(encoding="utf-8") == m.contenu(), "relancez python outils/defauts_telephone.py"
+
+
+def test_synchronisation_par_fichier(ecole):
+    """Téléphone hors du Wi-Fi de l'école : fichier de demande envoyé par WhatsApp, réponse en fichier."""
+    from epp.synchro import fichier as F
+    db, annee, srv, etat, modifs = ecole
+    c = _client(db, srv)
+    i = c.synchro()[1]["instantane"]
+    el = i["eleves"][0]
+    g = next(g for g in i["grilles"] if g["id"] == next(x for x in i["classes"] if x["code"] == el["classe"])["grille_id"])
+    iid, mid = el["inscription_id"], g["matieres"]["1"][0]["id"]
+    db.execute("DELETE FROM note WHERE inscription_id=? AND matiere_id=?", (iid, mid))
+    op = {"uid": _uid(), "op": "note", "inscription_id": iid, "matiere_id": mid, "valeur": 4, "avant": None}
+    corr = {"uid": _uid(), "op": "note", "inscription_id": iid, "matiere_id": mid, "valeur": 6, "avant": 4}
+    c.seq += 1
+    dem = F.demande(c.cle, srv.serveur_id, c.appareil_id, c.seq, {"ops": [op, corr]}, "Tecno de Mme KONE")
+    assert b"inscription_id" not in dem and json.loads(dem)["sens"] == "demande"          # contenu chiffré
+    imp = F.ImportFichier(db.path, etat_licence=lambda: etat["e"], quand_modifie=lambda q, n, k: modifs.append(q))
+    ap = imp.examiner(dem)
+    assert ap["ops"] == 2 and ap["par_type"] == {"note": 2} and ap["fusion"] is None and "ens" in ap["compte"]
+    assert db.scalar("SELECT COUNT(*) FROM note WHERE inscription_id=? AND matiere_id=?", (iid, mid)) == 0
+    # import avec le mot de passe administrateur saisi sur l'ordinateur : la correction passe aussi
+    nom, rep_fichier, rep = imp.importer(dem, MDP_ADMIN)
+    assert nom.endswith(f"-REPONSE-{c.seq}.akwasync") and "-Telephone-de-test-" in nom
+    assert [r["ok"] for r in rep["resultats"]] == [True, True]
+    assert db.scalar("SELECT valeur FROM note WHERE inscription_id=? AND matiere_id=?", (iid, mid)) == 6
+    lu = F.ouvrir_reponse(c.cle, c.appareil_id, rep_fichier)
+    assert lu["instantane"]["notes"][str(iid)][str(mid)] == 6 and "2 saisie(s)" in F.resume_reponse(rep)
+    # même fichier importé deux fois : refusé, la réponse le dit au téléphone
+    _, rep2, r = imp.importer(dem)
+    assert r["code"] == "REJEU" and F.ouvrir_reponse(c.cle, c.appareil_id, rep2)["code"] == "REJEU"
+    # fichier modifié, mauvais sens, autre ordinateur
+    falsifie = json.loads(dem)
+    falsifie["seq"] += 1
+    falsifie["message"] = falsifie["message"][:-8] + "AAAAAAA="
+    assert "modifié" in imp.examiner(json.dumps(falsifie).encode())["erreur"]
+    with pytest.raises(F.FichierInvalide, match="réponse"):
+        imp.examiner(rep_fichier)
+    with pytest.raises(F.FichierInvalide, match="autre ordinateur"):
+        imp.examiner(F.demande(c.cle, "ailleurs", c.appareil_id, c.seq + 1, {"ops": []}))
+    with pytest.raises(F.FichierInvalide):
+        imp.examiner(b"PK\x03\x04 pas un fichier AKWA")
+    # le Wi-Fi reprend après un fichier : le compteur est commun
+    assert c.synchro()[0] == 200
+
+
+def test_premier_envoi_par_fichier_d_un_telephone_utilise_seul(ecole):
+    from epp.synchro import fichier as F
+    db, annee, srv, etat, modifs = ecole
+    base, *_ = _base_telephone(db, annee)
+    c = _client(db, srv, "admin")
+    imp = F.ImportFichier(db.path, etat_licence=lambda: etat["e"])
+    dem = F.demande(c.cle, srv.serveur_id, c.appareil_id, 5, {"fusion": base, "ops": []})
+    ap = imp.examiner(dem)
+    assert ap["fusion"]["eleves"] == len(base["eleves"])
+    _, data, rep = imp.importer(dem, MDP_ADMIN)
+    assert rep["fusion"]["eleves_ajoutes"] == 2
+    assert F.ouvrir_reponse(c.cle, c.appareil_id, data)["fusion"]["eleves_ajoutes"] == 2
+    # sans mot de passe : rien n'est ajouté, le téléphone l'apprend par la réponse
+    _, data, rep = imp.importer(F.demande(c.cle, srv.serveur_id, c.appareil_id, 6, {"fusion": base, "ops": []}))
+    assert rep["code"] == "ADMIN_REQUIS" and "mot de passe" in F.resume_reponse(rep)

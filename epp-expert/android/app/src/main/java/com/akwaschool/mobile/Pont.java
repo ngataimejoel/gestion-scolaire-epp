@@ -1,6 +1,7 @@
 package com.akwaschool.mobile;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -12,11 +13,13 @@ import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
+import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
 import com.akwaschool.mobile.synchro.Client;
 import com.akwaschool.mobile.synchro.Decouverte;
+import com.akwaschool.mobile.synchro.FichierSynchro;
 import com.akwaschool.mobile.synchro.Protocole;
 
 import org.json.JSONException;
@@ -52,7 +55,8 @@ public class Pont {
     static final int ENREGISTRER = 42;
     /** Clés gardées quand on efface les données : licence et période d'essai du téléphone. */
     private static final String[] CLES_LICENCE = {"licence", "signature", "essai_debut", "derniere_vue"};
-    private static final String[] CLES_ASSOCIATION = {"adresse", "appareil_id", "cle", "serveur_id", "seq"};
+    private static final String[] CLES_ASSOCIATION = {"adresse", "appareil_id", "cle", "serveur_id", "seq", "seq_recu"};
+    static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
     private final Activity activite;
     private final WebView web;
@@ -64,6 +68,8 @@ public class Pont {
     private String demandeId;
     private String demandeUsage;
     private byte[] aEnregistrer;
+    /** Fichier ouvert avec AKWA SCHOOL depuis une autre application, en attente de l'interface. */
+    private volatile byte[] fichierRecu;
 
     Pont(Activity activite, WebView web) {
         this.activite = activite;
@@ -211,8 +217,9 @@ public class Pont {
             String adresse = prefs.getString("adresse", "");
             try {
                 String rep;
+                long seq = prochainSeq();
                 try {
-                    rep = Client.synchroniser(adresse, appareil, cle, prochainSeq(), requete);
+                    rep = Client.synchroniser(adresse, appareil, cle, seq, requete);
                 } catch (Client.Erreur e) {
                     if (e.statut != 0) {
                         throw e;
@@ -225,13 +232,160 @@ public class Pont {
                                 + "(Rapports & administration › Téléphones).", null);
                     }
                     prefs.edit().putString("adresse", nouvelle).commit();
-                    rep = Client.synchroniser(nouvelle, appareil, cle, prochainSeq(), requete);
+                    seq = prochainSeq();
+                    rep = Client.synchroniser(nouvelle, appareil, cle, seq, requete);
                 }
+                recu(seq);
                 rendre(id, "{\"ok\":true,\"reponse\":" + rep + "}");
             } catch (Client.Erreur e) {
                 rendre(id, erreur(e.statut, e.getMessage(), e.corps));
             } catch (RuntimeException e) {
                 rendre(id, erreur(0, "Synchronisation impossible : " + e.getMessage(), null));
+            }
+        });
+    }
+
+    /** Numéro de la dernière réponse reçue : une réponse plus ancienne (fichier en retard) est ignorée. */
+    private void recu(long seq) {
+        if (seq > prefs.getLong("seq_recu", 0)) {
+            prefs.edit().putLong("seq_recu", seq).commit();
+        }
+    }
+
+    // ------------------------------------------------------------------ synchronisation par fichier
+    private static String nomSimple(String s) {
+        String a = java.text.Normalizer.normalize(s == null ? "" : s, java.text.Normalizer.Form.NFD)
+                .replaceAll("[\\p{M}]", "").replaceAll("[^A-Za-z0-9]+", "-").replaceAll("^-+|-+$", "");
+        return a.isEmpty() ? "telephone" : a.substring(0, Math.min(30, a.length()));
+    }
+
+    /**
+     * Crée le fichier de demande (saisies en attente, ou données du téléphone utilisé seul) chiffré pour
+     * l'ordinateur de l'école, puis le partage (WhatsApp, e-mail…) ou l'enregistre, selon mode.
+     */
+    @JavascriptInterface
+    public void creerDemande(String id, String requete, String mode) {
+        reseau.execute(() -> {
+            if (!prefs.contains("cle")) {
+                rendre(id, erreur(0, "Ce téléphone n'est pas associé à l'ordinateur de l'école.", null));
+                return;
+            }
+            try {
+                long seq = prochainSeq();
+                String modele = (Build.MANUFACTURER + " " + Build.MODEL).trim();
+                String f = FichierSynchro.demande(prefs.getLong("appareil_id", 0), prefs.getString("serveur_id", ""),
+                        Protocole.unb64(prefs.getString("cle", "")), seq, requete, modele,
+                        java.time.LocalDateTime.now().withNano(0).toString());
+                String nom = "AKWA-" + nomSimple(modele) + "-DEMANDE-" + seq + FichierSynchro.EXTENSION;
+                byte[] b = f.getBytes(StandardCharsets.UTF_8);
+                if ("enregistrer".equals(mode)) {
+                    demanderEnregistrement(id, nom, "application/octet-stream", b);
+                } else {
+                    partager(id, nom, "application/octet-stream", b, "Demande de synchronisation AKWA SCHOOL",
+                            "Fichier à importer sur l'ordinateur de l'école : AKWA SCHOOL › Rapports & administration "
+                            + "› Téléphones › « Importer un fichier du téléphone ».");
+                }
+            } catch (Client.Erreur | GeneralSecurityException | RuntimeException e) {
+                rendre(id, erreur(0, "Création du fichier impossible : " + e.getMessage(), null));
+            }
+        });
+    }
+
+    /** Confie un fichier à une autre application (choix d'Android : WhatsApp, Gmail, Bluetooth…). */
+    private void partager(String id, String nom, String type, byte[] contenu, String sujet, String texte) {
+        try {
+            File d = Partage.dossier(activite);
+            File[] anciens = d.listFiles();
+            if (anciens != null) {
+                for (File a : anciens) {
+                    if (System.currentTimeMillis() - a.lastModified() > 7L * 86_400_000L) {
+                        //noinspection ResultOfMethodCallIgnored
+                        a.delete();
+                    }
+                }
+            }
+            try (FileOutputStream o = new FileOutputStream(new File(d, nom))) {
+                o.write(contenu);
+            }
+        } catch (IOException e) {
+            rendre(id, erreur(0, "Fichier impossible à préparer : " + e.getMessage(), null));
+            return;
+        }
+        Uri u = Partage.lien(nom);
+        activite.runOnUiThread(() -> {
+            Intent i = new Intent(Intent.ACTION_SEND).setType(type).putExtra(Intent.EXTRA_STREAM, u)
+                    .putExtra(Intent.EXTRA_SUBJECT, sujet).putExtra(Intent.EXTRA_TEXT, texte)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            i.setClipData(ClipData.newRawUri(nom, u));
+            try {
+                activite.startActivity(Intent.createChooser(i, "Envoyer " + nom));
+                rendre(id, "{\"ok\":true,\"nom\":" + Protocole.jsonTexte(nom) + "}");
+            } catch (RuntimeException e) {
+                rendre(id, erreur(0, "Aucune application de partage sur ce téléphone : utilisez « Enregistrer ».", null));
+            }
+        });
+    }
+
+    private String ouvrirReponse(byte[] data) {
+        if (!prefs.contains("cle")) {
+            return erreur(0, "Ce téléphone n'est pas associé à l'ordinateur de l'école.", null);
+        }
+        try {
+            FichierSynchro.Reponse r = FichierSynchro.ouvrirReponse(data, prefs.getLong("appareil_id", 0),
+                    prefs.getString("serveur_id", ""), Protocole.unb64(prefs.getString("cle", "")),
+                    prefs.getLong("seq_recu", 0));
+            recu(r.seq);
+            return "{\"ok\":true,\"seq\":" + r.seq + ",\"reponse\":" + r.json + "}";
+        } catch (Client.Erreur e) {
+            return erreur(0, e.getMessage(), null);
+        } catch (RuntimeException e) {
+            return erreur(0, "Fichier de réponse illisible.", null);
+        }
+    }
+
+    /** Fichier reçu par « Ouvrir avec AKWA SCHOOL » (appelé par MainActivity) : l'interface est prévenue. */
+    void fichierOuvert(Uri uri) {
+        reseau.execute(() -> {
+            try (InputStream in = activite.getContentResolver().openInputStream(uri)) {
+                if (in == null) {
+                    return;
+                }
+                fichierRecu = Tableur.tout(in);
+                activite.runOnUiThread(() -> web.evaluateJavascript("window.akwaFichierRecu && akwaFichierRecu()", null));
+            } catch (IOException | Tableur.Illisible | RuntimeException e) {
+                fichierRecu = null;
+            }
+        });
+    }
+
+    @JavascriptInterface
+    public boolean aUnFichierRecu() {
+        return fichierRecu != null;
+    }
+
+    /** Ouvre la réponse reçue par « Ouvrir avec AKWA SCHOOL ». */
+    @JavascriptInterface
+    public void ouvrirFichierRecu(String id) {
+        reseau.execute(() -> {
+            byte[] f = fichierRecu;
+            fichierRecu = null;
+            rendre(id, f == null ? erreur(0, "Aucun fichier reçu.", null) : ouvrirReponse(f));
+        });
+    }
+
+    /** Classeur Excel (.xlsx), présentation de l'application Windows ; enregistré ou partagé selon mode. */
+    @JavascriptInterface
+    public void exporterClasseur(String id, String nom, String description, String mode) {
+        reseau.execute(() -> {
+            try {
+                byte[] x = Classeur.depuisJson(description);
+                if ("partager".equals(mode)) {
+                    partager(id, nom, XLSX, x, nom, "Fichier Excel produit par AKWA SCHOOL.");
+                } else {
+                    demanderEnregistrement(id, nom, XLSX, x);
+                }
+            } catch (IOException | RuntimeException e) {
+                rendre(id, erreur(0, "Classeur impossible à créer : " + e.getMessage(), null));
             }
         });
     }
@@ -553,6 +707,10 @@ public class Pont {
                     data = Tableur.tout(in);
                 }
                 String nom = uri.getLastPathSegment() == null ? "" : uri.getLastPathSegment();
+                if ("reponse".equals(usage)) {
+                    rendre(id, ouvrirReponse(data));
+                    return;
+                }
                 if ("sauvegarde".equals(usage)) {
                     String poignee = "f" + System.nanoTime();
                     fichiersChoisis.clear();

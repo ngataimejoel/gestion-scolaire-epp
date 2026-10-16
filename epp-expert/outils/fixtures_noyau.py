@@ -10,6 +10,7 @@ dépôt (android/test-jvm/donnees, noms fictifs) produit par LibreOffice, que l'
 from __future__ import annotations
 
 import base64
+import os
 import json
 import shutil
 import sys
@@ -19,6 +20,9 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE))
 XLS = RACINE / "android" / "test-jvm" / "donnees" / "eleves_essai.xls"
+COLONNES_ELEVES = ["codedren", "codeiep", "iep", "codeecole", "ecole", "matricule", "nom", "prenoms", "sexe", "jour",
+                   "mois", "annee", "nationalite", "localite", "codesp", "sp", "pere", "mere", "nacte", "lieuacte",
+                   "residence", "niveau"]
 
 
 def _b64u(b: bytes) -> str:
@@ -80,6 +84,32 @@ def preparer(dossier: Path) -> None:
         pub, machine, str(int(maintenant.timestamp() * 1000)),
         lic1, sig1, lic_vie, sig_vie, lic_echue, sig_echue, lic_autre, sig_autre, falsifiee, sig1,
     ]) + "\n", encoding="utf-8")
+    # ------------------------------------------------------------------ classeur Excel du téléphone
+    (dossier / "classeur.json").write_text(json.dumps({"feuilles": [
+        {"nom": "ELEVES", "style": "national", "colonnes": [{"titre": c} for c in COLONNES_ELEVES],
+         "lignes": [["35", "000251", "OUANINOU", "E0001", "EPP ESSAI", "00012345A", "KOUASSI", "AÏCHA « MARIE »",
+                     "FEMININ", "1", "1", "2014"] + [""] * 9 + ["CP1"],
+                    [""] * 6 + ["YAO", "JEAN", "MASCULIN"] + [""] * 12 + ["CE1"]]},
+        {"nom": "Résultats CP1", "style": "rapport", "entete": ["MINISTERE DE L'EDUCATION NATIONALE", "IEPP OUANINOU"],
+         "droite": ["REPUBLIQUE DE COTE D'IVOIRE", "Année scolaire 2026-2027"], "titre": "RÉSULTATS ANNUELS",
+         "sous_titre": "Classe CP1", "paysage": True,
+         "colonnes": [{"titre": "N°", "type": "entier"}, {"titre": "Nom et prénoms", "nom": True},
+                      {"titre": "Né(e) le", "type": "date"}, {"titre": "MGA", "type": "nombre"},
+                      {"titre": "Décision", "type": "centre"}],
+         "lignes": [[1, "KOUASSI AÏCHA", "2014-01-01", 6.25, "ADMIS"], [2, "YAO <JEAN> & Cie", None, "4,5", "REDOUBLE"]]},
+    ]}, ensure_ascii=False), encoding="utf-8")
+
+    # ------------------------------------------------------------------ synchronisation par fichier
+    from epp.synchro import fichier as F
+    from epp.synchro import protocole as P
+    cle_sync = os.urandom(32)
+    (dossier / "synchro.txt").write_text(f"{P.b64(cle_sync)}\n12\nserveur-essai\n", encoding="utf-8")
+    rep = {"resultats": [{"uid": "t1", "ok": True}], "instantane": {"ecole": {"ecole_nom": "EPP « ESSAI »"}}}
+    msg = P.sceller(cle_sync, P.json_octets(rep), P.aad_reponse(12, 7))
+    (dossier / "reponse.akwasync").write_bytes(F._enveloppe("reponse", "serveur-essai", 12, 7, ecole="EPP « ESSAI »",
+                                                            message=P.b64(msg)))
+    (dossier / "reponse_rejeu.akwasync").write_bytes(F._enveloppe(
+        "reponse", "serveur-essai", 12, 5, erreur="Requête déjà reçue (rejeu refusé).", code="REJEU"))
     assert _empreinte("x") != machine
     print(f"données de test écrites dans {dossier}")
 
@@ -99,7 +129,57 @@ def verifier(dossier: Path) -> None:
                     break
         else:
             print(f"ok {f} : {len(attendu)} lignes identiques")
+    erreurs += _verifier_classeur(dossier) + _verifier_synchro(dossier)
     sys.exit(1 if erreurs else 0)
+
+
+def _verifier_classeur(dossier: Path) -> int:
+    """Le classeur du téléphone s'ouvre dans Excel (openpyxl) avec la présentation de l'application Windows."""
+    from openpyxl import load_workbook
+    from epp.io.import_eleves19 import COLONNES, lire_fichier
+    wb = load_workbook(dossier / "classeur.xlsx")
+    el, res = wb["ELEVES"], wb["Résultats CP1"]
+    pb = []
+    if [c.value for c in el[1]] != COLONNES:
+        pb.append("en-tête ELEVES")
+    if el["A1"].fill.fgColor.rgb != "FF0E6646" or not el["A1"].font.b or el["F2"].number_format != "@":
+        pb.append("présentation ELEVES")
+    if el["F2"].value != "00012345A" or el["H2"].value != "AÏCHA « MARIE »" or el.freeze_panes != "A2":
+        pb.append("valeurs ELEVES")
+    lu = lire_fichier(dossier / "classeur.xlsx")
+    if len(lu) != 3 or lu[1][5] != "00012345A":
+        pb.append("relecture par l'import de l'ordinateur")
+    cel = {c.value: c for row in res.iter_rows() for c in row if c.value is not None}
+    if "RÉSULTATS ANNUELS" not in cel or cel["RÉSULTATS ANNUELS"].font.color.rgb != "FF1F4E79":
+        pb.append("titre du rapport")
+    if cel["Nom et prénoms"].fill.fgColor.rgb != "FF1F4E79" or not cel["KOUASSI AÏCHA"].font.b:
+        pb.append("en-têtes et noms du rapport")
+    if cel[6.25].number_format != "0.00" or cel[4.5].number_format != "0.00" or "YAO <JEAN> & Cie" not in cel:
+        pb.append("nombres du rapport")
+    if res.page_setup.orientation != "landscape" or res.print_title_rows is None:
+        pb.append("mise en page")
+    import datetime as dt
+    if dt.datetime(2014, 1, 1) not in cel or cel[dt.datetime(2014, 1, 1)].number_format != "dd/mm/yyyy":
+        pb.append("date")
+    print(("ÉCHEC classeur Excel : " + ", ".join(pb)) if pb else "ok classeur Excel identique à l'application Windows")
+    return 1 if pb else 0
+
+
+def _verifier_synchro(dossier: Path) -> int:
+    from epp.synchro import protocole as P
+    cle = P.unb64((dossier / "synchro.txt").read_text().split()[0])
+    pb = []
+    if json.loads((dossier / "reponse.java.json").read_text(encoding="utf-8"))["instantane"]["ecole"]["ecole_nom"] \
+            != "EPP « ESSAI »":
+        pb.append("réponse lue par le téléphone")
+    e = json.loads((dossier / "demande.akwasync").read_text(encoding="utf-8"))
+    req = json.loads(P.ouvrir(cle, P.unb64(e["message"]), P.aad_requete(12)))
+    if (e["sens"], e["seq"], e["serveur_id"], e["appareil"], req["seq"], req["ops"][0]["valeur"]) != \
+            ("demande", 8, "serveur-essai", "TECNO « Spark »", 8, 7.5):
+        pb.append(f"demande du téléphone {e} {req}")
+    print(("ÉCHEC synchronisation par fichier : " + ", ".join(pb)) if pb else
+          "ok synchronisation par fichier : demande et réponse compatibles")
+    return 1 if pb else 0
 
 
 if __name__ == "__main__":

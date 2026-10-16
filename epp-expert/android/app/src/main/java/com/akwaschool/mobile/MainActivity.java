@@ -83,6 +83,21 @@ public class MainActivity extends Activity {
             }
         }
         web.loadUrl("file:///android_asset/www/index.html");
+        recu(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent i) {
+        super.onNewIntent(i);
+        setIntent(i);
+        recu(i);
+    }
+
+    /** Fichier ouvert avec AKWA SCHOOL depuis une autre application (réponse de l'ordinateur reçue par WhatsApp). */
+    private void recu(Intent i) {
+        if (i != null && Intent.ACTION_VIEW.equals(i.getAction()) && i.getData() != null) {
+            pont.fichierOuvert(i.getData());
+        }
     }
 
     void ouvrirAilleurs(Uri u) {
