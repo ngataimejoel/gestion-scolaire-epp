@@ -171,10 +171,11 @@ def test_menu_selon_le_role(app, demo, messages):
     assert not w.barre.groupes["administration"].isHidden()
     w.aller("personnel")
     assert "personnel" not in w.pages
-    w.aller("sauvegarde")                         # onglet sans droit : pas ouvert, et masqué
-    assert "sauvegarde" not in w.pages
+    w.aller("sauvegarde")              # partie sans droit : Import, export & sauvegarde s'ouvre sans la sauvegarde
+    assert "sauvegarde" not in w.pages and w.pages["donnees"].partie("sauvegarde") is None
+    assert w.pages["donnees"].partie("import_export") is not None
     w.aller("administration")
-    assert w.onglets_admin is not None and not w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("donnees"))
+    assert w.onglets_admin is not None and w.onglets_admin.isTabVisible(ADMIN_VOLETS.index("donnees"))
     w.timer_licence.stop()
 
 
@@ -323,13 +324,13 @@ def test_validation_et_passage_d_annee(fenetre, messages):
 
 
 def test_tutoriels_video_livres_et_listes_dans_l_aide(fenetre, messages):
-    """Les vidéos fabriquées par outils/tutoriels.py sont embarquées et proposées dans Aide › Tutoriels vidéo."""
+    """Les vidéos fabriquées par outils/tutoriels_v8.js sont embarquées et proposées dans Aide › Tutoriels vidéo."""
     import shutil
     import subprocess
 
     from epp.ui.video import tutoriels
     vids = tutoriels()
-    assert [v.stem[:2] for v in vids] == ["01", "02", "03", "04", "05", "06"]
+    assert [v.stem[:2] for v in vids] == ["01", "02", "03", "04", "05", "06", "07"]
     for v in vids:
         assert v.suffix == ".mp4" and 50_000 < v.stat().st_size < 2_000_000, v
     if shutil.which("ffprobe"):        # format lisible par Windows : H.264, 4:2:0
@@ -341,7 +342,7 @@ def test_tutoriels_video_livres_et_listes_dans_l_aide(fenetre, messages):
     p = fenetre.page("aide")
     p.rafraichir()
     noms = [p.liste.item(i).text() for i in range(p.liste.count())]
-    assert noms[0] == "01 Premiers pas" and len(noms) == 6
+    assert noms[0] == "01 Premiers pas" and len(noms) == 7
 
 
 def test_logo_de_l_application_et_bouton_de_connexion_visible(app, demo, messages):
