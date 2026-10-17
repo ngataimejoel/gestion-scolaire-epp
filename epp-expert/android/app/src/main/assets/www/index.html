@@ -2970,11 +2970,11 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  });
  // notes saisies par un enseignant : en attente de validation
  const grade0=chs.grade;
- // Enseignant : ni inscription, ni suppression, ni changement de classe ; appel Présent / Absent, une absence est définitive.
- document.head.insertAdjacentHTML('beforeend','<style>body.ens [data-act=addStu],body.ens [data-act=delStu]{display:none!important}</style>');
- const ENS_INTERDIT={addStu:'L’inscription des élèves est réservée au directeur.',delStu:'Seul le directeur peut supprimer un élève.'};
- Object.keys(ENS_INTERDIT).forEach(k=>{const f=acts[k];acts[k]=function(t){if(prof()){toast(ENS_INTERDIT[k]);return}return f.apply(this,arguments)}});
- const editStu0=acts.editStu;acts.editStu=async function(t){await editStu0.call(this,t);const s=prof()&&$('#dlg [name=classe]');if(s)[...s.options].forEach(o=>{if(!o.selected)o.remove()})};
+ // Enseignant : ni inscription, ni modification ou suppression d’élève, ni changement de classe ; appel Présent / Absent, une absence est définitive.
+ document.head.insertAdjacentHTML('beforeend','<style>body.ens [data-act=addStu],body.ens [data-act=delStu],body.ens [data-act=editStu],body.ens [data-act=depart],body.ens [data-act=editTea],body.ens [data-act=delTea]{display:none!important}body.ens [data-ch=teach],body.ens [data-ch=stuSt]{pointer-events:none;appearance:none;border-color:transparent;background:none}</style>');
+ const ENS_INTERDIT={addStu:'L’inscription des élèves est réservée au directeur.',delStu:'Seul le directeur peut supprimer un élève.',editStu:'Seul le directeur peut modifier un élève.',depart:'Seul le directeur peut modifier un élève.',editTea:'Seul le directeur peut modifier le personnel.',delTea:'Seul le directeur peut modifier le personnel.'};
+ Object.keys(ENS_INTERDIT).forEach(k=>{const f=acts[k];if(f)acts[k]=function(t){if(prof()){toast(ENS_INTERDIT[k]);return}return f.apply(this,arguments)}});
+ ['teach','stuSt'].forEach(k=>{const f=chs[k];chs[k]=function(t){if(prof()){toast(k==='teach'?'Seul le directeur affecte les classes.':'Seul le directeur peut modifier un élève.');render();return}return f.apply(this,arguments)}});
  const pa0=acts.pa;acts.pa=function(t){if(prof()&&(S.att[ui.aDate]||{})[t.dataset.id]){toast('Absence déjà enregistrée : elle ne peut plus être modifiée.');return}return pa0.call(this,t)};
  const allPres0=acts.allPres;acts.allPres=function(){if(!prof())return allPres0.call(this);(S.appel[ui.aDate]||(S.appel[ui.aDate]={}))[ui.aCls]=true;save();toast(`${ui.aCls} : les autres élèves sont présents`);render()};
  chs.grade=async function(t){const p=prof(),n=Number(ui.nEv);
