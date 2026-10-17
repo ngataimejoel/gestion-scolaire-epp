@@ -103,6 +103,7 @@ h1,h2,h3,h4{font-family:var(--disp);text-wrap:balance}
 .sres .none{padding:10px;color:var(--mut)}
 .view{width:100%;max-width:1320px;margin:0 auto;padding-block:22px 40px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px))}
 .bnav{display:none}
+body.ens:not(.solo) .nsave{display:none}.ng.nsave{margin-top:8px;border-top:1px solid var(--line);border-radius:0 0 10px 10px}
 
 /* ---------- Éléments communs ---------- */
 .ph{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap}
@@ -2642,8 +2643,8 @@ function applyTheme(){
 function render(){
  const r=route(),g=grpOf(r);
  if(!ui.nEv)ui.nEv=String(S.school.evalCourante);if(!ui.rEv)ui.rEv=String(S.school.evalCourante);
- $('#nav').innerHTML=MENU.map(m=>`<a href="#${m.id}" class="ng${m===g?' on':''}">${ic(m.ic)}${m.lab}</a>${m===g&&m.tabs.length?`<div class="ns">${m.tabs.map(([t,l])=>`<a href="#${m.id}-${t}" class="${r===m.id+'-'+t?'on':''}">${l}</a>`).join('')}</div>`:''}`).join('');
- $('#bnav').innerHTML=MENU.map(m=>`<a href="#${m.id}" class="${m===g?'on':''}">${ic(m.ic)}${m.short}</a>`).join('');
+ $('#nav').innerHTML=MENU.map(m=>`<a href="#${m.id}" class="ng${m===g?' on':''}">${ic(m.ic)}${m.lab}</a>${m===g&&m.tabs.length?`<div class="ns">${m.tabs.map(([t,l])=>`<a href="#${m.id}-${t}" class="${r===m.id+'-'+t?'on':''}">${l}</a>`).join('')}</div>`:''}`).join('')+`<a href="#" class="ng nsave" data-act="backup">${ic('down')}Sauvegarder</a>`;
+ $('#bnav').innerHTML=MENU.map(m=>`<a href="#${m.id}" class="${m===g?'on':''}">${ic(m.ic)}${m.short}</a>`).join('')+`<a href="#" class="nsave" data-act="backup">${ic('down')}Sauver</a>`;
  const tab=g.tabs.find(([t])=>r===g.id+'-'+t);
  $('#crumb').innerHTML=`<a href="#accueil">${esc(S.school.name)}</a>${ic('chev')}<${tab?'a href="#'+g.id+'"':'b'}>${g.lab}</${tab?'a':'b'}>${tab?ic('chev')+'<b>'+tab[1]+'</b>':''}`;
  $('#view').innerHTML=pages[r]();if(r!==ui.lastR){ui.lastR=r;const v=$('#view');v.classList.remove('enter');void v.offsetWidth;v.classList.add('enter')}

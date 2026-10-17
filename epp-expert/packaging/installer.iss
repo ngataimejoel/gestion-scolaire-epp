@@ -3,7 +3,7 @@
 ; d'installation : une mise à jour ou une désinstallation les conserve, sauf demande explicite.
 #define AppName "AKWA SCHOOL"
 #ifndef AppVersion
-  #define AppVersion "1.3.1"
+  #define AppVersion "1.4.0"
 #endif
 #define AppExe "GestionScolaireEPP.exe"
 
