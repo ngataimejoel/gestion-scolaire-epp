@@ -115,6 +115,8 @@
  function licenceOuApp(){
   const e=json(N.licence());
   if(e.utilisable)return entrer();
+  // la licence (activation, date d'expiration) ne regarde que le directeur
+  if(session&&session.role==='ens'){const f=ecran('<p>L’application n’est pas utilisable pour le moment. Adressez-vous au directeur.</p><button class="btn pri">Retour</button>',()=>connexion());return f}
   const f=ecran(`<p>${esc(e.message||'Licence à activer.')}</p><input name="c" placeholder="AKWA-1AN-XXXX-XXXX" autocomplete="off" autocapitalize="characters"><button class="btn pri">Activer (Internet nécessaire)</button>`,(f,err)=>{
    const b=document.querySelector('#akwaVerrou .btn');b.disabled=true;err('Activation en cours…');
    attendre(id=>N.activer(id,f.get('c').trim().toUpperCase(),S.school.name||'')).then(r=>{b.disabled=false;if(!r.ok)return err(r.message||'Activation impossible.');entrer()});
