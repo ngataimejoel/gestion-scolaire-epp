@@ -1715,8 +1715,8 @@ const sexCount=L=>{const g=L.filter(s=>s.sexe==='Masculin').length;return [g,L.l
 /* Notation (mêmes règles que l'application) */
 const info=c=>CLASSE_INFO[c];
 const grille=c=>GRILLES[info(c).grille];
-const cpChoix=(c,n)=>{try{return S.cpMat?.[c]?.[n]}catch(e){return null}};// S n’existe pas encore pendant load()
-const matieres=(c,n)=>{const L=grille(c).mat(n),ch=info(c).grille==='CP'&&cpChoix(c,n);return ch&&ch.length?L.filter(([m])=>ch.includes(m)):L};                       // [[matière, coefficient ou barème]]
+const cpChoix=(c,n)=>{try{return S.cpMat?.[c]?.[n]}catch(e){return null}},cpAjout=()=>{try{return S.cpExtra||[]}catch(e){return []}};// S n’existe pas encore pendant load()
+const matieres=(c,n)=>{const L=grille(c).mat(n),ch=info(c).grille==='CP'&&cpChoix(c,n);return ch&&ch.length?[...L,...cpAjout().map(m=>[m,1])].filter(([m])=>ch.includes(m)):L};                       // [[matière, coefficient ou barème]]
 const noteMax=(c,w)=>grille(c).mode==='COEF'?grille(c).max:w;
 const ech=c=>grille(c).echelle;
 const evalLabel=(c,n)=>EVALUATIONS[info(c).cal][n-1];
@@ -1784,7 +1784,7 @@ function seed(){
   log:[['Données de démonstration chargées',0],['Demande AUT-2026-003 : élève de CE2',1],['Appel validé : CE1',2],['Notes de la 1re composition saisies en CM1',30],['Mme Tanoh Léa affectée en CM1',60],['Inscription : 3 nouveaux élèves en CP1',1500]].map(([m,min])=>({t:Date.now()-min*6e4,m}))};
 }
 // Complète les données d'une version précédente (champs ajoutés depuis)
-function migrate(o){o.cpMat=o.cpMat||{};o.school={...ECOLE,...o.school};const vide={nom:'',prenoms:'',profession:'',tel:'',domicile:''};
+function migrate(o){o.cpMat=o.cpMat||{};o.cpExtra=o.cpExtra||[];o.school={...ECOLE,...o.school};const vide={nom:'',prenoms:'',profession:'',tel:'',domicile:''};
  o.students.forEach(s=>{s.pere={...vide,...s.pere};s.mere={...vide,...s.mere};['sang','allergies','entree','motifDepart'].forEach(k=>{if(s[k]==null)s[k]=''});s.nationalite=natOff(s.nationalite)||NAT_DEFAUT;if(s.matNat==null)s.matNat=/^AK-/i.test(s.mat||'')?'':(s.mat||'');if(!Array.isArray(s.parcours))s.parcours=[]});if(!Array.isArray(o.persoReps))o.persoReps=[];return o}
 function load(){if(window.APP)return APP.charger();try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.v===5&&o.students)return migrate(o)}}catch(e){}return seed()}
 let S=load();
@@ -2650,9 +2650,16 @@ const acts={
   <div class="note">${ic('set')}<span><b>Paramètres</b> : école, en-tête de tous les documents (armoiries, ministère, direction, inspection), calendrier, mot de passe et activation.</span></div>
   <div class="note">${ic('lock')}<span><b>Sécurité</b> : toute modification de notes et toute suppression de données demandent le mot de passe administrateur.</span></div>
   <div class="note">${ic('search')}<span><b>Recherche</b> : Ctrl + K (ou /) pour trouver un élève, un enseignant, un écran ou un rapport.</span></div></div>`,{noFoot:true})},
- cpMat(){const c=ui.nCls,n=Number(ui.nEv),cur=matieres(c,n).map(([m])=>m);
-  modal(`${ic('edit')} Matières · ${c} · ${esc(evalLabel(c,n))}`,`<p class="sub" style="margin-top:0">Cochez les matières évaluées à cette composition. Moyennes, rangs et bulletins ne comptent que celles-ci.</p>${CP_MATIERES.map(m=>`<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" name="m" value="${esc(m)}"${cur.includes(m)?' checked':''}> ${esc(m)}</label>`).join('')}`,
-  {onok:f=>{const L=f.getAll('m');if(!L.length){toast('Choisissez au moins une matière');return false}S.cpMat=S.cpMat||{};S.cpMat[c]=S.cpMat[c]||{};S.cpMat[c][n]=L.length===CP_MATIERES.length?null:L;log(`Matières ${c} – ${evalLabel(c,n)} : ${L.join(', ')}`);save();render();toast('Matières enregistrées')}})},
+ cpMat(){const c=ui.nCls,n=Number(ui.nEv),cur=matieres(c,n).map(([m])=>m),autre=c==='CP1'?'CP2':'CP1',tout=[...CP_MATIERES,...(S.cpExtra||[])];
+  modal(`${ic('edit')} Matières · ${c} · ${esc(evalLabel(c,n))}`,`${tout.map(m=>`<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" name="m" value="${esc(m)}"${cur.includes(m)?' checked':''}> ${esc(m)}</label>`).join('')}
+  ${field('Ajouter une matière',`<input name="nouvelle" autocomplete="off" autocapitalize="characters" placeholder="Nom de la matière">`,true)}
+  <label class="chk" style="display:flex;margin:10px 0 0"><input type="checkbox" name="aussi"> Appliquer aussi au ${autre} (${esc(evalLabel(autre,n))})</label>`,
+  {onok:f=>{const nv=String(f.get('nouvelle')||'').trim().toUpperCase().replace(/\s+/g,' '),L=f.getAll('m');
+   if(nv){if(!tout.includes(nv))S.cpExtra=[...(S.cpExtra||[]),nv];if(!L.includes(nv))L.push(nv)}
+   if(!L.length){toast('Choisissez au moins une matière');return false}
+   const ordre=[...CP_MATIERES,...(S.cpExtra||[])].filter(m=>L.includes(m)),defaut=ordre.length===CP_MATIERES.length&&CP_MATIERES.every(m=>ordre.includes(m));
+   S.cpMat=S.cpMat||{};[c,...(f.get('aussi')==='on'?[autre]:[])].forEach(k=>{S.cpMat[k]=S.cpMat[k]||{};S.cpMat[k][n]=defaut?null:ordre});
+   log(`Matières ${c}${f.get('aussi')==='on'?' et '+autre:''} – ${evalLabel(c,n)} : ${ordre.join(', ')}`);save();render();toast('Matières enregistrées')}})},
  depart(t){const s=S.students.find(x=>x.id===t.dataset.id);modal(`${ic('flag')} Départ de ${esc(fullName(s))}`,field('Statut',`<select name="statut">${opts(STATUTS,s.statut)}</select>`,1)+field('Motif de départ',`<input name="motifDepart" value="${esc(s.motifDepart)}" placeholder="Ex. : mutation des parents">`,1),
   {onok:f=>{s.statut=f.get('statut');s.motifDepart=f.get('motifDepart').trim();log(`Départ / statut : ${fullName(s)} – ${s.statut}${s.motifDepart?' ('+s.motifDepart+')':''}`);save();render();toast('Statut enregistré')},onclose:()=>render()})},
  addStu(){modal('Inscrire un élève',stuForm(),{ok:'Inscrire',onok:f=>{const e=stuErr(f);if(e){toast(e);return false}const s=readStu(f,{id:uid(),mat:nextMat(),photo:'',decision:''});S.students.push(s);log(`Inscription : ${fullName(s)} (${s.classe})`);toast(`${fullName(s)} inscrit(e) en ${s.classe}`);render();openDrawer('s',s.id)}})},
@@ -2971,8 +2978,8 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  // notes saisies par un enseignant : en attente de validation
  const grade0=chs.grade;
  // Enseignant : ni inscription, ni modification ou suppression d’élève, ni changement de classe ; appel Présent / Absent, une absence est définitive.
- document.head.insertAdjacentHTML('beforeend','<style>body.ens [data-act=addStu],body.ens [data-act=delStu],body.ens [data-act=editStu],body.ens [data-act=depart],body.ens [data-act=editTea],body.ens [data-act=delTea]{display:none!important}body.ens #schoolChip .tag,body.ens [data-act=authOk],body.ens [data-act=authNo],body.ens [data-act=delAuth]{display:none!important}body.ens [data-ch=teach],body.ens [data-ch=stuSt]{pointer-events:none;appearance:none;border-color:transparent;background:none}</style>');
- const ENS_INTERDIT={addStu:'L’inscription des élèves est réservée au directeur.',delStu:'Seul le directeur peut supprimer un élève.',editStu:'Seul le directeur peut modifier un élève.',depart:'Seul le directeur peut modifier un élève.',editTea:'Seul le directeur peut modifier le personnel.',authOk:'Seul le directeur accorde ou refuse une demande.',authNo:'Seul le directeur accorde ou refuse une demande.',delAuth:'Seul le directeur peut supprimer une demande.',delTea:'Seul le directeur peut modifier le personnel.'};
+ document.head.insertAdjacentHTML('beforeend','<style>body.ens [data-act=addStu],body.ens [data-act=delStu],body.ens [data-act=editStu],body.ens [data-act=depart],body.ens [data-act=editTea],body.ens [data-act=delTea]{display:none!important}body.ens #schoolChip .tag,body.ens [data-act=authOk],body.ens [data-act=authNo],body.ens [data-act=delAuth],body.ens [data-act=cpMat]{display:none!important}body.ens [data-ch=teach],body.ens [data-ch=stuSt]{pointer-events:none;appearance:none;border-color:transparent;background:none}</style>');
+ const ENS_INTERDIT={addStu:'L’inscription des élèves est réservée au directeur.',delStu:'Seul le directeur peut supprimer un élève.',editStu:'Seul le directeur peut modifier un élève.',depart:'Seul le directeur peut modifier un élève.',editTea:'Seul le directeur peut modifier le personnel.',authOk:'Seul le directeur accorde ou refuse une demande.',authNo:'Seul le directeur accorde ou refuse une demande.',delAuth:'Seul le directeur peut supprimer une demande.',cpMat:'Seul le directeur choisit les matières de la composition.',delTea:'Seul le directeur peut modifier le personnel.'};
  Object.keys(ENS_INTERDIT).forEach(k=>{const f=acts[k];if(f)acts[k]=function(t){if(prof()){toast(ENS_INTERDIT[k]);return}return f.apply(this,arguments)}});
  ['teach','stuSt'].forEach(k=>{const f=chs[k];chs[k]=function(t){if(prof()){toast(k==='teach'?'Seul le directeur affecte les classes.':'Seul le directeur peut modifier un élève.');render();return}return f.apply(this,arguments)}});
  // demandes d'autorisation : l'enseignant demande pour lui-même ou pour un élève de sa classe, et ne voit que celles-là
