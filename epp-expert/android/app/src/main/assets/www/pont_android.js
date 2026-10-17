@@ -73,7 +73,31 @@
  function afficherCode(code,suite){
   ecran(`<p><b>Votre code de secours</b></p><p class="code">${esc(code)}</p><p class="sub">Il permet de choisir un nouveau mot de passe en cas d’oubli, sans Internet. Notez-le et rangez-le en lieu sûr ; il ne sert qu’une fois.</p><button class="btn pri">J’ai noté le code</button>`,()=>suite());
  }
+ // espace enseignant seul : sa classe sans école ; le mot de passe « admin » du téléphone est le sien
+ const estSolo=()=>{try{return !!(S.school.solo&&S.teachers.some(t=>t.id===S.school.solo.tid))}catch(e){return false}};
+ const sessionDe=r=>r.role==='ens'?{role:'ens',tid:r.tid}:estSolo()?{role:'ens',tid:S.school.solo.tid,solo:true}:{role:'dir'};
+ const espace=()=>session&&session.solo?'enseignant':'ecole';
+ const licEns=e=>/^ens/.test(e.type||'');
  function premierLancement(){
+  const f=ecran(`<p><b>Bienvenue.</b> Qui utilise ce téléphone ?</p><button class="btn pri">Le directeur (espace de l’école)</button><button type="button" class="btn" data-ens>Un enseignant seul (sans l’école)</button>`,creerDirecteur);
+  f.querySelector('[data-ens]').addEventListener('click',creerEnseignant);
+ }
+ function creerEnseignant(){
+  const f=ecran(`<p><b>Espace enseignant.</b> Vous tenez votre classe seul ; le directeur pourra le rattacher plus tard à l’école.</p><input name="nom" placeholder="Vos nom et prénoms" autocomplete="name"><select name="cls">${CLASSES.map(c=>`<option>${c}</option>`).join('')}</select><input name="ecole" placeholder="Nom de l’école (facultatif)">
+<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Créer mon espace</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
+   const nom=String(f.get('nom')).trim(),a=f.get('a'),b=f.get('b'),ec=String(f.get('ecole')).trim();
+   if(nom.length<3)return err('Saisissez vos nom et prénoms.');
+   if(a.length<6)return err('Le mot de passe doit compter 6 caractères au moins.');
+   if(a!==b)return err('Les deux mots de passe sont différents.');
+   if(!N.definirAdmin(a,''))return err('Enregistrement impossible.');
+   N.connecter('admin',a);
+   const t={id:uid(),nom:majNomComplet(nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),tel:'',photo:'',actif:true,compte:null};
+   S.teachers=[t];S.students=[];S.school.solo={tid:t.id};S.school.name=ec.toUpperCase();
+   session={role:'ens',tid:t.id,solo:true};N.demarrerEssai();APP.enregistrer();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+  });
+  f.querySelector('[data-retour]').addEventListener('click',premierLancement);
+ }
+ function creerDirecteur(){
   ecran(`<p><b>Bienvenue.</b> Choisissez le mot de passe administrateur du téléphone. Il sera demandé à chaque ouverture et pour les corrections.</p>
 <input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Créer</button>`,(f,err)=>{
    const a=f.get('a'),b=f.get('b');
@@ -84,10 +108,11 @@
   });
  }
  function connexion(){
-  const f=ecran(`<p>Identifiant : <b>admin</b> pour le directeur, ou celui remis à l’enseignant.</p><input name="l" value="admin" autocomplete="username" autocapitalize="none"><input type="password" name="m" placeholder="Mot de passe" autocomplete="current-password" autofocus><button class="btn pri">Ouvrir</button><button type="button" class="lien" data-oubli>Mot de passe oublié ?</button>`,(f,err)=>{
+  const so=estSolo()&&S.teachers.find(x=>x.id===S.school.solo.tid);
+  const f=ecran(`${so?`<p>Espace enseignant de <b>${esc(so.nom)}</b> (${esc(so.classe)}).</p><input name="l" value="admin" type="hidden">`:`<p>Identifiant : <b>admin</b> pour le directeur, ou celui remis à l’enseignant.</p><input name="l" value="admin" autocomplete="username" autocapitalize="none">`}<input type="password" name="m" placeholder="Mot de passe" autocomplete="current-password" autofocus><button class="btn pri">Ouvrir</button><button type="button" class="lien" data-oubli>Mot de passe oublié ?</button>`,(f,err)=>{
    const r=json(N.connecter(f.get('l'),f.get('m')));
    if(!r.ok)return err(r.message||'Identifiant ou mot de passe incorrect.');
-   session=r.role==='ens'?{role:'ens',tid:r.tid}:{role:'dir'};
+   session=sessionDe(r);
    if(r.provisoire)return nouveauMotDePasse();
    licenceOuApp();
   });
@@ -107,19 +132,21 @@
    const l=String(f.get('l')).trim().toLowerCase();
    const r=json(!l||l==='admin'?N.recupererAdmin(f.get('c'),f.get('n')):N.recupererCompte(l,f.get('c'),f.get('n')));
    if(!r.ok)return err(r.message||'Code de secours incorrect.');
-   const c=json(N.connecter(l||'admin',f.get('n')));session=c.role==='ens'?{role:'ens',tid:c.tid}:{role:'dir'};
+   const c=json(N.connecter(l||'admin',f.get('n')));session=sessionDe(c);
    afficherCode(r.secours,licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',connexion);
  }
  function licenceOuApp(){
   const e=json(N.licence());
-  if(e.utilisable)return entrer();
-  // la licence (activation, date d'expiration) ne regarde que le directeur
-  if(session&&session.role==='ens'){const f=ecran('<p>L’application n’est pas utilisable pour le moment. Adressez-vous au directeur.</p><button class="btn pri">Retour</button>',()=>connexion());return f}
-  const f=ecran(`<p>${esc(e.message||'Licence à activer.')}</p><input name="c" placeholder="AKWA-1AN-XXXX-XXXX" autocomplete="off" autocapitalize="characters"><button class="btn pri">Activer (Internet nécessaire)</button>`,(f,err)=>{
+  // une licence enseignant n'ouvre que les sessions d'enseignant, jamais l'espace du directeur
+  if(e.utilisable&&(!licEns(e)||session.role==='ens'))return entrer();
+  // la licence (activation, date d'expiration) ne regarde que le directeur, ou l'enseignant seul pour son espace
+  if(session&&session.role==='ens'&&!session.solo){const f=ecran('<p>L’application n’est pas utilisable pour le moment. Adressez-vous au directeur.</p><button class="btn pri">Retour</button>',()=>connexion());return f}
+  const msg=e.utilisable?'Ce téléphone a une licence enseignant : l’espace du directeur demande un code école.':e.message||'Licence à activer.';
+  const f=ecran(`<p>${esc(msg)}</p><input name="c" placeholder="EPP-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters"><button class="btn pri">Activer (Internet nécessaire)</button>`,(f,err)=>{
    const b=document.querySelector('#akwaVerrou .btn');b.disabled=true;err('Activation en cours…');
-   attendre(id=>N.activer(id,f.get('c').trim().toUpperCase(),S.school.name||'')).then(r=>{b.disabled=false;if(!r.ok)return err(r.message||'Activation impossible.');entrer()});
+   attendre(id=>N.activerEspace(id,f.get('c').trim().toUpperCase(),S.school.name||'',espace())).then(r=>{b.disabled=false;if(!r.ok)return err(r.message||'Activation impossible.');entrer()});
   });
   return f;
  }
@@ -167,7 +194,7 @@
    e.preventDefault();e.stopImmediatePropagation();const d=new FormData(f);
    if(f.id==='pwdForm'){if(String(d.get('nw')).length<6)return toast('Le nouveau mot de passe doit compter 6 caractères au moins.');
     if(!N.definirAdmin(d.get('nw'),d.get('old')))return toast('Ancien mot de passe incorrect.');log('Mot de passe administrateur changé');toast('Mot de passe changé');f.reset()}
-   if(f.id==='actForm'){toast('Activation en cours…');attendre(id=>N.activer(id,String(d.get('code')).trim().toUpperCase(),S.school.name||'')).then(r=>{if(!r.ok)return toast(r.message||'Activation impossible.');
+   if(f.id==='actForm'){toast('Activation en cours…');attendre(id=>N.activerEspace(id,String(d.get('code')).trim().toUpperCase(),S.school.name||'',espace())).then(r=>{if(!r.ok)return toast(r.message||'Activation impossible.');
     S.school.licence=licencePage();log('Activation : '+((r.licence&&r.licence.message)||'licence activée'));save();toast((r.licence&&r.licence.message)||'Licence activée');applyTheme();render()})}
   },true);
   // ouverture : création du mot de passe, puis mot de passe à chaque ouverture, puis licence

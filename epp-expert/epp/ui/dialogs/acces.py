@@ -250,8 +250,9 @@ class DialogueActivation(_EcranScinde):
     """Écran d'activation. Quand la licence n'est pas valable, c'est le seul écran accessible :
     aucune donnée n'est consultable tant qu'un code valide n'a pas été activé (les données sont conservées)."""
 
-    def __init__(self, db=None, bloquant: bool = True, parent=None):
+    def __init__(self, db=None, bloquant: bool = True, parent=None, espace: str = "ecole"):
         ecole = db.get_param("ecole_nom") if db else ""
+        self.espace = espace
         super().__init__("Activation", ecole or "", parent)
         self.db = db
         self.etat = licence.etat()
@@ -292,7 +293,7 @@ class DialogueActivation(_EcranScinde):
         self.erreur.setText("")
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            self.etat = licence.activer(code, self.ecole.text().strip())
+            self.etat = licence.activer(code, self.ecole.text().strip(), espace=self.espace)
         except licence.LicenceErreur as e:
             self.erreur.setText(str(e))
             return

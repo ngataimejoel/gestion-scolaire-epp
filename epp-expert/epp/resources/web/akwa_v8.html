@@ -2370,7 +2370,7 @@ pages['admin-stats']=()=>{
 };
 pages['admin-donnees']=()=>`${ph('Rapports & administration',window.APP?'Vos données restent sur cet ordinateur, enregistrées automatiquement par l’application. Sauvegardez-les régulièrement sur une clé USB.':'Vos données restent sur cet ordinateur, dans ce navigateur. Sauvegardez-les régulièrement sur une clé USB.')}${seg('admin')}
  <div class="grid g2 mb">
-  <div class="card"><h3>Sauvegarde complète</h3><div class="sub">${S.lastBackup?`Dernière sauvegarde : ${fmtDate(S.lastBackup)}`:'Aucune sauvegarde pour l’instant'}</div><div class="bar" style="margin:12px 0 0"><button class="btn pri" data-act="backup">${ic('down')}Sauvegarder</button><label class="btn">${ic('up')}Restaurer<input type="file" accept=".json,application/json" data-ch="restore" hidden></label></div></div>
+  <div class="card"><h3>Sauvegarde complète</h3><div class="sub">${S.lastBackup?`Dernière sauvegarde : ${fmtDate(S.lastBackup)}`:'Aucune sauvegarde pour l’instant'}</div><div class="bar" style="margin:12px 0 0"><button class="btn pri" data-act="backup">${ic('down')}Sauvegarder</button><label class="btn">${ic('up')}Restaurer<input type="file" accept=".json,application/json" data-ch="restore" hidden></label><label class="btn rattacher">${ic('users')}Rattacher un espace enseignant<input type="file" accept=".json,application/json" data-ch="rattacher" hidden></label></div></div>
   <div class="card"><h3>Exporter vers Excel</h3><div class="sub">Fichiers CSV qu’Excel ouvre directement</div><div class="bar" style="margin:12px 0 0"><button class="btn" data-act="expStu">${ic('down')}Élèves</button><button class="btn" data-act="expTea">${ic('down')}Personnel</button><button class="btn" data-act="expNotes">${ic('down')}Notes</button><button class="btn" data-act="tpl">${ic('down')}Modèle d’import</button></div></div>
  </div>
  <div class="card mb"><h3>Importer des élèves depuis Excel</h3><div class="sub">Fichier .xls, .xlsx ou .csv aux colonnes de l’export national (ELEVES) : ${COLS_ELEVES.join(', ')}. Un aperçu ligne par ligne s’affiche avant l’import.</div>
@@ -2611,7 +2611,7 @@ function applyTheme(){
  const r=document.documentElement;r.dataset.accent=S.school.accent;
  if(S.school.theme==='light'||S.school.theme==='dark')r.dataset.theme=S.school.theme;else delete r.dataset.theme;
  const lic=licence();
- $('#schoolChip').innerHTML=`<b>${esc(S.school.name)}</b><span>${esc(S.school.iepp)} · ${esc(S.school.drenaet)}</span><span>Année ${esc(S.school.year)} · ${EV_GEN[S.school.evalCourante-1].split(' /')[0]}</span>${window.estEnseignant?.()?'':`<a href="#parametres" class="tag ${lic.ok?'ok':'warn'}" style="justify-self:start;margin-top:4px">${lic.lab}</a>`}`;
+ $('#schoolChip').innerHTML=`<b>${esc(S.school.name)}</b><span>${esc(S.school.iepp)} · ${esc(S.school.drenaet)}</span><span>Année ${esc(S.school.year)} · ${EV_GEN[S.school.evalCourante-1].split(' /')[0]}</span>${window.estEnseignant?.()&&!S.school.solo?'':`<a href="#parametres" class="tag ${lic.ok?'ok':'warn'}" style="justify-self:start;margin-top:4px">${lic.lab}</a>`}`;
 }
 function render(){
  const r=route(),g=grpOf(r);
@@ -2868,12 +2868,14 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  const prof=()=>S.session.role==='ens'?S.teachers.find(t=>t.id===S.session.tid):null;
  const maClasse=()=>prof()?.classe||'';
  window.estEnseignant=()=>!!prof();
+ // espace enseignant seul (sans école) : l'enseignant tient lui-même sa classe ; le directeur le rattache plus tard
+ const solo=()=>!!(prof()&&S.school.solo);
  const tag=()=>prof()?'['+prof().compte.login+'] ':'';
  const MENU0=MENU.map(m=>({...m,tabs:m.tabs.slice()}));
  const eg=MENU.find(m=>m.id==='eleves');eg.tabs.push(['enseignants','Enseignants']);MENU0.find(m=>m.id==='eleves').tabs.push(['enseignants','Enseignants']);
  const CACHE_ENS={eleves:['personnel','enseignants'],notes:['fin']};
  function menuDuProfil(){
-  const L=MENU0.filter(m=>!prof()||!['admin','parametres'].includes(m.id)).map(m=>({...m,tabs:m.tabs.filter(([t])=>!prof()||!(CACHE_ENS[m.id]||[]).includes(t))}));
+  const L=MENU0.filter(m=>!prof()||solo()||!['admin','parametres'].includes(m.id)).map(m=>({...m,tabs:m.tabs.filter(([t])=>!prof()||!(CACHE_ENS[m.id]||[]).includes(t)&&!(m.id==='admin'&&t!=='donnees'))}));
   MENU.splice(0,MENU.length,...L);
  }
  window.visList=list=>{if(!prof()||list!==CLASSES)return list;return CLASSES.filter(c=>c===maClasse())};
@@ -2886,9 +2888,9 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  const render0=render;
  render=function(){
   ensure8(S);menuDuProfil();
-  const p=prof();document.body.classList.toggle('ens',!!p);
+  const p=prof();document.body.classList.toggle('ens',!!p);document.body.classList.toggle('solo',solo());
   if(p){['nCls','aCls','rCls','fCls','repCls'].forEach(k=>ui[k]=p.classe);ui.cls=p.classe;
-   const r=route();if(!MENU.some(m=>r===m.id||r.startsWith(m.id+'-'))||(CACHE_ENS[r.split('-')[0]]||[]).includes(r.split('-')[1])){location.hash='#accueil';return}}
+   const r=route();if(!MENU.some(m=>r===m.id||r.startsWith(m.id+'-'))||(r.startsWith('admin')&&r!=='admin-donnees')||(CACHE_ENS[r.split('-')[0]]||[]).includes(r.split('-')[1])){location.hash='#accueil';return}}
   render0();
   const opt=[['dir','Directeur (administrateur)'],...S.teachers.filter(t=>t.compte&&t.compte.actif&&t.actif).map(t=>['ens:'+t.id,`${t.nom} – ${t.classe||'sans classe'}`])];
   if(window.APP)APP.bandeau();else $('#crumb').insertAdjacentHTML('beforeend',`<span class="sp"></span><label class="sub" style="margin-left:auto;display:flex;gap:6px;align-items:center">${ic('users')}Profil de démonstration <select data-ch="profil" aria-label="Profil">${opts(opt,p?'ens:'+p.id:'dir')}</select></label>`);
@@ -2977,10 +2979,40 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  // notes saisies par un enseignant : en attente de validation
  const grade0=chs.grade;
  // Enseignant : ni inscription, ni modification ou suppression d’élève, ni changement de classe ; appel Présent / Absent, une absence est définitive.
- document.head.insertAdjacentHTML('beforeend','<style>body.ens [data-act=addStu],body.ens [data-act=delStu],body.ens [data-act=editStu],body.ens [data-act=depart],body.ens [data-act=editTea],body.ens [data-act=delTea]{display:none!important}body.ens #schoolChip .tag,body.ens [data-act=authOk],body.ens [data-act=authNo],body.ens [data-act=delAuth],body.ens [data-act=cpMat]{display:none!important}body.ens [data-ch=teach],body.ens [data-ch=stuSt]{pointer-events:none;appearance:none;border-color:transparent;background:none}</style>');
+ document.head.insertAdjacentHTML('beforeend','<style>body.ens:not(.solo) [data-act=addStu],body.ens:not(.solo) [data-act=delStu],body.ens:not(.solo) [data-act=editStu],body.ens:not(.solo) [data-act=depart],body.ens:not(.solo) [data-act=cpMat],body.ens:not(.solo) #schoolChip .tag,body.ens [data-act=editTea],body.ens [data-act=delTea],body.ens [data-act=authOk],body.ens [data-act=authNo],body.ens [data-act=delAuth],body.ens .rattacher{display:none!important}body.ens [data-ch=teach],body.ens:not(.solo) [data-ch=stuSt]{pointer-events:none;appearance:none;border-color:transparent;background:none}</style>');
  const ENS_INTERDIT={addStu:'L’inscription des élèves est réservée au directeur.',delStu:'Seul le directeur peut supprimer un élève.',editStu:'Seul le directeur peut modifier un élève.',depart:'Seul le directeur peut modifier un élève.',editTea:'Seul le directeur peut modifier le personnel.',authOk:'Seul le directeur accorde ou refuse une demande.',authNo:'Seul le directeur accorde ou refuse une demande.',delAuth:'Seul le directeur peut supprimer une demande.',cpMat:'Seul le directeur choisit les matières de la composition.',delTea:'Seul le directeur peut modifier le personnel.'};
- Object.keys(ENS_INTERDIT).forEach(k=>{const f=acts[k];if(f)acts[k]=function(t){if(prof()){toast(ENS_INTERDIT[k]);return}return f.apply(this,arguments)}});
- ['teach','stuSt'].forEach(k=>{const f=chs[k];chs[k]=function(t){if(prof()){toast(k==='teach'?'Seul le directeur affecte les classes.':'Seul le directeur peut modifier un élève.');render();return}return f.apply(this,arguments)}});
+ const SOLO_OK=['addStu','delStu','editStu','depart','cpMat','stuSt'];
+ // espace enseignant seul pendant l'essai : inscription et import permis, mais aucune modification d'un élève déjà inscrit
+ const SOLO_ACHAT=['delStu','editStu','depart','stuSt'],MSG_ACHAT='Modification des élèves disponible après l’achat de l’application (Paramètres › Activation).';
+ const soloEssai=k=>solo()&&SOLO_ACHAT.includes(k)&&(S.school.licence||{}).type==='essai';
+ Object.keys(ENS_INTERDIT).forEach(k=>{const f=acts[k];if(f)acts[k]=function(t){if(prof()&&!(solo()&&SOLO_OK.includes(k))){toast(ENS_INTERDIT[k]);return}if(soloEssai(k)){toast(MSG_ACHAT);return}return f.apply(this,arguments)}});
+ // le directeur rattache à l'école la sauvegarde d'un espace enseignant seul : élèves, notes, absences, demandes
+ chs.rattacher=function(t){const fi=t.files[0];t.value='';if(!fi)return;fi.text().then(async x=>{let o=null;try{o=JSON.parse(x)}catch(e){}
+  const m=o&&o.school&&o.school.solo&&Array.isArray(o.students)&&(o.teachers||[]).find(z=>z.id===o.school.solo.tid);
+  if(!m||!m.classe)return toast('Ce fichier n’est pas la sauvegarde d’un espace enseignant.');
+  if(prof()||S.school.solo)return toast('Le rattachement se fait dans l’espace du directeur de l’école.');
+  if(!await askPwd(`Rattacher à l’école l’espace de <b>${esc(m.nom)}</b> (${m.classe}) : ses élèves, notes, absences et demandes ?`))return;
+  const c=m.classe;let ens=S.teachers.find(z=>norm(z.nom)===norm(m.nom));
+  if(!ens){ens={...m,id:uid(),compte:null,actif:true};S.teachers.push(ens)}
+  S.teachers.forEach(z=>{if(z!==ens&&z.classe===c)z.classe=''});ens.classe=c;
+  const ids={};let nE=0,nN=0;
+  o.students.forEach(s=>{const k=S.students.find(z=>(s.matNat&&z.matNat===s.matNat)||(norm(fullName(z))===norm(fullName(s))&&z.classe===s.classe));
+   if(k)ids[s.id]=k.id;else{const n={...s,id:uid(),mat:nextMat()};S.students.push(n);ids[s.id]=n.id;nE++}});
+  const cle=k=>{const[a,...r]=k.split('|');return ids[a]?[ids[a],...r].join('|'):null};
+  Object.entries(o.grades||{}).forEach(([k,v])=>{const n=cle(k);if(n&&S.grades[n]==null){S.grades[n]=v;nN++}});
+  Object.keys(o.compAbs||{}).forEach(k=>{const n=cle(k);if(n)S.compAbs[n]=true});
+  Object.entries(o.att||{}).forEach(([d,L])=>Object.entries(L||{}).forEach(([id,v])=>{if(ids[id]){const j=S.att[d]||(S.att[d]={});if(j[ids[id]]==null)j[ids[id]]=v}}));
+  Object.entries(o.appel||{}).forEach(([d,L])=>{if(L&&L[c])(S.appel[d]||(S.appel[d]={}))[c]=true});
+  (o.auth||[]).forEach(a=>{const pid=a.qui==='eleve'?ids[a.pid]:a.pid===m.id?ens.id:'';if(!pid||S.auth.some(z=>z.id===a.id))return;
+   const n=S.auth.reduce((k,z)=>Math.max(k,parseInt(z.ref.split('-').pop())||0),0)+1;S.auth.push({...a,pid,ref:`AUT-${startYear()}-${pad(n)}`})});
+  if(o.cpMat&&o.cpMat[c]&&!(S.cpMat||{})[c])(S.cpMat||(S.cpMat={}))[c]=o.cpMat[c];
+  S.cpExtra=[...new Set([...(S.cpExtra||[]),...(o.cpExtra||[])])];
+  log(`Espace enseignant rattaché : ${m.nom} (${c}), ${plural(nE,'élève')} ajouté(s), ${plural(nN,'note')}`);save();render();
+  toast(`Espace de ${m.nom} rattaché : ${plural(nE,'élève')} ajouté(s), ${plural(nN,'note')} reprise(s). Créez maintenant son compte enseignant.`)})};
+ // espace enseignant seul : ses élèves restent dans sa classe
+ const doImport0=acts.doImport;acts.doImport=function(){const p=solo()&&prof();if(p&&ui.imp){const n=ui.imp.items.filter(i=>i.state==='ok'&&i.s.classe!==p.classe).length;ui.imp.items.forEach(i=>{if(i.state==='ok'&&i.s.classe!==p.classe)i.state='autre'});if(n)toast(`${plural(n,'élève')} d’une autre classe ignoré(s)`)}return doImport0.apply(this,arguments)};
+ ['addStu','editStu'].forEach(k=>{const f=acts[k];acts[k]=async function(t){await f.apply(this,arguments);const p=prof(),s=p&&$('#dlg [name=classe]');if(s){s.value=p.classe;[...s.options].forEach(o=>{if(o.value!==p.classe)o.remove()});chs.stuCls(s)}}});
+ ['teach','stuSt'].forEach(k=>{const f=chs[k];chs[k]=function(t){if(soloEssai(k)){toast(MSG_ACHAT);render();return}if(prof()&&!(solo()&&SOLO_OK.includes(k))){toast(k==='teach'?'Seul le directeur affecte les classes.':'Seul le directeur peut modifier un élève.');render();return}return f.apply(this,arguments)}});
  // demandes d'autorisation : l'enseignant demande pour lui-même ou pour un élève de sa classe, et ne voit que celles-là
  window.authVisible=a=>{const p=prof();if(!p)return true;if(a.qui==='personnel')return a.pid===p.id;const s=S.students.find(x=>x.id===a.pid);return !!s&&s.classe===p.classe};
  const addAuth0=acts.addAuth;acts.addAuth=function(t){const p=prof();if(!p)return addAuth0.call(this,t);

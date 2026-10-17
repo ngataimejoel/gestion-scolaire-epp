@@ -88,3 +88,29 @@ def test_page_avec_donnees_et_pont():
     assert html.count("window.APP_DATA=") == 1 and "<\\/script><b>" in html
     assert "APP.charger()" in html and "APP.verifierAdmin" in html and "qwebchannel.js" in html
     assert html.index("window.APP_DATA=") < html.index("let S=load()")
+
+
+def test_espace_enseignant_seul(st):
+    code = st.creer_espace_enseignant("MotDePasse!2026", "kone awa-marie", "CE1", "epp test")
+    assert code
+    s = st.authentifier(ADMIN, "MotDePasse!2026")
+    assert s["role"] == "ens" and s["solo"] and s["nom"] == "KONE Awa-Marie – CE1"
+    o = st.lire()
+    assert o["school"]["solo"] == {"tid": s["tid"]} and o["school"]["name"] == "EPP TEST"
+    assert st.solo()["classe"] == "CE1"
+    assert licence_pour_page(licence.Etat("active", "ensvie")) == {"type": "vie"}
+
+
+def test_activation_transmet_l_espace(monkeypatch):
+    envoye = {}
+
+    def faux(req, timeout=0):
+        import json
+        envoye.update(json.loads(req.data))
+        raise licence.urllib.error.URLError("hors ligne")
+
+    monkeypatch.setattr(licence, "_config", lambda: {"url": "https://exemple.invalid", "cle_publique": "x"})
+    monkeypatch.setattr(licence.urllib.request, "urlopen", faux)
+    with pytest.raises(licence.LicenceErreur):
+        licence.activer("EPP-AAAA-BBBB-CCCC-DDDD", "EPP", espace="enseignant")
+    assert envoye["espace"] == "enseignant"

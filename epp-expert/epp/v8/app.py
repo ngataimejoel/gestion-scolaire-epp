@@ -90,13 +90,21 @@ def run(argv: list[str]) -> int:
     try:
         while True:
             etat = licence.etat()
+            espace = "enseignant" if st.solo() else "ecole"
             while licence.verrouillee(etat):
-                if not DialogueActivation(None, bloquant=True).exec():
+                if not DialogueActivation(None, bloquant=True, espace=espace).exec():
                     return 0
                 etat = licence.etat()
             session = ouvrir_session(st)
             if session is None:
                 return 0
+            # une licence enseignant n'ouvre que l'espace enseignant seul, jamais celui du directeur
+            while session["role"] == "dir" and (etat.type or "").startswith("ens"):
+                QMessageBox.information(None, NOM, "Cet ordinateur a une licence enseignant : l'espace du directeur "
+                                                   "demande un code école.")
+                if not DialogueActivation(None, bloquant=True).exec():
+                    return 0
+                etat = licence.etat()
             win = Fenetre(st, session, etat)
             win.show()
             app.exec()

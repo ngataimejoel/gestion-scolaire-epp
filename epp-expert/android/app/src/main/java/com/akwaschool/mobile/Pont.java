@@ -814,6 +814,12 @@ public class Pont {
 
     @JavascriptInterface
     public void activer(String id, String code, String ecole) {
+        activerEspace(id, code, ecole, "ecole");
+    }
+
+    /** {@code espace} : « enseignant » pour l'espace enseignant seul (codes enseignant acceptés), sinon « ecole ». */
+    @JavascriptInterface
+    public void activerEspace(String id, String code, String ecole, String espace) {
         reseau.execute(() -> {
             try {
                 String version = "?";
@@ -823,7 +829,8 @@ public class Pont {
                     // version inconnue
                 }
                 Licence.Activation a = Licence.activer(Licence.URL_ACTIVATION, code, machine(), ecole,
-                        "android-" + version, prefs.getString("licence", null), prefs.getString("signature", null));
+                        "android-" + version, prefs.getString("licence", null), prefs.getString("signature", null),
+                        "enseignant".equals(espace) ? "enseignant" : "ecole");
                 prefs.edit().putString("licence", a.licence).putString("signature", a.signature).commit();
                 rendre(id, "{\"ok\":true,\"licence\":" + licence() + "}");
             } catch (Client.Erreur e) {

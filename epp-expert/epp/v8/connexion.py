@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
+                               QPushButton, QVBoxLayout)
 
 from epp import __version__
 from epp.ui import logo as logo_app
@@ -51,21 +52,47 @@ class _Base(QDialog):
         raise NotImplementedError
 
 
+CLASSES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"]
+
+
 class PremierLancement(_Base):
-    """Mot de passe de l'administrateur (directeur), puis son code de secours."""
+    """Espace de l'école (mot de passe du directeur) ou espace enseignant seul, puis le code de secours."""
 
     def __init__(self, st: Stockage):
-        super().__init__("Premier lancement", "Choisissez le mot de passe de l'administrateur (le directeur). "
+        super().__init__("Premier lancement", "Choisissez qui utilise cet ordinateur, puis le mot de passe. "
                                               "Identifiant : <b>admin</b>.")
         self.st = st
+        self.qui = QComboBox()
+        self.qui.addItem("Le directeur (espace de l'école)", "dir")
+        self.qui.addItem("Un enseignant seul (sans l'école)", "solo")
+        self.nom, self.classe, self.ecole = QLineEdit(), QComboBox(), QLineEdit()
+        self.classe.addItems(CLASSES)
+        self.ecole.setPlaceholderText("facultatif")
         self.p1, self.p2 = _mdp(), _mdp()
+        self.form.addRow("Utilisateur", self.qui)
+        self.form.addRow("Vos nom et prénoms", self.nom)
+        self.form.addRow("Votre classe", self.classe)
+        self.form.addRow("École", self.ecole)
         self.form.addRow("Mot de passe", self.p1)
         self.form.addRow("Confirmation", self.p2)
+        self.qui.currentIndexChanged.connect(self._montrer)
+        self._montrer()
+
+    def _montrer(self):
+        solo = self.qui.currentData() == "solo"
+        for w in (self.nom, self.classe, self.ecole):
+            self.form.setRowVisible(w, solo)
 
     def valider(self):
         if self.p1.text() != self.p2.text():
             raise Erreur("Les deux mots de passe ne sont pas identiques.")
-        code = self.st.creer_admin(self.p1.text())
+        if self.qui.currentData() == "solo":
+            if len(self.nom.text().strip()) < 3:
+                raise Erreur("Saisissez vos nom et prénoms.")
+            code = self.st.creer_espace_enseignant(self.p1.text(), self.nom.text(), self.classe.currentText(),
+                                                   self.ecole.text())
+        else:
+            code = self.st.creer_admin(self.p1.text())
         self.session = self.st.authentifier(ADMIN, self.p1.text())
         afficher_code_secours(self, ADMIN, code)
 
