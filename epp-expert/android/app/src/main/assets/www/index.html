@@ -1715,7 +1715,8 @@ const sexCount=L=>{const g=L.filter(s=>s.sexe==='Masculin').length;return [g,L.l
 /* Notation (mêmes règles que l'application) */
 const info=c=>CLASSE_INFO[c];
 const grille=c=>GRILLES[info(c).grille];
-const matieres=(c,n)=>grille(c).mat(n);                       // [[matière, coefficient ou barème]]
+const cpChoix=(c,n)=>{try{return S.cpMat?.[c]?.[n]}catch(e){return null}};// S n’existe pas encore pendant load()
+const matieres=(c,n)=>{const L=grille(c).mat(n),ch=info(c).grille==='CP'&&cpChoix(c,n);return ch&&ch.length?L.filter(([m])=>ch.includes(m)):L};                       // [[matière, coefficient ou barème]]
 const noteMax=(c,w)=>grille(c).mode==='COEF'?grille(c).max:w;
 const ech=c=>grille(c).echelle;
 const evalLabel=(c,n)=>EVALUATIONS[info(c).cal][n-1];
@@ -1783,7 +1784,7 @@ function seed(){
   log:[['Données de démonstration chargées',0],['Demande AUT-2026-003 : élève de CE2',1],['Appel validé : CE1',2],['Notes de la 1re composition saisies en CM1',30],['Mme Tanoh Léa affectée en CM1',60],['Inscription : 3 nouveaux élèves en CP1',1500]].map(([m,min])=>({t:Date.now()-min*6e4,m}))};
 }
 // Complète les données d'une version précédente (champs ajoutés depuis)
-function migrate(o){o.school={...ECOLE,...o.school};const vide={nom:'',prenoms:'',profession:'',tel:'',domicile:''};
+function migrate(o){o.cpMat=o.cpMat||{};o.school={...ECOLE,...o.school};const vide={nom:'',prenoms:'',profession:'',tel:'',domicile:''};
  o.students.forEach(s=>{s.pere={...vide,...s.pere};s.mere={...vide,...s.mere};['sang','allergies','entree','motifDepart'].forEach(k=>{if(s[k]==null)s[k]=''});s.nationalite=natOff(s.nationalite)||NAT_DEFAUT;if(s.matNat==null)s.matNat=/^AK-/i.test(s.mat||'')?'':(s.mat||'');if(!Array.isArray(s.parcours))s.parcours=[]});if(!Array.isArray(o.persoReps))o.persoReps=[];return o}
 function load(){if(window.APP)return APP.charger();try{const r=localStorage.getItem(KEY);if(r){const o=JSON.parse(r);if(o&&o.v===5&&o.students)return migrate(o)}}catch(e){}return seed()}
 let S=load();
@@ -1797,6 +1798,7 @@ const startYear=()=>parseInt(S.school.year)||2026;
 const active=()=>S.students.filter(s=>s.statut==='Inscrit');
 const byName=(a,b)=>(a.nom+a.prenoms).localeCompare(b.nom+b.prenoms,'fr');
 const byClass=(a,b)=>CLASSES.indexOf(a.classe)-CLASSES.indexOf(b.classe)||byName(a,b);
+const fmtNais=s=>s.ageEstime&&s.naissance?`vers ${s.naissance.slice(0,4)} (sans extrait)`:fmtDate(s.naissance);
 const ageOf=s=>{if(!s.naissance)return null;const b=parseISO(s.naissance),r=new Date(startYear(),9,1);let a=r.getFullYear()-b.getFullYear();if(r<new Date(r.getFullYear(),b.getMonth(),b.getDate()))a--;return a};
 const ageAnom=s=>{const a=ageOf(s);return a!=null&&a-AGE_NORMAL[s.classe]>=3};
 const gk=(id,n,m)=>`${id}|${n}|${m}`;
@@ -1977,7 +1979,7 @@ function stuList(){
 }
 function stuRows(){
  const L=stuList();if($('#stuCount'))$('#stuCount').textContent=plural(L.length,'élève');
- return L.map(s=>`<tr><td><div class="who">${avatar(s)}${nameBtn(s)}</div></td><td>${esc(matOf(s))}</td><td>${clsLink(s.classe)}${s.redoublant?' <span class="tag" data-tip="Redoublant">RED</span>':''}</td><td>${s.sexe==='Masculin'?'G':'F'}</td><td>${ageOf(s)??'—'} ans${ageAnom(s)?' <span class="tag warn" data-tip="3 ans ou plus au-dessus de l’âge normal">âge</span>':''}</td><td>${s.extrait?`<span class="tag ok" data-tip="Acte n° ${esc(s.acte?.num||'?')} du ${fmtDate(s.acte?.date)}">Extrait n° ${esc(s.acte?.num||'?')}</span>`:'<span class="tag warn">Sans extrait</span>'}</td><td><span class="tag ${s.statut==='Inscrit'?'':'bad'}">${s.statut}</span></td><td class="r"><button class="ib" data-act="ficheSco" data-id="${s.id}" title="Fiche scolaire">${ic('file')}</button><button class="ib" data-act="editStu" data-id="${s.id}" title="Modifier">${ic('edit')}</button><button class="ib dng" data-act="delStu" data-id="${s.id}" title="Supprimer">${ic('trash')}</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty">Aucun élève ne correspond à ces filtres.</td></tr>`;
+ return L.map(s=>`<tr><td><div class="who">${avatar(s)}${nameBtn(s)}</div></td><td>${esc(matOf(s))}</td><td>${clsLink(s.classe)}${s.redoublant?' <span class="tag" data-tip="Redoublant">RED</span>':''}</td><td>${s.sexe==='Masculin'?'G':'F'}</td><td>${ageOf(s)??'—'} ans${ageAnom(s)?' <span class="tag warn" data-tip="3 ans ou plus au-dessus de l’âge normal">âge</span>':''}</td><td>${s.extrait?`<span class="tag ok" data-tip="Acte n° ${esc(s.acte?.num||'?')} du ${fmtDate(s.acte?.date)}">Extrait n° ${esc(s.acte?.num||'?')}</span>`:'<span class="tag warn">Sans extrait</span>'}</td><td><select data-ch="stuSt" data-id="${s.id}" aria-label="Statut de ${esc(fullName(s))}">${opts(STATUTS,s.statut)}</select></td><td class="r"><button class="ib" data-act="ficheSco" data-id="${s.id}" title="Fiche scolaire">${ic('file')}</button><button class="ib" data-act="editStu" data-id="${s.id}" title="Modifier">${ic('edit')}</button><button class="ib dng" data-act="delStu" data-id="${s.id}" title="Supprimer">${ic('trash')}</button></td></tr>`).join('')||`<tr><td colspan="8" class="empty">Aucun élève ne correspond à ces filtres.</td></tr>`;
 }
 pages['eleves-liste']=()=>`${ph('Élèves & personnel','Cliquez sur un nom pour ouvrir sa fiche : notes, absences, extrait, bulletin et actions rapides.',`<button class="btn" data-act="printStu">${ic('print')}Registre des élèves</button><button class="btn" data-act="allFiches">${ic('file')}Fiches scolaires${ui.cls?' '+ui.cls:''}</button><button class="btn pri" data-act="addStu">${ic('plus')}Inscrire un élève</button>`)}${seg('eleves')}
  <div class="bar"><input id="fq" placeholder="Nom ou matricule…" value="${esc(ui.q)}" data-in="fq" style="min-width:200px">
@@ -1987,37 +1989,56 @@ pages['eleves-liste']=()=>`${ph('Élèves & personnel','Cliquez sur un nom pour 
   ${ui.q||ui.cls||ui.st||ui.doc?`<button class="btn sm" data-act="clearF">${ic('x')}Effacer les filtres</button>`:''}<span class="sub" id="stuCount"></span></div>
  <div class="tw"><table><thead><tr><th>Élève</th><th>Matricule</th><th>Classe</th><th>Sexe</th><th>Âge</th><th>Extrait de naissance</th><th>Statut</th><th></th></tr></thead><tbody id="stuBody">${stuRows()}</tbody></table></div>`;
 function stuForm(s={}){
- ui.tmpPhoto=undefined;const a=s.acte||{};
+ ui.tmpPhoto=undefined;ui.tmpExtrait=undefined;const a=s.acte||{},ex=s.id?(s.extrait?'oui':'non'):'',tut=!!(s.parent||s.tel),cls=s.classe||ui.cls;
  return `<div class="fg"><div class="full matbar"><span>Matricule école : <b>${s.id?esc(s.mat):'attribué automatiquement'}</b></span></div>${s.id?`<div class="full note" style="margin:0">${ic('lock')}<span>Fiche déjà enregistrée : toute modification est validée par le mot de passe d’un administrateur.</span></div>`:''}
  ${field('Matricule national (DESPS)',`<input name="matNat" value="${esc(s.matNat)}" placeholder="Ex. : 12345678A" maxlength="12" autocomplete="off">`,1)}
  <div class="full" style="display:flex;align-items:center;gap:12px"><span id="phPrev">${avatar(s.id?s:{prenoms:'?',nom:'?'},'lg')}</span><label class="btn sm">${ic('cam')}Choisir une photo<input type="file" accept="image/*" data-ch="photo" hidden></label></div>
- ${field('Nom',`<input name="nom" required value="${esc(s.nom)}">`)}${field('Prénoms',`<input name="prenoms" required value="${esc(s.prenoms)}">`)}
- ${field('Date de naissance',`<input type="date" name="naissance" required value="${esc(s.naissance)}">`)}${field('Lieu de naissance (localité)',`<input name="lieu" value="${esc(s.lieu)}" list="dl-sp">`)}
- ${field('Sexe',`<select name="sexe" required>${opts(['Masculin','Féminin'],s.sexe,'Choisir…')}</select>`)}${field('Nationalité',`<input name="nationalite" value="${esc(s.nationalite||NAT_DEFAUT)}" list="dl-nat" placeholder="Choisir dans la liste officielle">`)}
- ${field('Classe',`<select name="classe" required>${opts(CLASSES,s.classe||ui.cls,'Choisir…')}</select>`)}${field('Statut',`<select name="statut">${opts(STATUTS,s.statut||'Inscrit')}</select>`)}
- ${field('Groupe sanguin',`<select name="sang">${opts(SANG,s.sang,'Non renseigné')}</select>`)}${field('Allergies / handicap',`<input name="allergies" value="${esc(s.allergies)}" placeholder="Aucun">`)}
- ${field('Entré(e) à l’école le',`<input type="date" name="entree" value="${esc(s.entree)}">`)}${field('Motif de départ (si l’élève quitte l’école)',`<input name="motifDepart" value="${esc(s.motifDepart)}" placeholder="Ex. : mutation des parents">`)}
- ${parentBox('pere','Père',s.pere)}${parentBox('mere','Mère',s.mere)}
- <div class="acte"><div class="sub" style="grid-column:1/-1"><b style="color:var(--ink)">Tuteur / tutrice</b> (personne à contacter, si ce n’est ni le père ni la mère)</div>${field('Nom et prénoms',`<input name="parent" value="${esc(s.parent)}">`)}${field('Contact',`<input name="tel" type="tel" value="${esc(s.tel)}" placeholder="07 00 00 00 00">`)}</div>
- <div class="fd"><label class="chk"><input type="checkbox" name="redoublant"${s.redoublant?' checked':''}> Redoublant</label></div>
- <div class="fd"><label class="chk"><input type="checkbox" name="extrait" data-ch="extrait"${s.extrait?' checked':''}> Extrait de naissance fourni</label></div>
- <div class="acte" id="acteBox"${s.extrait?'':' hidden'}><div class="full sub" style="grid-column:1/-1"><b style="color:var(--ink)">Informations de l’extrait de naissance</b> (telles qu’écrites sur l’acte)</div>
+ ${field('Nom',`<input name="nom" required value="${esc(s.nom)}" data-in="majNom" autocapitalize="characters" autocomplete="off">`)}${field('Prénoms',`<input name="prenoms" required value="${esc(s.prenoms)}" data-in="majPrenoms" autocapitalize="words" autocomplete="off">`)}
+ <div class="fd full"><label>L’enfant a-t-il un extrait de naissance ?</label><div class="bar" style="margin:0"><label class="chk"><input type="radio" name="extrait" value="oui" data-ch="extrait"${ex==='oui'?' checked':''}> Oui</label><label class="chk"><input type="radio" name="extrait" value="non" data-ch="extrait"${ex==='non'?' checked':''}> Non</label></div></div>
+ <div class="acte" id="acteBox"${ex==='oui'?'':' hidden'}><div class="full sub" style="grid-column:1/-1"><b style="color:var(--ink)">Extrait de naissance</b></div>
+  <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px"><span id="exPrev">${s.extraitPhoto?`<img src="${s.extraitPhoto}" alt="Extrait" style="height:64px;border-radius:6px">`:''}</span><label class="btn sm">${ic('cam')}Photo de l’extrait<input type="file" accept="image/*" data-ch="extraitPhoto" hidden></label></div>
+  ${field('Date de naissance (jour, mois, année)',`<input type="date" name="naissance" value="${esc(s.ageEstime?'':s.naissance)}">`)}${field('Lieu de naissance (localité)',`<input name="lieu" value="${esc(s.lieu)}" list="dl-sp">`)}
   ${field('N° de l’acte',`<input name="acte_num" id="acteNum" value="${esc(a.num)}" placeholder="Ex. : 245">`)}${field('Date de l’acte (établi le)',`<input type="date" name="acte_date" value="${esc(a.date)}">`)}
   ${field('Centre d’état civil',`<input name="acte_centre" value="${esc(a.centre)}" placeholder="Ex. : Centre d’état civil de Ouaninou">`)}${field('Sous-préfecture',`<input name="acte_sp" value="${esc(a.sp)}" list="dl-sp" placeholder="Ex. : OUANINOU">`)}</div>
+ <div class="acte" id="ageBox"${ex==='non'?'':' hidden'}>${field('Âge de l’enfant (en années)',`<input type="number" name="age" min="2" max="20" inputmode="numeric" value="${s.ageEstime&&ageOf(s)!=null?ageOf(s):''}">`)}<div class="sub" style="grid-column:1/-1">Sans extrait : le nom et les prénoms de l’un des parents, ou du tuteur, sont obligatoires.</div></div>
+ ${field('Sexe',`<select name="sexe" required>${opts(['Masculin','Féminin'],s.sexe,'Choisir…')}</select>`)}${field('Nationalité',`<input name="nationalite" value="${esc(s.nationalite||NAT_DEFAUT)}" list="dl-nat" placeholder="Choisir dans la liste officielle">`)}
+ ${field('Classe',`<select name="classe" required data-ch="stuCls">${opts(CLASSES,cls,'Choisir…')}</select>`)}${field('Entré(e) à l’école le',`<span id="entreeBox" style="display:contents">${entreeIn(cls,s.entree,!s.id)}</span>`)}
+ ${field('Groupe sanguin',`<select name="sang">${opts(SANG,s.sang,'Non renseigné')}</select>`)}${field('Allergies / handicap',`<input name="allergies" value="${esc(s.allergies)}" placeholder="Aucun">`)}
+ ${parentBox('pere','Père',s.pere)}${parentBox('mere','Mère',s.mere)}
+ <div class="fd full"><label class="chk"><input type="checkbox" name="tuteur" data-ch="tuteur"${tut?' checked':''}> Tuteur / tutrice (personne à contacter, si ce n’est ni le père ni la mère)</label></div>
+ <div class="acte" id="tutBox"${tut?'':' hidden'}>${field('Nom et prénoms du tuteur',`<input name="parent" value="${esc(s.parent)}" data-in="majNomComplet" autocomplete="off">`)}${field('Contact',`<input name="tel" type="tel" value="${esc(s.tel)}" placeholder="07 00 00 00 00">`)}</div>
+ <div class="fd"><label class="chk"><input type="checkbox" name="redoublant"${s.redoublant?' checked':''}> Redoublant</label></div>
  </div>`;
+}
+// date d'entrée : date du jour, non modifiable, pour une inscription au CP1 ; à renseigner pour les autres classes
+const entreeIn=(c,v,neuf)=>c==='CP1'?`<input type="date" name="entree" value="${esc(neuf||!v?today:v)}" readonly title="Inscription au CP1 : date du jour">`:`<input type="date" name="entree" value="${esc(v)}">`;
+// noms en majuscules, chaque prénom avec une majuscule, quel que soit le mode de saisie
+const majNom=v=>String(v||'').toUpperCase();
+const majPrenoms=v=>String(v||'').toLowerCase().replace(/(^|[\s\-'’])(\p{L})/gu,(x,a,b)=>a+b.toUpperCase());
+const majNomComplet=v=>{const m=String(v||'').match(/^(\s*\S+)([\s\S]*)$/);return m?m[1].toUpperCase()+majPrenoms(m[2]):''};
+function stuErr(f){
+ const ex=f.get('extrait'),P=k=>(f.get(k+'_nom')||'').trim()&&(f.get(k+'_prenoms')||'').trim();
+ if(!ex)return 'Indiquez si l’enfant a un extrait de naissance (Oui ou Non).';
+ if(ex==='oui'){if(!f.get('naissance'))return 'Saisissez la date de naissance (jour, mois, année).';if(!P('pere')||!P('mere'))return 'Avec un extrait, les nom et prénoms du père et de la mère sont obligatoires.'}
+ else{const a=Number(f.get('age'));if(!a||a<2||a>20)return 'Saisissez l’âge de l’enfant (en années).';if(!P('pere')&&!P('mere')&&!(f.get('tuteur')==='on'&&(f.get('parent')||'').trim()))return 'Sans extrait, le nom et les prénoms de l’un des parents ou du tuteur sont obligatoires.'}
+ if(f.get('classe')!=='CP1'&&!f.get('entree'))return 'Saisissez la date d’entrée à l’école.';
+ return '';
 }
 function parentBox(k,lab,p={}){
  const v=x=>esc((p||{})[x]);
- return `<div class="acte"><div class="sub" style="grid-column:1/-1"><b style="color:var(--ink)">${lab}</b></div>${field('Nom',`<input name="${k}_nom" value="${v('nom')}">`)}${field('Prénoms',`<input name="${k}_prenoms" value="${v('prenoms')}">`)}${field('Profession',`<input name="${k}_profession" value="${v('profession')}" list="dl-prof-${k}"><datalist id="dl-prof-${k}">${(k==='pere'?PROF_P:PROF_M).map(x=>`<option value="${x}">`).join('')}</datalist>`)}${field('Contact',`<input name="${k}_tel" type="tel" value="${v('tel')}" placeholder="07 00 00 00 00">`)}${field('Domicile',`<input name="${k}_domicile" value="${v('domicile')}" placeholder="Ex. : Ouaninou, quartier Commerce">`,1)}</div>`;
+ return `<div class="acte"><div class="sub" style="grid-column:1/-1"><b style="color:var(--ink)">${lab}</b></div>${field('Nom',`<input name="${k}_nom" value="${v('nom')}" data-in="majNom" autocapitalize="characters" autocomplete="off">`)}${field('Prénoms',`<input name="${k}_prenoms" value="${v('prenoms')}" data-in="majPrenoms" autocapitalize="words" autocomplete="off">`)}${field('Profession',`<input name="${k}_profession" value="${v('profession')}" list="dl-prof-${k}"><datalist id="dl-prof-${k}">${(k==='pere'?PROF_P:PROF_M).map(x=>`<option value="${x}">`).join('')}</datalist>`)}${field('Contact',`<input name="${k}_tel" type="tel" value="${v('tel')}" placeholder="07 00 00 00 00">`)}${field('Domicile',`<input name="${k}_domicile" value="${v('domicile')}" placeholder="Ex. : Ouaninou, quartier Commerce">`,1)}</div>`;
 }
-const readParent=(f,k)=>Object.fromEntries(['nom','prenoms','profession','tel','domicile'].map(x=>[x,(f.get(k+'_'+x)||'').trim()]));
+const readParent=(f,k)=>{const p=Object.fromEntries(['nom','prenoms','profession','tel','domicile'].map(x=>[x,(f.get(k+'_'+x)||'').trim()]));p.nom=majNom(p.nom);p.prenoms=majPrenoms(p.prenoms);return p};
 function readStu(f,s){
- const ex=f.get('extrait')==='on';
- Object.assign(s,{matNat:(f.get('matNat')||'').replace(/\s/g,'').toUpperCase(),nom:f.get('nom').trim(),prenoms:f.get('prenoms').trim(),naissance:f.get('naissance'),lieu:f.get('lieu').trim(),sexe:f.get('sexe'),nationalite:natOff(f.get('nationalite'))||NAT_DEFAUT,classe:f.get('classe'),statut:f.get('statut')||'Inscrit',parent:f.get('parent').trim(),tel:f.get('tel').trim(),redoublant:f.get('redoublant')==='on',extrait:ex,
-  pere:readParent(f,'pere'),mere:readParent(f,'mere'),sang:f.get('sang')||'',allergies:f.get('allergies').trim(),entree:f.get('entree')||'',motifDepart:f.get('motifDepart').trim(),parcours:s.parcours||[],
+ const ex=f.get('extrait')==='oui',tut=f.get('tuteur')==='on',age=Number(f.get('age'))||0;
+ Object.assign(s,{matNat:(f.get('matNat')||'').replace(/\s/g,'').toUpperCase(),nom:majNom(f.get('nom').trim()),prenoms:majPrenoms(f.get('prenoms').trim()),
+  naissance:ex?f.get('naissance'):`${startYear()-age}-01-01`,ageEstime:!ex,lieu:(f.get('lieu')||'').trim(),sexe:f.get('sexe'),nationalite:natOff(f.get('nationalite'))||NAT_DEFAUT,classe:f.get('classe'),statut:s.statut||'Inscrit',
+  parent:tut?majNomComplet(f.get('parent').trim()):'',tel:tut?f.get('tel').trim():'',redoublant:f.get('redoublant')==='on',extrait:ex,
+  pere:readParent(f,'pere'),mere:readParent(f,'mere'),sang:f.get('sang')||'',allergies:f.get('allergies').trim(),entree:f.get('entree')||'',motifDepart:s.motifDepart||'',parcours:s.parcours||[],
   acte:ex?{num:f.get('acte_num').trim(),date:f.get('acte_date'),centre:f.get('acte_centre').trim(),sp:f.get('acte_sp').trim()}:(s.acte||{num:'',date:'',centre:'',sp:''})});
- if(ui.tmpPhoto!==undefined)s.photo=ui.tmpPhoto;return s;
+ if(ui.tmpPhoto!==undefined)s.photo=ui.tmpPhoto;if(ui.tmpExtrait!==undefined)s.extraitPhoto=ui.tmpExtrait;return s;
 }
+
 function nextMat(){const nums=S.students.map(s=>parseInt((s.mat||'').replace(/\D/g,'').slice(2))||0);return 'AK-'+String(startYear()).slice(2)+pad(Math.max(0,...nums)+1)}
 
 pages['eleves-classes']=()=>{const ev=S.school.evalCourante;return `${ph('Élèves & personnel','Les six niveaux en un coup d’œil. Chaque carte mène à la liste, aux notes, à l’appel et au classement de la classe.',`<button class="btn" data-act="printEff">${ic('print')}Tableau des effectifs</button>`)}${seg('eleves')}
@@ -2038,9 +2059,8 @@ function saveTea(f,t){t.nom=f.get('nom').trim();t.matricule=f.get('matricule').t
 pages['notes-saisie']=()=>{
  const n=Number(ui.nEv),c=ui.nCls,M=matieres(c,n),g=grille(c),L=active().filter(s=>s.classe===c).sort(byName);
  const rows=L.map(s=>{const ab=isAbs(s.id,n);return `<tr data-id="${s.id}"><td><div class="who">${avatar(s)}${nameBtn(s)}</div></td><td class="c"><input type="checkbox" data-ch="cabs" data-id="${s.id}"${ab?' checked':''} aria-label="Absent à la composition"></td>${M.map(([m,w])=>{const v=gv(s.id,n,m);return `<td class="c"><input class="grade" data-id="${s.id}" data-m="${esc(m)}" data-max="${noteMax(c,w)}" data-ch="grade" data-old="${fmtIn(v)}" value="${fmtIn(v)}" inputmode="decimal" autocomplete="off" placeholder="/${noteMax(c,w)}"${ab?' disabled':''} aria-label="${esc(m)}, ${esc(fullName(s))}"></td>`}).join('')}<td class="r" data-tot="${s.id}"></td><td class="r"><b data-avg="${s.id}"></b></td><td class="r" data-rk="${s.id}"></td></tr>`}).join('');
- return `${ph('Notes & bulletins',`Matières et barèmes de l’application. Tab passe à la matière suivante, Entrée à l’élève suivant.`,`${go('notes-resultats',{rCls:c,rEv:String(n)},ic('award')+'Voir le classement','btn')}`)}${seg('notes')}
+ return `${ph('Notes & bulletins',`Matières et barèmes de l’application. Tab passe à la matière suivante, Entrée à l’élève suivant.`,`${info(c).grille==='CP'?`<button class="btn" data-act="cpMat">${ic('edit')}Matières de la composition</button>`:''}${go('notes-resultats',{rCls:c,rEv:String(n)},ic('award')+'Voir le classement','btn')}`)}${seg('notes')}
  <div class="bar">${pills('nCls')}<select data-ch="nEv" aria-label="Évaluation">${evOpts(n,false,c)}</select><span class="chip" id="nCount"></span></div>
- <div class="note mb">${ic('lock')}<span>Grille <b>${g.lib}</b> : ${g.mode==='COEF'?'notes sur 10, coefficient 1, moyenne sur 10':`notes sur le barème de chaque matière, moyenne sur ${g.echelle}`}. Seuil d’admission : ${info(c).seuil}/${g.echelle}. Corriger une note déjà saisie demande le mot de passe administrateur${window.APP?'':' (démo : « admin »)'}.</span></div>
  <div class="tw"><table><thead><tr><th>Élève</th><th class="c">Absent</th>${M.map(([m,w])=>`<th class="c" style="white-space:normal;min-width:84px">${m}<br><span style="text-transform:none;letter-spacing:0">/${noteMax(c,w)}</span></th>`).join('')}<th class="r">Total</th><th class="r">Moy. /${g.echelle}</th><th class="r">Rang</th></tr></thead><tbody id="nBody">${rows||`<tr><td colspan="${M.length+5}" class="empty">Aucun élève inscrit dans cette classe.</td></tr>`}</tbody>
  <tfoot><tr><td>Moyenne de la classe</td><td></td>${M.map(([m])=>`<td class="c" data-cm="${esc(m)}"></td>`).join('')}<td></td><td class="r" id="nCm"></td><td></td></tr></tfoot></table></div>`;
 };
@@ -2062,7 +2082,7 @@ function bulletin(s,per){
  const c=s.classe,{w}=ranking(c,per),me=w.find(x=>x.s.id===s.id),t=teacherOf(c),eff=active().filter(o=>o.classe===c).length,e=ech(c);
  const ab=absOf(s.id),nA=ab.filter(x=>x.v==='A').length,nJ=ab.length-nA;
  const head=`${entete()}<div class="dtitle"><h2>${per==='A'?'BULLETIN ANNUEL':'BULLETIN DE NOTES – '+evalLabel(c,per).toUpperCase()}</h2></div>
- <div class="dmeta"><span>Nom et prénoms : <b>${esc(fullName(s))}</b></span><span>Matricule : <b>${esc(s.mat)}</b></span><span>Classe : <b>${c}</b> (effectif : ${eff})${s.redoublant?' · redoublant':''}</span><span>Né(e) le ${fmtDate(s.naissance)}${s.lieu?' à '+esc(s.lieu):''} · ${s.sexe}</span><span>Enseignant(e) : ${esc(t?.nom||'—')}</span><span>Absences : ${nA} non justifiée(s), ${nJ} justifiée(s)</span></div>`;
+ <div class="dmeta"><span>Nom et prénoms : <b>${esc(fullName(s))}</b></span><span>Matricule : <b>${esc(s.mat)}</b></span><span>Classe : <b>${c}</b> (effectif : ${eff})${s.redoublant?' · redoublant':''}</span><span>Né(e) le ${fmtNais(s)}${s.lieu?' à '+esc(s.lieu):''} · ${s.sexe}</span><span>Enseignant(e) : ${esc(t?.nom||'—')}</span><span>Absences : ${nA} non justifiée(s), ${nJ} justifiée(s)</span></div>`;
  if(per==='A'){
   const m=mga(s);
   return `${head}<table><thead><tr><th>Évaluation</th><th>Date</th><th>Moyenne / ${e}</th><th>Rang</th><th>Moy. classe</th></tr></thead><tbody>${[1,2,3,4].map(n=>{const r=ranking(c,n).w.find(x=>x.s.id===s.id);return `<tr><td>${evalLabel(c,n)}</td><td>${fmtDate(evalDate(c,n))}</td><td><b>${isAbs(s.id,n)?'Absent':fmt(moyEval(s,n))}</b></td><td>${r?rankTxt(r.rank):'—'}</td><td>${fmt(classAvg(c,n))}</td></tr>`}).join('')}</tbody></table>
@@ -2080,10 +2100,9 @@ pages['notes-fin']=()=>{
  const cnt=d=>active().filter(s=>decisionOf(s)===d).length,next=(()=>{const y=startYear()+1;return `${y}–${y+1}`})();
  return `${ph('Notes & bulletins',`Décisions de fin d’année d’après la MGA, puis passage à l’année ${next}.`,`<button class="btn" data-act="printDec">${ic('print')}Imprimer les décisions</button><button class="btn pri" data-act="rollover">${ic('flag')}Valider et passer à ${next}</button>`)}${seg('notes')}
  <div class="grid g4 mb">${mstat('Admis',cnt('Admis'),'toute l’école')}${mstat('Redoublants',cnt('Redoublant'),'toute l’école')}${mstat('MGA incomplète',active().filter(s=>!decisionOf(s)).length,'évaluations manquantes')}${mstat('Départs',S.students.filter(s=>s.statut!=='Inscrit').length,'abandons, exclusions, transferts')}</div>
- <div class="note mb">${ic('help')}<span>Proposition : <b>Admis</b> si la MGA atteint le seuil de la classe (${c} : ${info(c).seuil}/${e}), sinon <b>Redoublant</b>. ${info(c).regle==='MOYENNE4'?'Au CM2, la MGA est la moyenne des 4 évaluations.':'MGA = (moyenne des 3 compositions + 2 × composition de passage) ÷ 3.'} Le directeur peut changer la décision. Au passage, les admis montent d’une classe (les CM2 admis quittent l’école).</span></div>
  <div class="bar">${pills('fCls')}</div>
  <div class="tw"><table><thead><tr><th>Élève</th>${[1,2,3,4].map(n=>`<th class="r">${evalLabel(c,n).replace('composition','compo.')}</th>`).join('')}<th class="r">MGA /${e}</th><th>Proposition</th><th>Décision du directeur</th></tr></thead><tbody>${L.map(({s,m})=>`<tr><td><div class="who">${avatar(s)}${nameBtn(s)}</div></td>${[1,2,3,4].map(n=>`<td class="r">${isAbs(s.id,n)?'Abs.':fmt(moyEval(s,n))}</td>`).join('')}<td class="r"><b>${fmt(m)}</b></td><td>${decTag(decisionProp(s))}</td><td><select data-ch="deci" data-id="${s.id}" aria-label="Décision">${opts(DECISIONS,decisionOf(s),'—')}</select>${s.decision&&s.decision!==decisionProp(s)?' <span class="tag acc">modifiée</span>':''}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Aucun élève inscrit.</td></tr>'}</tbody></table></div>
- ${window.APP?'':`<div class="sub" style="margin-top:10px">Pour essayer la fin d’année avec la démonstration : Rapports & administration › Import, export & sauvegarde › « Remplir toutes les évaluations ».</div>`}`;
+ `;
 };
 
 /* ---------- 6.4 Absences ---------- */
@@ -2262,7 +2281,6 @@ pages['admin-rapports']=()=>{
  const k=ui.rep,pay=repPaysage(k),param=k==='resultats'?`<select data-ch="repCls" aria-label="Classe">${opts(CLASSES,ui.repCls)}</select><select data-ch="repEv" aria-label="Évaluation">${evOpts(ui.repEv,false,ui.repCls)}</select>`:k==='compo'?`<select data-ch="repEv" aria-label="Évaluation">${evOpts(ui.repEv,false)}</select>`:k==='mensuel'?`<select data-ch="repMois" aria-label="Mois">${opts(moisOpts(),ui.repMois)}</select>`:'';
  return `${ph('Rapports & administration','Les rapports officiels de l’application, calculés à partir de vos données. Remplissez les zones à rédiger, puis imprimez.',`<button class="btn" data-act="gFromRep">${ic('edit')}Modifier ce rapport</button><button class="btn pri" data-act="printRep">${ic('print')}Imprimer ce rapport</button>`)}${seg('admin')}
  <div class="bar">${pills('rep',null,REPORTS)}${param}</div>
- <div class="note mb">${ic('print')}<span><b>${fitInfo(repDoc(k,false),pay,repFit(k))}.</b> Les cadres pointillés sont à rédiger : le texte est gardé et repris à l’impression. ${k==='fin'||k==='cm2'?'Les décisions viennent de Notes & bulletins › Fin d’année.':''} « Modifier ce rapport » en fait une copie dans le générateur, où vous changez les tableaux, leur ordre et les titres.</span></div>
  <div class="paperwrap"><div class="paper ${pay?'land':'port'}">${repDoc(k,true)}</div></div>`;
 };
 const moisOpts=()=>Object.keys(JOURS_MOIS).map(Number).sort((a,b)=>(a<9?a+12:a)-(b<9?b+12:b)).map(m=>[String(m),`${MOIS[m-1]} (${JOURS_MOIS[m]} jours de classe)`]);
@@ -2314,7 +2332,6 @@ pages['admin-generateur']=()=>{
    ${b.type==='signature'?'':`<input data-ch="gbT" data-i="${i}" value="${esc(b.titre)}" placeholder="Titre (facultatif)" aria-label="Titre du bloc">`}${blocParam(b,i)}
    <span class="sp"></span><button class="ib" data-act="gMv" data-i="${i}" data-d="-1" title="Monter"${i?'':' disabled'}>${ic('up')}</button><button class="ib" data-act="gMv" data-i="${i}" data-d="1" title="Descendre"${i<r.blocs.length-1?'':' disabled'}>${ic('down')}</button><button class="ib dng" data-act="gRm" data-i="${i}" title="Retirer">${ic('x')}</button></div>`).join('')||'<div class="sub">Ajoutez un premier bloc ci-dessous.</div>'}</div>
   <div class="bar" style="margin:12px 0 0"><select id="gAddSel" aria-label="Bloc à ajouter">${opts(Object.entries(BLOCS).map(([k,b])=>[k,b.lab]))}</select><button class="btn" data-act="gAdd">${ic('plus')}Ajouter ce bloc</button></div></div>
-  <div class="note mb">${ic('print')}<span><b>${fitInfo(repPerso(r,false),r.pay)}.</b> L’aperçu ci-dessous se met à jour à chaque changement.</span></div>
   <div class="paperwrap"><div class="paper ${r.pay?'land':'port'}">${repPerso(r,true)}</div></div>`
  :`<div class="card empty">Choisissez un rapport à gauche, créez-en un nouveau, ou partez d’un rapport officiel pour le modifier.</div>`;
  return `${ph('Rapports & administration','Créez vos propres rapports ou modifiez une copie d’un rapport officiel : tableaux, ordre, titres et orientation. Chaque rapport s’imprime sur une seule page A4.',r?`<button class="btn pri" data-act="gPrint">${ic('print')}Imprimer</button>`:'')}${seg('admin')}
@@ -2444,9 +2461,9 @@ function buildImport(rows){
   const na=c.y>=0&&g(r,'y')?toISO(`${g(r,'j')}/${g(r,'m')}/${g(r,'y')}`):toISO(g(r,'na'));
   const num=vide0(g(r,'an')),exv=norm(g(r,'ex')),ex=c.ex>=0&&exv?['oui','1','true','complet','x'].includes(exv):!!num;
   const pe=coupeNom(g(r,'pe')),me=coupeNom(g(r,'me')),dom=vide0(g(r,'re')),spv=vide0(g(r,'sp'));
-  const s={id:uid(),nom:g(r,'nom'),prenoms:g(r,'pre'),classe:cl,sexe,naissance:na,matNat:g(r,'mat').replace(/\s/g,'').toUpperCase(),lieu:vide0(g(r,'lo')),nationalite:natOff(g(r,'nat'))||NAT_DEFAUT,redoublant:false,mat:'',
+  const s={id:uid(),nom:majNom(g(r,'nom')),prenoms:majPrenoms(g(r,'pre')),classe:cl,sexe,naissance:na,matNat:g(r,'mat').replace(/\s/g,'').toUpperCase(),lieu:vide0(g(r,'lo')),nationalite:natOff(g(r,'nat'))||NAT_DEFAUT,redoublant:false,mat:'',
    parent:g(r,'pa')||vide0(g(r,'pe'))||vide0(g(r,'me')),tel:g(r,'tel'),extrait:ex,acte:{num,date:toISO(g(r,'ad')),centre:vide0(g(r,'ac')),sp:spv},
-   pere:{nom:pe.nom,prenoms:pe.prenoms,profession:'',tel:'',domicile:dom},mere:{nom:me.nom,prenoms:me.prenoms,profession:'',tel:'',domicile:dom},
+   pere:{nom:majNom(pe.nom),prenoms:majPrenoms(pe.prenoms),profession:'',tel:'',domicile:dom},mere:{nom:majNom(me.nom),prenoms:majPrenoms(me.prenoms),profession:'',tel:'',domicile:dom},
    sang:'',allergies:'',entree:'',motifDepart:'',parcours:[],statut:'Inscrit',photo:'',decision:''};
   let state='ok',why='';const km=norm(s.matNat);
   if(!s.nom||!s.prenoms){state='err';why='nom ou prénoms manquant'}else if(!CLASSES.includes(cl)){state='err';why='classe inconnue'}else if(!sexe){state='err';why='sexe illisible'}
@@ -2503,7 +2520,7 @@ function qrText(s){
  const sc=S.school,a=s.acte||{},p=s.pere||{},m=s.mere||{};
  return [`FICHE SCOLAIRE - ${sc.name}`,`${sc.iepp} - ${sc.drenaet}`,`Annee scolaire ${sc.year}`,
   `Eleve : ${fullName(s)}`,`Matricule : ${matOf(s)}${s.matNat&&s.mat?' (école : '+s.mat+')':''}`,`Sexe : ${s.sexe} - Classe : ${s.classe}`,
-  `Ne(e) le ${fmtDate(s.naissance)}${s.lieu?' a '+s.lieu:''}`,s.extrait?`Acte n° ${a.num||'?'} du ${fmtDate(a.date)}${a.centre?' - '+a.centre:''}`:'Extrait de naissance : non fourni',
+  `Ne(e) le ${fmtNais(s)}${s.lieu?' a '+s.lieu:''}`,s.extrait?`Acte n° ${a.num||'?'} du ${fmtDate(a.date)}${a.centre?' - '+a.centre:''}`:'Extrait de naissance : non fourni',
   `Pere : ${(p.nom+' '+p.prenoms).trim()||'-'}${p.profession?' ('+p.profession+')':''}`,`Mere : ${(m.nom+' '+m.prenoms).trim()||'-'}${m.profession?' ('+m.profession+')':''}`,
   `Contact : ${p.tel||m.tel||s.tel||'-'}`].join('\n');
 }
@@ -2521,7 +2538,7 @@ function ficheScolaire(s){
    <p class="fs-qrcap">Code QR : école et élève<br><span>À scanner avec un téléphone</span></p></div>
   <div class="fs-right"><div class="fs-no">FICHE N° <b>${pad(parseInt((s.mat||'').replace(/\D/g,'').slice(2))||0)}</b></div><div class="fs-mat"><b>NUMERO MATRICULE :</b><span>${esc(matOf(s))}</span></div>${QR.svg(qrText(s),92)}</div></div>
  <p>NOM : ${f(s.nom)}</p><p>PRENOM(S) : ${f(s.prenoms)}</p>
- <p>Né(e) le : ${f(fmtDate(s.naissance),'90px')} à : ${f(s.lieu)} S/P : ${f(a.sp?a.sp.replace(/^Sous-préfecture de /i,''):'')}</p>
+ <p>Né(e) le : ${f(fmtNais(s),'90px')} à : ${f(s.lieu)} S/P : ${f(a.sp?a.sp.replace(/^Sous-préfecture de /i,''):'')}</p>
  <p>Nationalité : ${f(s.nationalite)} Groupe sanguin : ${f(s.sang)} Allergies / handicap : ${f(s.allergies)}</p>
  <p>Acte de Naissance / Jugement supplétif : N° ${f(s.extrait?a.num:'','70px')} Du ${f(s.extrait?fmtDate(a.date):'','90px')} Délivré à : ${f(s.extrait?a.centre:'')}</p>
  <div class="fs-par">${par('PERE',s.pere)}${par('MERE',s.mere)}${par('TUTEUR / TUTRICE',tut)}</div>
@@ -2545,11 +2562,11 @@ function ficheEleve(s){
  const per=[1,2,3,4,'A'].map(p=>{const r=ranking(c,p).w,me=r.find(x=>x.s.id===s.id),v=score(s,p);return `<tr><td>${p==='A'?'<b>MGA</b>':evalLabel(c,p)}</td><td class="r"><b>${p!=='A'&&isAbs(s.id,p)?'Abs.':fmt(v)}</b></td><td class="r">${me?rankTxt(me.rank)+' / '+r.length:'—'}</td><td>${v==null?'—':`<button class="btn sm" data-act="bul" data-id="${s.id}" data-per="${p}">Bulletin</button>`}</td></tr>`}).join('');
  return `<div class="dh"><span>Fiche élève</span><button class="ib" data-act="closeDrawer" aria-label="Fermer">${ic('x')}</button></div><div class="dbody">
  <div class="matbar" style="margin-bottom:12px"><span>Matricule école : <b>${esc(s.mat)}</b></span><span>Matricule national : <b>${esc(s.matNat||'—')}</b></span></div><div class="dhero">${avatar(s,'xl')}<div><h2>${esc(fullName(s))}</h2><div class="sub">${s.sexe} · ${ageOf(s)??'—'} ans · ${esc(s.nationalite||'')}</div><div class="bar" style="margin:6px 0 0">${clsLink(c)}<span class="tag ${s.statut==='Inscrit'?'ok':'bad'}">${s.statut}</span>${s.redoublant?'<span class="tag">Redoublant</span>':''}${s.extrait?'':'<span class="tag warn">Sans extrait</span>'}${ageAnom(s)?'<span class="tag warn">Âge à vérifier</span>':''}</div></div></div>
- <div class="dact"><button class="btn sm" data-act="editStu" data-id="${s.id}">${ic('edit')}Modifier</button><button class="btn sm pri" data-act="ficheSco" data-id="${s.id}">${ic('file')}Fiche scolaire</button>${go('notes-saisie',{nCls:c},ic('award')+'Notes de la classe')}${go('absences-appel',{aCls:c},ic('clip')+'Appel')}<button class="btn sm" data-act="addAuth" data-qui="eleve" data-id="${s.id}">${ic('cal')}Demande d’absence</button></div>
- <section><h4>Identité</h4><dl class="kvs"><dt>Né(e) le</dt><dd>${fmtDate(s.naissance)}${s.lieu?' à '+esc(s.lieu):''}</dd><dt>Groupe sanguin</dt><dd>${esc(s.sang)||'—'}</dd><dt>Allergies / handicap</dt><dd>${esc(s.allergies)||'—'}</dd><dt>Tuteur / tutrice</dt><dd>${esc(s.parent)||'—'}${s.tel?' · '+esc(s.tel):''}</dd><dt>Enseignant(e)</dt><dd>${teacherOf(c)?`<button class="lk" data-act="ficheP" data-id="${teacherOf(c).id}">${esc(teacherOf(c).nom)}</button>`:'—'}</dd></dl></section>
+ <div class="dact"><button class="btn sm" data-act="editStu" data-id="${s.id}">${ic('edit')}Modifier</button><button class="btn sm" data-act="depart" data-id="${s.id}">${ic('flag')}Départ${s.statut!=='Inscrit'?' · '+esc(s.statut):''}</button><button class="btn sm pri" data-act="ficheSco" data-id="${s.id}">${ic('file')}Fiche scolaire</button>${go('notes-saisie',{nCls:c},ic('award')+'Notes de la classe')}${go('absences-appel',{aCls:c},ic('clip')+'Appel')}<button class="btn sm" data-act="addAuth" data-qui="eleve" data-id="${s.id}">${ic('cal')}Demande d’absence</button></div>
+ <section><h4>Identité</h4><dl class="kvs">${s.ageEstime?`<dt>Âge</dt><dd>${ageOf(s)??'—'} ans (déclaré, sans extrait)`:`<dt>Né(e) le</dt><dd>${fmtNais(s)}`}${s.lieu?' à '+esc(s.lieu):''}</dd><dt>Groupe sanguin</dt><dd>${esc(s.sang)||'—'}</dd><dt>Allergies / handicap</dt><dd>${esc(s.allergies)||'—'}</dd><dt>Tuteur / tutrice</dt><dd>${esc(s.parent)||'—'}${s.tel?' · '+esc(s.tel):''}</dd><dt>Enseignant(e)</dt><dd>${teacherOf(c)?`<button class="lk" data-act="ficheP" data-id="${teacherOf(c).id}">${esc(teacherOf(c).nom)}</button>`:'—'}</dd></dl></section>
  <section><h4>Parents</h4><dl class="kvs">${[['Père',s.pere],['Mère',s.mere]].map(([l,p])=>`<dt>${l}</dt><dd>${p&&(p.nom||p.prenoms)?`<b>${esc(p.nom+' '+p.prenoms)}</b><br><span class="sub">${esc(p.profession)||'Profession non renseignée'}${p.tel?' · '+esc(p.tel):''}${p.domicile?' · '+esc(p.domicile):''}</span>`:'—'}</dd>`).join('')}</dl></section>
  <section><h4>QR code de la fiche</h4><div class="qrline">${QR.svg(qrText(s),110)}<span class="sub">Contient l’école, l’élève, sa classe, son extrait et ses parents. Il est imprimé sur la fiche scolaire.</span></div></section>
- <section><h4>Extrait de naissance</h4>${s.extrait?`<dl class="kvs"><dt>N° de l’acte</dt><dd>${esc(a.num)||'—'}</dd><dt>Établi le</dt><dd>${fmtDate(a.date)}</dd><dt>Centre</dt><dd>${esc(a.centre)||'—'}</dd><dt>Sous-préfecture</dt><dd>${esc(a.sp)||'—'}</dd></dl>`:`<p style="margin:0" class="sub">Pas encore fourni. <button class="lk" data-act="editStu" data-id="${s.id}">Saisir l’extrait</button></p>`}</section>
+ <section><h4>Extrait de naissance</h4>${s.extrait?`<dl class="kvs"><dt>N° de l’acte</dt><dd>${esc(a.num)||'—'}</dd><dt>Établi le</dt><dd>${fmtDate(a.date)}</dd><dt>Centre</dt><dd>${esc(a.centre)||'—'}</dd><dt>Sous-préfecture</dt><dd>${esc(a.sp)||'—'}</dd>${s.statut!=='Inscrit'||s.motifDepart?`<dt>Départ</dt><dd>${esc(s.statut)}${s.motifDepart?' · '+esc(s.motifDepart):''}</dd>`:''}</dl>${s.extraitPhoto?`<img src="${s.extraitPhoto}" alt="Photo de l’extrait" style="max-width:100%;border-radius:8px;margin-top:8px;border:1px solid var(--line)">`:''}`:`<p style="margin:0" class="sub">Pas encore fourni. <button class="lk" data-act="editStu" data-id="${s.id}">Saisir l’extrait</button></p>`}</section>
  <section><h4>Résultats · grille ${grille(c).lib}, moyennes sur ${e}</h4><table class="mini"><thead><tr><th>Évaluation</th><th class="r">Moyenne</th><th class="r">Rang</th><th></th></tr></thead><tbody>${per}</tbody></table>${mga(s)!=null?`<p style="margin:8px 0 0">Décision : ${decTag(decisionOf(s))}</p>`:''}</section>
  <section><h4>Assiduité</h4><p style="margin:0 0 8px">${ab.length?`${plural(ab.length,'absence')}, dont ${ab.length-nA} justifiée(s).`:'Aucune absence cette année.'}</p><div class="lst">${ab.slice(0,5).map(x=>`<div><span>${dayLabel(x.d)}</span><span class="m"><span class="tag ${x.v==='J'?'warn':'bad'}">${x.v==='J'?'Justifiée':'Non justifiée'}</span></span></div>`).join('')}</div>
  ${auths.length?`<h4 style="margin-top:12px">Demandes d’autorisation</h4><div class="lst">${auths.map(a=>`<button data-act="go" data-to="absences-autorisations" data-set='{"auQui":"eleve","auSt":""}'><span>${a.ref} · ${esc(a.motif)}</span><span class="m">${a.statut}</span></button>`).join('')}</div>`:''}</section></div>`;
@@ -2634,8 +2651,13 @@ const acts={
   <div class="note">${ic('set')}<span><b>Paramètres</b> : école, en-tête de tous les documents (armoiries, ministère, direction, inspection), calendrier, mot de passe et activation.</span></div>
   <div class="note">${ic('lock')}<span><b>Sécurité</b> : toute modification de notes et toute suppression de données demandent le mot de passe administrateur.</span></div>
   <div class="note">${ic('search')}<span><b>Recherche</b> : Ctrl + K (ou /) pour trouver un élève, un enseignant, un écran ou un rapport.</span></div></div>`,{noFoot:true})},
- addStu(){modal('Inscrire un élève',stuForm(),{ok:'Inscrire',onok:f=>{const s=readStu(f,{id:uid(),mat:nextMat(),photo:'',decision:''});S.students.push(s);log(`Inscription : ${fullName(s)} (${s.classe})`);toast(`${fullName(s)} inscrit(e) en ${s.classe}`);render();openDrawer('s',s.id)}})},
- async editStu(t){const s=S.students.find(x=>x.id===t.dataset.id);if(!await askPwd(`Modifier le dossier déjà enregistré de <b>${esc(fullName(s))}</b>.`))return;modal('Modifier l’élève',stuForm(s),{onok:f=>{readStu(f,s);log(`Dossier modifié : ${fullName(s)}`);toast('Dossier mis à jour');render()}})},
+ cpMat(){const c=ui.nCls,n=Number(ui.nEv),cur=matieres(c,n).map(([m])=>m);
+  modal(`${ic('edit')} Matières · ${c} · ${esc(evalLabel(c,n))}`,`<p class="sub" style="margin-top:0">Cochez les matières évaluées à cette composition. Moyennes, rangs et bulletins ne comptent que celles-ci.</p>${CP_MATIERES.map(m=>`<label class="chk" style="display:flex;margin:6px 0"><input type="checkbox" name="m" value="${esc(m)}"${cur.includes(m)?' checked':''}> ${esc(m)}</label>`).join('')}`,
+  {onok:f=>{const L=f.getAll('m');if(!L.length){toast('Choisissez au moins une matière');return false}S.cpMat=S.cpMat||{};S.cpMat[c]=S.cpMat[c]||{};S.cpMat[c][n]=L.length===CP_MATIERES.length?null:L;log(`Matières ${c} – ${evalLabel(c,n)} : ${L.join(', ')}`);save();render();toast('Matières enregistrées')}})},
+ depart(t){const s=S.students.find(x=>x.id===t.dataset.id);modal(`${ic('flag')} Départ de ${esc(fullName(s))}`,field('Statut',`<select name="statut">${opts(STATUTS,s.statut)}</select>`,1)+field('Motif de départ',`<input name="motifDepart" value="${esc(s.motifDepart)}" placeholder="Ex. : mutation des parents">`,1),
+  {onok:f=>{s.statut=f.get('statut');s.motifDepart=f.get('motifDepart').trim();log(`Départ / statut : ${fullName(s)} – ${s.statut}${s.motifDepart?' ('+s.motifDepart+')':''}`);save();render();toast('Statut enregistré')},onclose:()=>render()})},
+ addStu(){modal('Inscrire un élève',stuForm(),{ok:'Inscrire',onok:f=>{const e=stuErr(f);if(e){toast(e);return false}const s=readStu(f,{id:uid(),mat:nextMat(),photo:'',decision:''});S.students.push(s);log(`Inscription : ${fullName(s)} (${s.classe})`);toast(`${fullName(s)} inscrit(e) en ${s.classe}`);render();openDrawer('s',s.id)}})},
+ async editStu(t){const s=S.students.find(x=>x.id===t.dataset.id);if(!await askPwd(`Modifier le dossier déjà enregistré de <b>${esc(fullName(s))}</b>.`))return;modal('Modifier l’élève',stuForm(s),{onok:f=>{const e=stuErr(f);if(e){toast(e);return false}readStu(f,s);log(`Dossier modifié : ${fullName(s)}`);toast('Dossier mis à jour');render()}})},
  async delStu(t){const s=S.students.find(x=>x.id===t.dataset.id);if(await askPwd(`Supprimer définitivement <b>${esc(fullName(s))}</b> avec ses notes et absences ?`)){S.students=S.students.filter(x=>x!==s);Object.keys(S.grades).forEach(k=>{if(k.startsWith(s.id+'|'))delete S.grades[k]});Object.values(S.att).forEach(m=>delete m[s.id]);log(`Élève supprimé : ${fullName(s)}`);toast('Élève supprimé');render()}},
  addTea(){modal('Nouveau membre du personnel',teaForm(),{onok:f=>{const t={id:uid(),photo:''};saveTea(f,t);S.teachers.push(t);log(`Personnel ajouté : ${t.nom}`);toast('Membre ajouté');render()}})},
  editTea(t){const m=S.teachers.find(x=>x.id===t.dataset.id);modal('Modifier le membre',teaForm(m),{onok:f=>{saveTea(f,m);log(`Personnel modifié : ${m.nom}`);toast('Modifications enregistrées');render()}})},
@@ -2699,7 +2721,7 @@ const acts={
   S.archives[S.school.year]={students:arch,grades:S.grades,compAbs:S.compAbs,att:S.att};
   Object.assign(S,{students:keep,grades:{},compAbs:{},att:{},appel:{}});Object.assign(S.school,{year:next,evalCourante:1});ui.nEv=ui.rEv='1';
   log(`Passage à ${next} : ${up} admis, ${stay} redoublants ou sans décision, ${out} archivés`);applyTheme();toast(`Bienvenue en ${next}`);navigate('accueil')},
- printStu(){const L=S.students.slice().sort(byClass);printList('Registre général des élèves (toutes classes)',`<table class="small"><thead><tr><th>N°</th><th>Matricule</th><th>Nom et prénoms</th><th>Sexe</th><th>Classe</th><th>Né(e) le</th><th>Âge</th><th>Nationalité</th><th>Extrait (n° / date)</th><th>Parent</th><th>Téléphone</th><th>Red.</th><th>Statut</th></tr></thead><tbody>${L.map((s,i)=>`<tr><td>${i+1}</td><td>${esc(matOf(s))}</td><td class="nm">${esc(fullName(s))}</td><td>${s.sexe[0]==='M'?'M':'F'}</td><td>${s.classe}</td><td>${fmtDate(s.naissance)}</td><td>${ageOf(s)??''}</td><td>${esc(s.nationalite||'')}</td><td>${s.extrait?`Oui · ${esc(s.acte?.num||'')} du ${fmtDate(s.acte?.date)}`:'Non'}</td><td>${esc(s.parent)}</td><td>${esc(s.tel)}</td><td>${s.redoublant?'Oui':'Non'}</td><td>${s.statut}</td></tr>`).join('')}</tbody></table>`,true)},
+ printStu(){const L=S.students.slice().sort(byClass);printList('Registre général des élèves (toutes classes)',`<table class="small"><thead><tr><th>N°</th><th>Matricule</th><th>Nom et prénoms</th><th>Sexe</th><th>Classe</th><th>Né(e) le</th><th>Âge</th><th>Nationalité</th><th>Extrait (n° / date)</th><th>Parent</th><th>Téléphone</th><th>Red.</th><th>Statut</th></tr></thead><tbody>${L.map((s,i)=>`<tr><td>${i+1}</td><td>${esc(matOf(s))}</td><td class="nm">${esc(fullName(s))}</td><td>${s.sexe[0]==='M'?'M':'F'}</td><td>${s.classe}</td><td>${fmtNais(s)}</td><td>${ageOf(s)??''}</td><td>${esc(s.nationalite||'')}</td><td>${s.extrait?`Oui · ${esc(s.acte?.num||'')} du ${fmtDate(s.acte?.date)}`:'Non'}</td><td>${esc(s.parent)}</td><td>${esc(s.tel)}</td><td>${s.redoublant?'Oui':'Non'}</td><td>${s.statut}</td></tr>`).join('')}</tbody></table>`,true)},
  printByClass(){printDocs(CLASSES.map(c=>{const t=teacherOf(c),L=active().filter(s=>s.classe===c).sort(byName);return `${entete()}<div class="dtitle"><h2>ÉTAT DES ÉLÈVES – CLASSE DE ${c}</h2><div>Enseignant(e) : ${esc(t?.nom||'—')}</div></div>${stuTable(L)}<h3>STATISTIQUES DE LA CLASSE</h3><table class="small"><thead><tr><th></th><th>G</th><th>F</th><th>T</th></tr></thead><tbody>${[['Inscrits',L],['Ivoiriens',L.filter(s=>isIvo(s))],['Étrangers',L.filter(s=>!isIvo(s))],['Avec extrait',L.filter(s=>s.extrait)],['Sans extrait',L.filter(s=>!s.extrait)],['Redoublants',L.filter(s=>s.redoublant)]].map(([l,X])=>`<tr><td style="text-align:left">${l}</td>${sxCells(X)}</tr>`).join('')}</tbody></table>${signature()}`}))},
  printNoDoc(){printList('Dossiers à régulariser (sans extrait de naissance)',stuTable(S.students.filter(s=>!s.extrait).sort(byClass)))},
  printAges(){printList('Élèves par âge, niveau et sexe',agesTable()+'<h3 style="margin:18px 0 6px">Élèves avec et sans extrait de naissance</h3>'+extraitsTable(),true)},
@@ -2719,10 +2741,11 @@ const acts={
  async logoDel(t){if(!await askPwd(t.dataset.k==='armoiries'?'Remettre les armoiries d’origine ?':'Retirer ce logo des documents ?'))return;S.school[t.dataset.k]='';save();toast('Image retirée');render()},
  async delConge(t){const c=S.conges.find(x=>x.id===t.dataset.id);if(!await askPwd(`Supprimer « ${esc(c.lib)} » du calendrier ?`))return;S.conges=S.conges.filter(x=>x!==c);log(`Calendrier : ${c.lib} supprimé`);save();render()}
 };
-function stuTable(L){return `<table><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Matricule</th><th>Classe</th><th>Sexe</th><th>Naissance</th><th>Extrait</th></tr></thead><tbody>${L.map((s,i)=>`<tr><td>${i+1}</td><td class="nm">${esc(fullName(s))}</td><td>${esc(matOf(s))}</td><td>${s.classe}</td><td>${s.sexe[0]}</td><td>${fmtDate(s.naissance)}</td><td>${s.extrait?'Oui'+(s.acte?.num?' (n° '+esc(s.acte.num)+')':''):'Non'}</td></tr>`).join('')}</tbody></table>`}
+function stuTable(L){return `<table><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Matricule</th><th>Classe</th><th>Sexe</th><th>Naissance</th><th>Extrait</th></tr></thead><tbody>${L.map((s,i)=>`<tr><td>${i+1}</td><td class="nm">${esc(fullName(s))}</td><td>${esc(matOf(s))}</td><td>${s.classe}</td><td>${s.sexe[0]}</td><td>${fmtNais(s)}</td><td>${s.extrait?'Oui'+(s.acte?.num?' (n° '+esc(s.acte.num)+')':''):'Non'}</td></tr>`).join('')}</tbody></table>`}
 
 /* Saisies (data-in) et changements (data-ch) */
-const ins={fq(t){ui.q=t.value;$('#stuBody').innerHTML=stuRows()}};
+const majChamp=(t,f)=>{const p=t.selectionStart,v=f(t.value);if(v!==t.value){t.value=v;try{t.setSelectionRange(p,p)}catch(e){}}};
+const ins={fq(t){ui.q=t.value;$('#stuBody').innerHTML=stuRows()},majNom(t){majChamp(t,majNom)},majPrenoms(t){majChamp(t,majPrenoms)},majNomComplet(t){majChamp(t,majNomComplet)}};
 const chs={
  fcls(t){ui.cls=t.value;render()},fst(t){ui.st=t.value;render()},fdoc(t){ui.doc=t.value;render()},
  nEv(t){ui.nEv=t.value;render()},rEv(t){ui.rEv=t.value;render()},repEv(t){ui.repEv=t.value;render()},repCls(t){ui.repCls=t.value;render()},repMois(t){ui.repMois=t.value;render()},
@@ -2730,7 +2753,11 @@ const chs={
  auQui(t){ui.auQui=t.value;render()},auSt(t){ui.auSt=t.value;render()},
  authQui(t){const i=$('#authNom');i.setAttribute('list','dl-'+t.value);i.value='';i.focus()},
  authJ(){majJours()},
- extrait(t){const b=$('#acteBox');b.hidden=!t.checked;if(t.checked)$('#acteNum').focus()},
+ extrait(t){const o=t.value==='oui';$('#acteBox').hidden=!o;$('#ageBox').hidden=o},
+ tuteur(t){$('#tutBox').hidden=!t.checked},
+ stuCls(t){const b=$('#entreeBox');if(b)b.innerHTML=entreeIn(t.value,(b.querySelector('input')||{}).value,true)},
+ extraitPhoto(t){const f=t.files[0];if(!f)return;readImage(f,1400).then(u=>{ui.tmpExtrait=u;$('#exPrev').innerHTML=`<img src="${u}" alt="Extrait" style="height:64px;border-radius:6px">`}).catch(()=>toast('Image illisible'))},
+ stuSt(t){const s=S.students.find(x=>x.id===t.dataset.id);if(!s)return;s.statut=t.value;log(`Statut de ${fullName(s)} : ${s.statut}`);save();if(s.statut!=='Inscrit')acts.depart(t);else render()},
  gFrom(t){if(!t.value)return;const r=newRep(MODELES[t.value]());r.titre+=' (modifié)';save();toast('Copie créée');render()},
  gR(t){const r=curRep(),k=t.dataset.k;r[k]=k==='pay'?t.value==='1':t.value;save();render()},
  gbT(t){curRep().blocs[Number(t.dataset.i)].titre=t.value;save();render()},
@@ -2870,7 +2897,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
   const bloque=p&&!ouverte(c,n);if(bloque)$$('.grade,[data-ch="cabs"]').forEach(i=>i.disabled=true);
   const msg=bloque?`<b>Saisie fermée</b> par le directeur pour cette évaluation${x.fin&&x.fin<today?` (date limite du ${fmtDate(x.fin)} dépassée)`:''}.`
    :`${x.fin?`Date limite de saisie : <b>${fmtDate(x.fin)}</b>. `:''}${S.school.validation?(p?'Vos notes restent <b>en attente</b> (orange) jusqu’à leur validation par le directeur ; elles ne comptent pas encore.':`${enAttente(c,n)} note(s) en attente de validation (orange) : ${go('eleves-enseignants',{ensTab:'validation'},'Valider','btn sm')}`):''}`;
-  $('.tw')?.insertAdjacentHTML('beforebegin',`<div class="note mb${bloque?' warn':''}">${ic('lock')}<span>${msg}</span></div>`);
+  if(bloque)$('.tw')?.insertAdjacentHTML('beforebegin',`<div class="note mb warn">${ic('lock')}<span>${msg}</span></div>`);
  }
  const acc0=pages.accueil;
  pages.accueil=()=>{const p=prof();if(!p)return acc0();
@@ -2900,7 +2927,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
    <p class="sub">Désactiver la fiche d’un enseignant (départ, mutation) bloque aussitôt son compte et ses téléphones.</p>`;
  }
  function ensSuivi(){const n=S.school.evalCourante;
-  return `<div class="note mb">${ic('chart')}<span>Évaluation en cours : <b>${esc(EV_GEN[n-1])}</b> · aujourd’hui ${fmtDate(today)}.</span></div><div class="tw"><table><thead><tr><th>Classe</th><th>Enseignant</th><th class="c">Notes saisies</th><th class="c">En attente</th><th class="c">Saisie</th><th class="c">Appel du jour</th><th class="c">Absents du jour</th><th class="c">Messages non lus</th></tr></thead><tbody>${CLASSES.map(c=>{
+  return `<div class="tw"><table><thead><tr><th>Classe</th><th>Enseignant</th><th class="c">Notes saisies</th><th class="c">En attente</th><th class="c">Saisie</th><th class="c">Appel du jour</th><th class="c">Absents du jour</th><th class="c">Messages non lus</th></tr></thead><tbody>${CLASSES.map(c=>{
    const t=teacherOf(c),L=active().filter(s=>s.classe===c&&!isAbs(s.id,n)),tot=L.length*matieres(c,n).length,x=sk(c,n),abs=Object.entries(S.att[today]||{}).filter(([id])=>S.students.find(s=>s.id===id)?.classe===c).length,nl=t?S.messages.filter(m=>(!m.dest||m.dest===t.id)&&!m.lus[t.id]).length:0;
    return `<tr><td>${clsLink(c)}</td><td>${esc(t?.nom||'—')}</td><td class="c">${tot-missingNotes(c,n)}/${tot}</td><td class="c">${enAttente(c,n)||'—'}</td><td class="c">${ouverte(c,n)?`ouverte${x.fin?' jusqu’au '+fmtDate(x.fin):''}`:'<b>fermée</b>'}</td><td class="c">${S.appel[today]?.[c]?ic('check'):'<span class="sub">pas fait</span>'}</td><td class="c">${abs}</td><td class="c">${nl||'—'}</td></tr>`}).join('')}</tbody></table></div>`;
  }
@@ -2972,6 +2999,17 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
 <script>
 /* Logo AKWA SCHOOL (A noir, toque orange). Pour le changer : remplacez le texte entre guillemets par une autre image en base64. */
 window.LOGO_AKWA="data:image/jpeg;base64,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";
+</script>
+<script>
+/* Aperçu A4 : sur un écran plus étroit qu'une page A4 (téléphone), le document garde sa mise en page A4
+   (portrait 210 mm, paysage 297 mm) et est réduit à la largeur de l'écran, comme une page imprimée. */
+function ajusterPapiers(){document.querySelectorAll('.paperwrap>.paper,#dlg .paper').forEach(p=>{
+ const W=p.classList.contains('land')?1123:794;p.style.zoom='';p.style.width='';p.style.minWidth='';p.style.maxWidth='';
+ const box=p.parentElement.clientWidth;if(!box||box>=W)return;
+ p.style.width=W+'px';p.style.minWidth=W+'px';p.style.maxWidth='none';p.style.zoom=(box/W).toFixed(4)})}
+(function(){const r=render,m=modal;render=function(){const x=r.apply(this,arguments);ajusterPapiers();return x};
+ modal=function(){const x=m.apply(this,arguments);ajusterPapiers();return x};
+ addEventListener('resize',ajusterPapiers);document.addEventListener('DOMContentLoaded',ajusterPapiers);ajusterPapiers()})();
 </script>
 </body>
 </html>

@@ -10,6 +10,9 @@ seulement ce qui fait de la démonstration une vraie application :
 - les mentions et boutons de démonstration sont masqués.
 Le pont avec l'application (enregistrement, impression, fichiers, licence…) est ajouté au chargement
 par epp/v8/fenetre.py (epp/resources/web/pont_v8.js).
+
+Depuis la version 1.3.2, akwa_v8.html est modifié directement (inscription, statut, matières du CP,
+aperçu A4…) : ne plus le régénérer depuis le prototype, ces changements seraient perdus.
 """
 from __future__ import annotations
 
