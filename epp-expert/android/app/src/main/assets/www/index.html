@@ -2109,7 +2109,7 @@ pages['absences-appel']=()=>{
  const L=active().filter(s=>s.classe===ui.aCls).sort(byName),d=S.att[ui.aDate]||{},done=(S.appel[ui.aDate]||{})[ui.aCls];
  const nA=L.filter(s=>d[s.id]==='A').length,nJ=L.filter(s=>d[s.id]==='J').length,off=!isSchoolDay(ui.aDate);
  const hol=S.conges.find(c=>ui.aDate>=c.du&&ui.aDate<=(c.au||c.du));
- return `${ph('Absences','Un clic sur l’état fait défiler : Présent → Absent → Absent justifié.',`<button class="btn" data-act="allPres">${ic('check')}Tout le monde présent</button><button class="btn pri" data-act="valAppel">${ic('clip')}${done?'Appel validé':'Valider l’appel'}</button>`)}${seg('absences')}
+ return `${ph('Absences',window.estEnseignant?.()?'Présent ou absent. Une absence enregistrée ne se modifie plus.':'Un clic sur l’état fait défiler : Présent → Absent → Absent justifié.',`<button class="btn" data-act="allPres">${ic('check')}Tout le monde présent</button><button class="btn pri" data-act="valAppel">${ic('clip')}${done?'Appel validé':'Valider l’appel'}</button>`)}${seg('absences')}
  <div class="bar">${pills('aCls',c=>(S.appel[ui.aDate]||{})[c]?'<span class="d" title="Appel fait"></span>':'')}<input type="date" value="${ui.aDate}" data-ch="aDate" aria-label="Date"><span class="chip" id="aSum">${L.length-nA-nJ} présent(s) · ${nA} absent(s) · ${nJ} justifié(s)</span></div>
  ${off?`<div class="note warn mb">${ic('cal')}<span>${hol?`${esc(hol.lib)} : `:''}ce jour n’est pas un jour de classe (jours de classe : lundi, mardi, jeudi, vendredi).</span></div>`:''}
  <div class="tw"><table><thead><tr><th>Élève</th><th>Matricule</th><th>Présence</th><th>Absences de l’année</th></tr></thead><tbody>${L.map(s=>{const v=d[s.id]||'',n=absOf(s.id).length;return `<tr><td><div class="who">${avatar(s)}${nameBtn(s)}</div></td><td>${esc(matOf(s))}</td><td><button class="pa ${v}" data-act="pa" data-id="${s.id}">${v==='A'?'Absent':v==='J'?'Absent justifié':'Présent'}</button></td><td>${n?`<span class="tag ${n>=5?'warn':''}">${n}</span>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="4" class="empty">Aucun élève inscrit.</td></tr>'}</tbody></table></div>`;
@@ -2880,7 +2880,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  const render0=render;
  render=function(){
   ensure8(S);menuDuProfil();
-  const p=prof();
+  const p=prof();document.body.classList.toggle('ens',!!p);
   if(p){['nCls','aCls','rCls','fCls','repCls'].forEach(k=>ui[k]=p.classe);ui.cls=p.classe;
    const r=route();if(!MENU.some(m=>r===m.id||r.startsWith(m.id+'-'))||(CACHE_ENS[r.split('-')[0]]||[]).includes(r.split('-')[1])){location.hash='#accueil';return}}
   render0();
@@ -2906,6 +2906,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
   <div class="grid g2 mb"><div class="card"><h3>À faire</h3><ul style="margin:8px 0 0;padding-left:18px">
    ${manq?`<li>${manq} note(s) à saisir pour la ${esc(evalLabel(c,n))}${x.fin?` avant le <b>${fmtDate(x.fin)}</b>`:''} – ${go('notes-saisie',{},'Saisir','lk')}</li>`:'<li>Toutes les notes de l’évaluation en cours sont saisies.</li>'}
    ${S.appel[today]?.[c]?'<li>Appel du jour fait.</li>':`<li>Faire l’appel du jour – ${go('absences-appel',{},'Appel','lk')}</li>`}
+   <li>Fiche de classement de la classe – ${go('notes-resultats',{},'Classement','lk')}</li>
    <li>Demander une autorisation d’absence – ${go('absences-autorisations',{},'Autorisations','lk')}</li></ul></div>
    <div class="card"><h3>Ma classe : ${c}</h3>${mstat('Élèves',active().filter(s=>s.classe===c).length,'inscrits')}${mstat('Notes en attente',enAttente(c,n),'à valider par le directeur')}</div></div>
   ${acc0()}`};
@@ -2969,6 +2970,13 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  });
  // notes saisies par un enseignant : en attente de validation
  const grade0=chs.grade;
+ // Enseignant : ni inscription, ni suppression, ni changement de classe ; appel Présent / Absent, une absence est définitive.
+ document.head.insertAdjacentHTML('beforeend','<style>body.ens [data-act=addStu],body.ens [data-act=delStu]{display:none!important}</style>');
+ const ENS_INTERDIT={addStu:'L’inscription des élèves est réservée au directeur.',delStu:'Seul le directeur peut supprimer un élève.'};
+ Object.keys(ENS_INTERDIT).forEach(k=>{const f=acts[k];acts[k]=function(t){if(prof()){toast(ENS_INTERDIT[k]);return}return f.apply(this,arguments)}});
+ const editStu0=acts.editStu;acts.editStu=async function(t){await editStu0.call(this,t);const s=prof()&&$('#dlg [name=classe]');if(s)[...s.options].forEach(o=>{if(!o.selected)o.remove()})};
+ const pa0=acts.pa;acts.pa=function(t){if(prof()&&(S.att[ui.aDate]||{})[t.dataset.id]){toast('Absence déjà enregistrée : elle ne peut plus être modifiée.');return}return pa0.call(this,t)};
+ const allPres0=acts.allPres;acts.allPres=function(){if(!prof())return allPres0.call(this);(S.appel[ui.aDate]||(S.appel[ui.aDate]={}))[ui.aCls]=true;save();toast(`${ui.aCls} : les autres élèves sont présents`);render()};
  chs.grade=async function(t){const p=prof(),n=Number(ui.nEv);
   if(!p||!S.school.validation)return grade0(t).then(()=>{if(p)log(tag()+`Note saisie : ${t.dataset.m} (${ui.nCls})`)});
   if(!ouverte(ui.nCls,n)){toast('La saisie est fermée pour cette évaluation');return}
