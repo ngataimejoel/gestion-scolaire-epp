@@ -49,7 +49,7 @@ import java.util.regex.Pattern;
  * par resultat(id).
  */
 public class Pont {
-    private static final Pattern NOM_FICHIER = Pattern.compile("[a-z_]{1,40}\\.json");
+    private static final Pattern NOM_FICHIER = Pattern.compile("[a-z0-9_]{1,40}\\.json");
     private static final Pattern ID = Pattern.compile("[A-Za-z0-9_-]{1,40}");
     private static final int ITERATIONS_PIN = 20_000;
     static final int CHOISIR = 41;
