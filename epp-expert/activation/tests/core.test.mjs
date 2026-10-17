@@ -87,3 +87,19 @@ test("API HTTP : administration protégée par jeton", async () => {
   assert.equal(a.status, 200);
   assert.equal((await req("/api/activer", { method: "POST", body: "{" })).status, 400);
 });
+
+test("codes enseignant : seulement pour l'espace enseignant", async () => {
+  const s = memoire();
+  const [{ code }, { code: c2 }] = await genererCodes(s, { type: "ens1an", nombre: 2 });
+  await assert.rejects(activer(s, privateKey, { code, machine: M1 }), { status: 403 });
+  await assert.rejects(activer(s, privateKey, { code, machine: M1, espace: "ecole" }), { status: 403 });
+  const r = await activer(s, privateKey, { code, machine: M1, espace: "enseignant" });
+  const l = verifierLicence(privateKey, r.licence, r.signature);
+  assert.equal(l.type, "ens1an"); assert.ok(l.expire_le);
+  const [{ code: v }] = await genererCodes(s, { type: "ensvie" });
+  assert.equal(lire((await activer(s, privateKey, { code: v, machine: M2, espace: "enseignant" })).licence).expire_le, null);
+  // un code école reste accepté dans l'espace enseignant
+  const [{ code: e }] = await genererCodes(s, { type: "1an" });
+  assert.ok((await activer(s, privateKey, { code: e, machine: M2, espace: "enseignant" })).licence);
+  assert.ok(c2);
+});

@@ -38,7 +38,7 @@
   <section class="card">
    <h2>Créer des codes</h2>
    <form class="bar" id="fGenerer">
-    <label>Durée<select id="type"><option value="1an">1 an</option><option value="vie">À vie</option></select></label>
+    <label>Durée<select id="type"><option value="1an">1 an</option><option value="vie">À vie</option><option value="ens1an">Enseignant 1 an</option><option value="ensvie">Enseignant à vie</option></select></label>
     <label>Nombre<input type="number" id="nombre" value="1" min="1" max="500" style="width:90px"></label>
     <label style="flex:1;min-width:200px">Note (école, client…)<input id="note" maxlength="200" placeholder="Ex. EPP OUANINOU 2"></label>
     <button class="pri">Créer</button>
@@ -60,7 +60,7 @@
  const $=s=>document.querySelector(s);let jeton='',codes=[];
  const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  const date=d=>d?new Date(d).toLocaleDateString('fr-FR'):'';
- const TYPES={'1an':'1 an',vie:'À vie'};
+ const TYPES={'1an':'1 an',vie:'À vie',ens1an:'Enseignant 1 an',ensvie:'Enseignant à vie'};
  function msg(t,err){const m=$('#msg');m.textContent=t||'';m.className=err?'err':''}
  async function api(action,corps){
   const r=await fetch('/api/admin/'+action,{method:corps?'POST':'GET',headers:{Authorization:'Bearer '+jeton,'Content-Type':'application/json'},body:corps?JSON.stringify(corps):undefined});

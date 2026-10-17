@@ -1,7 +1,8 @@
 // Logique du service d'activation, indépendante de l'hébergeur (testée avec un stockage en mémoire).
 //
 // Stockage : interface { get(cle), setIfNew(cle, valeur) -> bool, set(cle, valeur), delete(cle), list(prefixe) }.
-//   codes/<CODE>        : { type: "1an" | "vie", note, cree_le, revoque }
+//   codes/<CODE>        : { type: "1an" | "vie" | "ens1an" | "ensvie", note, cree_le, revoque }
+//   (codes « ens… » : espace enseignant seul du téléphone, refusés ailleurs)
 //   utilisations/<CODE> : { machine, ecole, active_le, licence, signature }  (créé une seule fois : usage unique)
 //
 // La licence renvoyée est un JSON encodé en base64url, signé en Ed25519 avec la clé privée du
@@ -9,7 +10,9 @@
 import crypto from "node:crypto";
 
 export const ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"; // sans 0/O, 1/I
-export const TYPES = { "1an": "1 an", vie: "À vie" };
+export const TYPES = { "1an": "1 an", vie: "À vie", ens1an: "Enseignant 1 an", ensvie: "Enseignant à vie" };
+export const estEnseignant = (type) => String(type).startsWith("ens");
+const aVie = (type) => String(type).endsWith("vie");
 const JOUR = 86400000;
 
 export class ErreurActivation extends Error {
@@ -54,7 +57,7 @@ export function verifierLicence(privateKey, licence, signature) {
 }
 
 export async function genererCodes(store, { type, nombre = 1, note = "" }, maintenant = new Date()) {
-  if (!TYPES[type]) throw new ErreurActivation(400, "Type de code inconnu (1an ou vie).");
+  if (!TYPES[type]) throw new ErreurActivation(400, "Type de code inconnu (1an, vie, ens1an ou ensvie).");
   nombre = Number(nombre);
   if (!Number.isInteger(nombre) || nombre < 1 || nombre > 500) throw new ErreurActivation(400, "Nombre de codes : 1 à 500.");
   const codes = [];
@@ -76,6 +79,9 @@ export async function activer(store, privateKey, demande, maintenant = new Date(
   const rec = await store.get(`codes/${code}`);
   if (!rec) throw new ErreurActivation(404, "Code d'activation inconnu.");
   if (rec.revoque) throw new ErreurActivation(403, "Ce code a été annulé par le fournisseur.");
+  if (estEnseignant(rec.type) && demande.espace !== "enseignant") {
+    throw new ErreurActivation(403, "Ce code est réservé à l'espace enseignant du téléphone.");
+  }
 
   const deja = await store.get(`utilisations/${code}`);
   if (deja) {
@@ -85,7 +91,7 @@ export async function activer(store, privateKey, demande, maintenant = new Date(
   }
 
   let base = maintenant.getTime();
-  if (rec.type === "1an" && demande.licence_actuelle && demande.signature_actuelle) {
+  if (!aVie(rec.type) && demande.licence_actuelle && demande.signature_actuelle) {
     // renouvellement avant échéance : les jours restants ne sont pas perdus
     const act = verifierLicence(privateKey, demande.licence_actuelle, demande.signature_actuelle);
     if (act && act.machine === machine && act.expire_le && Date.parse(act.expire_le) > base) base = Date.parse(act.expire_le);
@@ -93,7 +99,7 @@ export async function activer(store, privateKey, demande, maintenant = new Date(
   const contenu = {
     v: 1, produit: "GESTION SCOLAIRE EPP EXPERT", code, type: rec.type, machine,
     ecole: String(demande.ecole || "").slice(0, 120), active_le: maintenant.toISOString(),
-    expire_le: rec.type === "vie" ? null : new Date(base + 365 * JOUR).toISOString(),
+    expire_le: aVie(rec.type) ? null : new Date(base + 365 * JOUR).toISOString(),
   };
   const licence = b64u(JSON.stringify(contenu));
   const signature = b64u(crypto.sign(null, Buffer.from(licence, "base64url"), privateKey));

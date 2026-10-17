@@ -26,7 +26,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 
-TYPES = {"1an": "1 an", "vie": "À vie"}
+TYPES = {"1an": "1 an", "vie": "À vie", "ens1an": "Enseignant 1 an", "ensvie": "Enseignant à vie"}
 URL_SERVICE = "https://epp-expert-activation.netlify.app"
 
 
@@ -86,7 +86,7 @@ def appel(chemin: str, corps: dict | None = None, cfg: dict | None = None) -> di
 
 def generer(type_: str, nombre: int, note: str = "") -> list[dict]:
     if type_ not in TYPES:
-        raise ErreurGenerateur("Type : 1an ou vie.")
+        raise ErreurGenerateur("Type : 1an, vie, ens1an ou ensvie.")
     return appel("/api/admin/codes", {"type": type_, "nombre": nombre, "note": note})["codes"]
 
 
@@ -139,6 +139,8 @@ def fenetre() -> int:
     type_ = QComboBox()
     type_.addItem("Licence 1 an", "1an")
     type_.addItem("Licence à vie", "vie")
+    type_.addItem("Enseignant seul, 1 an", "ens1an")
+    type_.addItem("Enseignant seul, à vie", "ensvie")
     nombre = QSpinBox()
     nombre.setRange(1, 500)
     note = QLineEdit()
@@ -183,7 +185,7 @@ def fenetre() -> int:
             vals = [c["code"], TYPES.get(c["type"], c["type"]) + (" (annulé)" if c.get("revoque") else ""),
                     c.get("note", ""), "OUI" if c.get("utilise") else "NON", c.get("ecole", ""),
                     (c.get("active_le") or "")[:10], (c.get("expire_le") or "")[:10] or (
-                        "jamais" if c.get("utilise") and c["type"] == "vie" else "")]
+                        "jamais" if c.get("utilise") and c["type"].endswith("vie") else "")]
             for j, v in enumerate(vals):
                 table.setItem(i, j, QTableWidgetItem(v))
 

@@ -109,7 +109,8 @@ class Pont(QObject):
     def activer(self, code: str) -> str:
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            e = licence.activer(code, (self.st.lire() or {}).get("school", {}).get("name", ""))
+            e = licence.activer(code, (self.st.lire() or {}).get("school", {}).get("name", ""),
+                                espace="enseignant" if self.f.session.get("solo") else "ecole")
         except licence.LicenceErreur as e:
             return json.dumps({"erreur": str(e)})
         finally:

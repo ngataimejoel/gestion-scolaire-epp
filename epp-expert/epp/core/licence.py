@@ -39,7 +39,7 @@ class LicenceErreur(Exception):
 @dataclass
 class Etat:
     statut: str                 # active | essai | essai_termine | expiree | horloge
-    type: str | None = None     # 1an | vie
+    type: str | None = None     # 1an | vie | ens1an | ensvie (codes de l'espace enseignant seul)
     expire_le: datetime | None = None
     jours_restants: int | None = None
     ecole: str = ""
@@ -51,7 +51,7 @@ class Etat:
 
     @property
     def message(self) -> str:
-        if self.statut == "active" and self.type == "vie":
+        if self.statut == "active" and (self.type or "").endswith("vie"):
             return "Licence à vie activée."
         if self.statut == "active":
             return f"Licence valable jusqu'au {self.expire_le:%d/%m/%Y} ({self.jours_restants} jour(s))."
@@ -211,15 +211,17 @@ def etat(maintenant: datetime | None = None) -> Etat:
     return Etat("essai" if reste > 0 else "essai_termine", jours_restants=max(reste, 0))
 
 
-def activer(code: str, ecole: str = "", url: str | None = None, timeout: float = 20) -> Etat:
-    """Active un code auprès du service en ligne et enregistre la licence reçue."""
+def activer(code: str, ecole: str = "", url: str | None = None, timeout: float = 20, espace: str = "ecole") -> Etat:
+    """Active un code auprès du service en ligne et enregistre la licence reçue.
+
+    ``espace`` : « enseignant » pour l'espace enseignant seul (seul à accepter les codes enseignant)."""
     cfg = _config()
     url = (url or cfg["url"]).rstrip("/")
     if not url or not cfg["cle_publique"]:
         raise LicenceErreur("Le service d'activation n'est pas configuré dans cette version.")
     machine = empreinte_machine()
     actuelle = _lire_json(FICHIER)
-    corps = {"code": code.strip(), "machine": machine, "ecole": ecole, "version": __version__,
+    corps = {"code": code.strip(), "machine": machine, "ecole": ecole, "version": __version__, "espace": espace,
              "licence_actuelle": actuelle.get("licence"), "signature_actuelle": actuelle.get("signature")}
     req = urllib.request.Request(f"{url}/api/activer", data=json.dumps(corps).encode("utf-8"), method="POST",
                                  headers={"Content-Type": "application/json"})

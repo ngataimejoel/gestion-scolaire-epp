@@ -148,9 +148,16 @@ public final class Licence {
     /** Active un code auprès du service en ligne (Internet nécessaire à ce moment seulement). */
     public static Activation activer(String url, String code, String machine, String ecole, String version,
                                      String licenceActuelle, String signatureActuelle) throws Client.Erreur {
+        return activer(url, code, machine, ecole, version, licenceActuelle, signatureActuelle, "ecole");
+    }
+
+    /** {@code espace} : « ecole » ou « enseignant » (espace enseignant seul, seul à accepter les codes enseignant). */
+    public static Activation activer(String url, String code, String machine, String ecole, String version,
+                                     String licenceActuelle, String signatureActuelle, String espace)
+            throws Client.Erreur {
         String corps = "{\"code\":" + Protocole.jsonTexte(code == null ? "" : code.trim()) + ",\"machine\":"
                 + Protocole.jsonTexte(machine) + ",\"ecole\":" + Protocole.jsonTexte(ecole) + ",\"version\":"
-                + Protocole.jsonTexte(version) + ",\"licence_actuelle\":"
+                + Protocole.jsonTexte(version) + ",\"espace\":" + Protocole.jsonTexte(espace) + ",\"licence_actuelle\":"
                 + (licenceActuelle == null ? "null" : Protocole.jsonTexte(licenceActuelle)) + ",\"signature_actuelle\":"
                 + (signatureActuelle == null ? "null" : Protocole.jsonTexte(signatureActuelle)) + "}";
         Client.Reponse r = Client.post(url.replaceAll("/+$", "") + "/api/activer",

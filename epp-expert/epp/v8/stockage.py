@@ -61,11 +61,18 @@ def _provisoire() -> str:
 def licence_pour_page(e: licence.Etat, aujourd_hui: date | None = None) -> dict:
     """État de la licence au format de l'interface v8 (bandeau, Paramètres)."""
     j = aujourd_hui or date.today()
-    if e.statut == "active" and e.type == "vie":
+    if e.statut == "active" and (e.type or "").endswith("vie"):
         return {"type": "vie"}
     if e.statut == "active" and e.expire_le:
         return {"type": "an", "fin": e.expire_le.date().isoformat()}
     return {"type": "essai", "debut": (j - timedelta(days=max(0, licence.ESSAI_JOURS - (e.jours_restants or 0)))).isoformat()}
+
+
+def _squelette() -> dict:
+    """Données vides au format de l'interface v8 (les valeurs par défaut de l'école sont ajoutées par la page)."""
+    return {"v": 5, "school": {}, "students": [], "teachers": [], "grades": {}, "compAbs": {}, "att": {}, "appel": {},
+            "auth": [], "conges": [], "redac": {}, "persoReps": [], "archives": {}, "lastBackup": "", "log": [],
+            "messages": [], "attente": {}, "saisie": {}}
 
 
 class Stockage:
@@ -166,7 +173,39 @@ class Stockage:
             nom = f"{t.get('nom', '')} – {t.get('classe') or 'sans classe'}"
         with self.conn:
             self._journal(c["login"], "Connexion")
+        solo = self.solo() if c["role"] == "dir" else None
+        if solo:    # espace enseignant seul : le compte admin est celui de l'enseignant
+            return {"role": "ens", "tid": solo["id"], "solo": True, "login": c["login"], "provisoire": False,
+                    "nom": f"{solo.get('nom', '')} – {solo.get('classe') or 'sans classe'}"}
         return {"role": c["role"], "tid": c["tid"], "login": c["login"], "nom": nom, "provisoire": bool(c["provisoire"])}
+
+    def solo(self) -> dict | None:
+        """L'enseignant de l'espace enseignant seul (sans école), ou None pour l'espace d'une école."""
+        o = self.lire() or {}
+        s = (o.get("school") or {}).get("solo") or {}
+        return self._enseignant(s.get("tid", "")) if s else None
+
+    def completer_ecole(self, champs: dict) -> None:
+        """Renseignements saisis à la création (directeur, secteur, inspection, inspecteur, conseiller pédagogique)."""
+        o = self.lire() or _squelette()
+        sc = o.setdefault("school", {})
+        sc.update({k: str(v).strip() for k, v in champs.items()})
+        lieu = re.sub(r"^IEPP\s+", "", sc.get("iepp", ""), flags=re.I).strip().upper()
+        if lieu:
+            sc["iepp"] = f"IEPP {lieu}"
+            sc["inspection"] = f"INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE DE {lieu}"
+        self.ecrire(json.dumps(o, ensure_ascii=False))
+
+    def creer_espace_enseignant(self, mot_de_passe: str, nom: str, classe: str, ecole: str = "") -> str:
+        """Premier lancement en espace enseignant seul : renvoie le code de secours."""
+        code = self.creer_admin(mot_de_passe)
+        mots = nom.split()
+        nom = " ".join([mots[0].upper()] + ["-".join(x.capitalize() for x in m.split("-")) for m in mots[1:]]) if mots else ""
+        t = {"id": "ens" + secrets.token_hex(4), "nom": nom, "matricule": "", "fonction": "Instituteur",
+             "grade": "", "classe": classe, "tel": "", "photo": "", "actif": True, "compte": None}
+        school = {"solo": {"tid": t["id"]}, "name": ecole.strip().upper()}
+        self.ecrire(json.dumps({**_squelette(), "school": school, "teachers": [t]}))
+        return code
 
     def verifier(self, login: str, mot_de_passe: str) -> bool:
         c = self._compte(login)

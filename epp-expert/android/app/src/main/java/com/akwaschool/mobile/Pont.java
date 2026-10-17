@@ -49,7 +49,7 @@ import java.util.regex.Pattern;
  * par resultat(id).
  */
 public class Pont {
-    private static final Pattern NOM_FICHIER = Pattern.compile("[a-z_]{1,40}\\.json");
+    private static final Pattern NOM_FICHIER = Pattern.compile("[a-z0-9_]{1,40}\\.json");
     private static final Pattern ID = Pattern.compile("[A-Za-z0-9_-]{1,40}");
     private static final int ITERATIONS_PIN = 20_000;
     static final int CHOISIR = 41;
@@ -814,6 +814,12 @@ public class Pont {
 
     @JavascriptInterface
     public void activer(String id, String code, String ecole) {
+        activerEspace(id, code, ecole, "ecole");
+    }
+
+    /** {@code espace} : « enseignant » pour l'espace enseignant seul (codes enseignant acceptés), sinon « ecole ». */
+    @JavascriptInterface
+    public void activerEspace(String id, String code, String ecole, String espace) {
         reseau.execute(() -> {
             try {
                 String version = "?";
@@ -823,7 +829,8 @@ public class Pont {
                     // version inconnue
                 }
                 Licence.Activation a = Licence.activer(Licence.URL_ACTIVATION, code, machine(), ecole,
-                        "android-" + version, prefs.getString("licence", null), prefs.getString("signature", null));
+                        "android-" + version, prefs.getString("licence", null), prefs.getString("signature", null),
+                        "enseignant".equals(espace) ? "enseignant" : "ecole");
                 prefs.edit().putString("licence", a.licence).putString("signature", a.signature).commit();
                 rendre(id, "{\"ok\":true,\"licence\":" + licence() + "}");
             } catch (Client.Erreur e) {

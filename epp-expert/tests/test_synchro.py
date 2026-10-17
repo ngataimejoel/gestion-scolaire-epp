@@ -462,3 +462,19 @@ def test_premier_envoi_par_fichier_d_un_telephone_utilise_seul(ecole):
     # sans mot de passe : rien n'est ajouté, le téléphone l'apprend par la réponse
     _, data, rep = imp.importer(F.demande(c.cle, srv.serveur_id, c.appareil_id, 6, {"fusion": base, "ops": []}))
     assert rep["code"] == "ADMIN_REQUIS" and "mot de passe" in F.resume_reponse(rep)
+
+
+def test_fichiers_du_telephone_acceptes_par_le_pont_java():
+    """Les noms écrits par pont_android.js doivent passer le filtre de Pont.java (sinon rien n'est enregistré)."""
+    import re
+    from pathlib import Path
+
+    racine = Path(__file__).resolve().parent.parent / "android" / "app" / "src" / "main"
+    java = (racine / "java" / "com" / "akwaschool" / "mobile" / "Pont.java").read_text(encoding="utf-8")
+    motif = re.search(r'NOM_FICHIER = Pattern\.compile\("(.+?)"\)', java).group(1).replace("\\\\", "\\")
+    js = (racine / "assets" / "www" / "pont_android.js").read_text(encoding="utf-8")
+    noms = [re.search(r"const FICHIER='([^']+)'", js).group(1)]
+    noms += [f"copie_v8_{j}.json" for j in ("dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi")]
+    assert "'copie_v8_'+JOURS" in js
+    for nom in noms:
+        assert re.fullmatch(motif, nom), nom
