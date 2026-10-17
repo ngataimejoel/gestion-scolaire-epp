@@ -53,6 +53,11 @@ class _Base(QDialog):
 
 
 CLASSES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"]
+# demandés à la création, pour l'école comme pour l'espace enseignant seul
+CHAMPS = [("director", "Directeur (nom et prénoms)"), ("dirTel", "Contact du directeur"),
+          ("secteur", "Secteur pédagogique"), ("iepp", "Inspection (IEPP)"),
+          ("inspNom", "Inspecteur (nom et prénoms)"), ("inspTel", "Contact de l'inspecteur"),
+          ("cpNom", "Conseiller pédagogique (nom et prénoms)"), ("cpTel", "Contact du conseiller pédagogique")]
 
 
 class PremierLancement(_Base):
@@ -73,6 +78,9 @@ class PremierLancement(_Base):
         self.form.addRow("Vos nom et prénoms", self.nom)
         self.form.addRow("Votre classe", self.classe)
         self.form.addRow("École", self.ecole)
+        self.champs = {k: QLineEdit() for k, _ in CHAMPS}
+        for k, lib in CHAMPS:
+            self.form.addRow(lib, self.champs[k])
         self.form.addRow("Mot de passe", self.p1)
         self.form.addRow("Confirmation", self.p2)
         self.qui.currentIndexChanged.connect(self._montrer)
@@ -84,6 +92,9 @@ class PremierLancement(_Base):
             self.form.setRowVisible(w, solo)
 
     def valider(self):
+        for k, lib in CHAMPS:
+            if not self.champs[k].text().strip():
+                raise Erreur(f"{lib} : à renseigner.")
         if self.p1.text() != self.p2.text():
             raise Erreur("Les deux mots de passe ne sont pas identiques.")
         if self.qui.currentData() == "solo":
@@ -93,6 +104,7 @@ class PremierLancement(_Base):
                                                    self.ecole.text())
         else:
             code = self.st.creer_admin(self.p1.text())
+        self.st.completer_ecole({k: e.text() for k, e in self.champs.items()})
         self.session = self.st.authentifier(ADMIN, self.p1.text())
         afficher_code_secours(self, ADMIN, code)
 

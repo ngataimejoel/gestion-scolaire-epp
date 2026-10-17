@@ -68,6 +68,13 @@ def licence_pour_page(e: licence.Etat, aujourd_hui: date | None = None) -> dict:
     return {"type": "essai", "debut": (j - timedelta(days=max(0, licence.ESSAI_JOURS - (e.jours_restants or 0)))).isoformat()}
 
 
+def _squelette() -> dict:
+    """Données vides au format de l'interface v8 (les valeurs par défaut de l'école sont ajoutées par la page)."""
+    return {"v": 5, "school": {}, "students": [], "teachers": [], "grades": {}, "compAbs": {}, "att": {}, "appel": {},
+            "auth": [], "conges": [], "redac": {}, "persoReps": [], "archives": {}, "lastBackup": "", "log": [],
+            "messages": [], "attente": {}, "saisie": {}}
+
+
 class Stockage:
     def __init__(self, fichier: Path | None = None):
         self.fichier = Path(fichier) if fichier else dossier() / "akwa.sqlite"
@@ -178,6 +185,17 @@ class Stockage:
         s = (o.get("school") or {}).get("solo") or {}
         return self._enseignant(s.get("tid", "")) if s else None
 
+    def completer_ecole(self, champs: dict) -> None:
+        """Renseignements saisis à la création (directeur, secteur, inspection, inspecteur, conseiller pédagogique)."""
+        o = self.lire() or _squelette()
+        sc = o.setdefault("school", {})
+        sc.update({k: str(v).strip() for k, v in champs.items()})
+        lieu = re.sub(r"^IEPP\s+", "", sc.get("iepp", ""), flags=re.I).strip().upper()
+        if lieu:
+            sc["iepp"] = f"IEPP {lieu}"
+            sc["inspection"] = f"INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE DE {lieu}"
+        self.ecrire(json.dumps(o, ensure_ascii=False))
+
     def creer_espace_enseignant(self, mot_de_passe: str, nom: str, classe: str, ecole: str = "") -> str:
         """Premier lancement en espace enseignant seul : renvoie le code de secours."""
         code = self.creer_admin(mot_de_passe)
@@ -186,10 +204,7 @@ class Stockage:
         t = {"id": "ens" + secrets.token_hex(4), "nom": nom, "matricule": "", "fonction": "Instituteur",
              "grade": "", "classe": classe, "tel": "", "photo": "", "actif": True, "compte": None}
         school = {"solo": {"tid": t["id"]}, "name": ecole.strip().upper()}
-        self.ecrire(json.dumps({"v": 5, "school": school, "students": [], "teachers": [t], "grades": {}, "compAbs": {},
-                                "att": {}, "appel": {}, "auth": [], "conges": [], "redac": {}, "persoReps": [],
-                                "archives": {}, "lastBackup": "", "log": [], "messages": [], "attente": {},
-                                "saisie": {}}))
+        self.ecrire(json.dumps({**_squelette(), "school": school, "teachers": [t]}))
         return code
 
     def verifier(self, login: str, mot_de_passe: str) -> bool:

@@ -114,3 +114,12 @@ def test_activation_transmet_l_espace(monkeypatch):
     with pytest.raises(licence.LicenceErreur):
         licence.activer("EPP-AAAA-BBBB-CCCC-DDDD", "EPP", espace="enseignant")
     assert envoye["espace"] == "enseignant"
+
+
+def test_renseignements_de_creation(st):
+    st.creer_admin("MotDePasse!2026")
+    st.completer_ecole({"director": "M. Kone Ali", "dirTel": "0700000000", "secteur": "Ouaninou 1", "iepp": "ouaninou",
+                        "inspNom": "M. Bamba", "inspTel": "0101", "cpNom": "Mme Yao", "cpTel": "0202"})
+    sc = st.lire()["school"]
+    assert sc["iepp"] == "IEPP OUANINOU" and sc["inspection"].endswith("PRIMAIRE DE OUANINOU")
+    assert sc["cpNom"] == "Mme Yao" and st.lire()["grades"] == {}
