@@ -1989,18 +1989,18 @@ pages['eleves-liste']=()=>`${ph('Élèves & personnel','Cliquez sur un nom pour 
   ${ui.q||ui.cls||ui.st||ui.doc?`<button class="btn sm" data-act="clearF">${ic('x')}Effacer les filtres</button>`:''}<span class="sub" id="stuCount"></span></div>
  <div class="tw"><table><thead><tr><th>Élève</th><th>Matricule</th><th>Classe</th><th>Sexe</th><th>Âge</th><th>Extrait de naissance</th><th>Statut</th><th></th></tr></thead><tbody id="stuBody">${stuRows()}</tbody></table></div>`;
 function stuForm(s={}){
- ui.tmpPhoto=undefined;ui.tmpExtrait=undefined;const a=s.acte||{},ex=s.id?(s.extrait?'oui':'non'):'',tut=!!(s.parent||s.tel),cls=s.classe||ui.cls;
+ ui.tmpPhoto=undefined;ui.tmpExtrait=undefined;const a=s.acte||{},ex=!!s.extrait,tut=!!(s.parent||s.tel),cls=s.classe||ui.cls;
  return `<div class="fg"><div class="full matbar"><span>Matricule école : <b>${s.id?esc(s.mat):'attribué automatiquement'}</b></span></div>${s.id?`<div class="full note" style="margin:0">${ic('lock')}<span>Fiche déjà enregistrée : toute modification est validée par le mot de passe d’un administrateur.</span></div>`:''}
  ${field('Matricule national (DESPS)',`<input name="matNat" value="${esc(s.matNat)}" placeholder="Ex. : 12345678A" maxlength="12" autocomplete="off">`,1)}
  <div class="full" style="display:flex;align-items:center;gap:12px"><span id="phPrev">${avatar(s.id?s:{prenoms:'?',nom:'?'},'lg')}</span><label class="btn sm">${ic('cam')}Choisir une photo<input type="file" accept="image/*" data-ch="photo" hidden></label></div>
  ${field('Nom',`<input name="nom" required value="${esc(s.nom)}" data-in="majNom" autocapitalize="characters" autocomplete="off">`)}${field('Prénoms',`<input name="prenoms" required value="${esc(s.prenoms)}" data-in="majPrenoms" autocapitalize="words" autocomplete="off">`)}
- <div class="fd full"><label>L’enfant a-t-il un extrait de naissance ?</label><div class="bar" style="margin:0"><label class="chk"><input type="radio" name="extrait" value="oui" data-ch="extrait"${ex==='oui'?' checked':''}> Oui</label><label class="chk"><input type="radio" name="extrait" value="non" data-ch="extrait"${ex==='non'?' checked':''}> Non</label></div></div>
- <div class="acte" id="acteBox"${ex==='oui'?'':' hidden'}><div class="full sub" style="grid-column:1/-1"><b style="color:var(--ink)">Extrait de naissance</b></div>
+ <div class="fd full"><label class="chk"><input type="checkbox" name="extrait" data-ch="extrait"${ex?' checked':''}> L’enfant a un extrait de naissance</label></div>
+ <div class="acte" id="acteBox"${ex?'':' hidden'}><div class="full sub" style="grid-column:1/-1"><b style="color:var(--ink)">Extrait de naissance</b></div>
   <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px"><span id="exPrev">${s.extraitPhoto?`<img src="${s.extraitPhoto}" alt="Extrait" style="height:64px;border-radius:6px">`:''}</span><label class="btn sm">${ic('cam')}Photo de l’extrait<input type="file" accept="image/*" data-ch="extraitPhoto" hidden></label></div>
   ${field('Date de naissance (jour, mois, année)',`<input type="date" name="naissance" value="${esc(s.ageEstime?'':s.naissance)}">`)}${field('Lieu de naissance (localité)',`<input name="lieu" value="${esc(s.lieu)}" list="dl-sp">`)}
   ${field('N° de l’acte',`<input name="acte_num" id="acteNum" value="${esc(a.num)}" placeholder="Ex. : 245">`)}${field('Date de l’acte (établi le)',`<input type="date" name="acte_date" value="${esc(a.date)}">`)}
   ${field('Centre d’état civil',`<input name="acte_centre" value="${esc(a.centre)}" placeholder="Ex. : Centre d’état civil de Ouaninou">`)}${field('Sous-préfecture',`<input name="acte_sp" value="${esc(a.sp)}" list="dl-sp" placeholder="Ex. : OUANINOU">`)}</div>
- <div class="acte" id="ageBox"${ex==='non'?'':' hidden'}>${field('Âge de l’enfant (en années)',`<input type="number" name="age" min="2" max="20" inputmode="numeric" value="${s.ageEstime&&ageOf(s)!=null?ageOf(s):''}">`)}<div class="sub" style="grid-column:1/-1">Sans extrait : le nom et les prénoms de l’un des parents, ou du tuteur, sont obligatoires.</div></div>
+ <div class="acte" id="ageBox"${ex?' hidden':''}>${field('Âge de l’enfant (en années)',`<input type="number" name="age" min="2" max="20" inputmode="numeric" value="${s.ageEstime&&ageOf(s)!=null?ageOf(s):''}">`)}<div class="sub" style="grid-column:1/-1">Sans extrait : le nom et les prénoms de l’un des parents, ou du tuteur, sont obligatoires.</div></div>
  ${field('Sexe',`<select name="sexe" required>${opts(['Masculin','Féminin'],s.sexe,'Choisir…')}</select>`)}${field('Nationalité',`<input name="nationalite" value="${esc(s.nationalite||NAT_DEFAUT)}" list="dl-nat" placeholder="Choisir dans la liste officielle">`)}
  ${field('Classe',`<select name="classe" required data-ch="stuCls">${opts(CLASSES,cls,'Choisir…')}</select>`)}${field('Entré(e) à l’école le',`<span id="entreeBox" style="display:contents">${entreeIn(cls,s.entree,!s.id)}</span>`)}
  ${field('Groupe sanguin',`<select name="sang">${opts(SANG,s.sang,'Non renseigné')}</select>`)}${field('Allergies / handicap',`<input name="allergies" value="${esc(s.allergies)}" placeholder="Aucun">`)}
@@ -2017,9 +2017,8 @@ const majNom=v=>String(v||'').toUpperCase();
 const majPrenoms=v=>String(v||'').toLowerCase().replace(/(^|[\s\-'’])(\p{L})/gu,(x,a,b)=>a+b.toUpperCase());
 const majNomComplet=v=>{const m=String(v||'').match(/^(\s*\S+)([\s\S]*)$/);return m?m[1].toUpperCase()+majPrenoms(m[2]):''};
 function stuErr(f){
- const ex=f.get('extrait'),P=k=>(f.get(k+'_nom')||'').trim()&&(f.get(k+'_prenoms')||'').trim();
- if(!ex)return 'Indiquez si l’enfant a un extrait de naissance (Oui ou Non).';
- if(ex==='oui'){if(!f.get('naissance'))return 'Saisissez la date de naissance (jour, mois, année).';if(!P('pere')||!P('mere'))return 'Avec un extrait, les nom et prénoms du père et de la mère sont obligatoires.'}
+ const ex=f.get('extrait')==='on',P=k=>(f.get(k+'_nom')||'').trim()&&(f.get(k+'_prenoms')||'').trim();
+ if(ex){if(!f.get('naissance'))return 'Saisissez la date de naissance (jour, mois, année).';if(!P('pere')||!P('mere'))return 'Avec un extrait, les nom et prénoms du père et de la mère sont obligatoires.'}
  else{const a=Number(f.get('age'));if(!a||a<2||a>20)return 'Saisissez l’âge de l’enfant (en années).';if(!P('pere')&&!P('mere')&&!(f.get('tuteur')==='on'&&(f.get('parent')||'').trim()))return 'Sans extrait, le nom et les prénoms de l’un des parents ou du tuteur sont obligatoires.'}
  if(f.get('classe')!=='CP1'&&!f.get('entree'))return 'Saisissez la date d’entrée à l’école.';
  return '';
@@ -2030,7 +2029,7 @@ function parentBox(k,lab,p={}){
 }
 const readParent=(f,k)=>{const p=Object.fromEntries(['nom','prenoms','profession','tel','domicile'].map(x=>[x,(f.get(k+'_'+x)||'').trim()]));p.nom=majNom(p.nom);p.prenoms=majPrenoms(p.prenoms);return p};
 function readStu(f,s){
- const ex=f.get('extrait')==='oui',tut=f.get('tuteur')==='on',age=Number(f.get('age'))||0;
+ const ex=f.get('extrait')==='on',tut=f.get('tuteur')==='on',age=Number(f.get('age'))||0;
  Object.assign(s,{matNat:(f.get('matNat')||'').replace(/\s/g,'').toUpperCase(),nom:majNom(f.get('nom').trim()),prenoms:majPrenoms(f.get('prenoms').trim()),
   naissance:ex?f.get('naissance'):`${startYear()-age}-01-01`,ageEstime:!ex,lieu:(f.get('lieu')||'').trim(),sexe:f.get('sexe'),nationalite:natOff(f.get('nationalite'))||NAT_DEFAUT,classe:f.get('classe'),statut:s.statut||'Inscrit',
   parent:tut?majNomComplet(f.get('parent').trim()):'',tel:tut?f.get('tel').trim():'',redoublant:f.get('redoublant')==='on',extrait:ex,
@@ -2753,7 +2752,7 @@ const chs={
  auQui(t){ui.auQui=t.value;render()},auSt(t){ui.auSt=t.value;render()},
  authQui(t){const i=$('#authNom');i.setAttribute('list','dl-'+t.value);i.value='';i.focus()},
  authJ(){majJours()},
- extrait(t){const o=t.value==='oui';$('#acteBox').hidden=!o;$('#ageBox').hidden=o},
+ extrait(t){const o=t.checked;$('#acteBox').hidden=!o;$('#ageBox').hidden=o},
  tuteur(t){$('#tutBox').hidden=!t.checked},
  stuCls(t){const b=$('#entreeBox');if(b)b.innerHTML=entreeIn(t.value,(b.querySelector('input')||{}).value,true)},
  extraitPhoto(t){const f=t.files[0];if(!f)return;readImage(f,1400).then(u=>{ui.tmpExtrait=u;$('#exPrev').innerHTML=`<img src="${u}" alt="Extrait" style="height:64px;border-radius:6px">`}).catch(()=>toast('Image illisible'))},
