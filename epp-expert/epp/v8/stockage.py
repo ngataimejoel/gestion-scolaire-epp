@@ -168,7 +168,10 @@ class Stockage:
         nom = "Directeur (administrateur)"
         if c["role"] == "ens":
             t = self._enseignant(c["tid"])
-            if not t or not t.get("actif", True) or not (t.get("compte") or {}).get("actif"):
+            if not t or not t.get("compte"):
+                time.sleep(0.4)
+                raise Erreur("Utilisateur inexistant.")
+            if not t.get("actif", True) or not t["compte"].get("actif"):
                 raise Erreur("Compte désactivé. Adressez-vous au directeur.")
             nom = f"{t.get('nom', '')} – {t.get('classe') or 'sans classe'}"
         with self.conn:

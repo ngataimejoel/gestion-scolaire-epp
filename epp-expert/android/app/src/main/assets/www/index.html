@@ -2920,6 +2920,8 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  const render0=render;
  render=function(){
   ensure8(S);menuDuProfil();
+  if(S.session&&S.session.role==='ens'&&!prof()){document.body.classList.add('ens');MENU.splice(0,MENU.length);$('#nav').innerHTML='';$('#bnav').innerHTML='';$('#crumb').innerHTML='';
+   $('#view').innerHTML=`<div class="card"><h3>Utilisateur inexistant</h3><div class="sub">Ce compte enseignant a été supprimé. Reconnectez-vous avec un compte valide.</div>${window.APP?`<div class="bar" style="margin:12px 0 0"><button class="btn pri" data-act="deconnexion">Se déconnecter</button></div>`:''}</div>`;return}
   const p=prof();document.body.classList.toggle('ens',!!p);document.body.classList.toggle('solo',solo());
   if(p){['nCls','aCls','rCls','fCls','repCls'].forEach(k=>ui[k]=p.classe);ui.cls=p.classe;
    const r=route();if(!MENU.some(m=>r===m.id||r.startsWith(m.id+'-'))||(r.startsWith('admin')&&r!=='admin-donnees')||(CACHE_ENS[r.split('-')[0]]||[]).includes(r.split('-')[1])){location.hash='#accueil';return}}

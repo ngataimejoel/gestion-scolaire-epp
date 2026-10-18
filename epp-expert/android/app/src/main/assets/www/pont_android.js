@@ -75,6 +75,8 @@
  }
  // espace enseignant seul : sa classe sans école ; le mot de passe « admin » du téléphone est le sien
  const estSolo=()=>{try{return !!(S.school.solo&&S.teachers.some(t=>t.id===S.school.solo.tid))}catch(e){return false}};
+ // compte enseignant supprimé ou désactivé dans les données : refus (jamais de repli sur le directeur)
+ const refusEns=r=>{if(!r.ok||r.role!=='ens')return '';const t=S.teachers.find(x=>x.id===r.tid);const m=!t||!t.compte?'Utilisateur inexistant.':!t.actif||!t.compte.actif?'Compte désactivé. Adressez-vous au directeur.':'';if(m)N.deconnecter();return m};
  const sessionDe=r=>r.role==='ens'?{role:'ens',tid:r.tid}:estSolo()?{role:'ens',tid:S.school.solo.tid,solo:true}:{role:'dir'};
  const espace=()=>session&&session.solo?'enseignant':'ecole';
  const licEns=e=>/^ens/.test(e.type||'');
@@ -120,6 +122,7 @@ ${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contac
   const f=ecran(`${so?`<p>Espace enseignant de <b>${esc(so.nom)}</b> (${esc(so.classe)}).</p><input name="l" value="admin" type="hidden">`:`<p>Identifiant : <b>admin</b> pour le directeur, ou celui remis à l’enseignant.</p><input name="l" value="admin" autocomplete="username" autocapitalize="none">`}<input type="password" name="m" placeholder="Mot de passe" autocomplete="current-password" autofocus><button class="btn pri">Ouvrir</button><button type="button" class="lien" data-oubli>Mot de passe oublié ?</button>`,(f,err)=>{
    const r=json(N.connecter(f.get('l'),f.get('m')));
    if(!r.ok)return err(r.message||'Identifiant ou mot de passe incorrect.');
+   const refus=refusEns(r);if(refus)return err(refus);
    session=sessionDe(r);
    if(r.provisoire)return nouveauMotDePasse();
    licenceOuApp();
@@ -140,7 +143,7 @@ ${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contac
    const l=String(f.get('l')).trim().toLowerCase();
    const r=json(!l||l==='admin'?N.recupererAdmin(f.get('c'),f.get('n')):N.recupererCompte(l,f.get('c'),f.get('n')));
    if(!r.ok)return err(r.message||'Code de secours incorrect.');
-   const c=json(N.connecter(l||'admin',f.get('n')));session=sessionDe(c);
+   const c=json(N.connecter(l||'admin',f.get('n')));const refus=refusEns(c);if(refus)return err(refus);session=sessionDe(c);
    afficherCode(r.secours,licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',connexion);
@@ -180,6 +183,7 @@ ${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contac
    attendre(id=>N.enregistrerFichier(id,nom,type,t)).then(r=>{if(r.ok)toast('Fichier enregistré : '+nom);else if(!r.annule)toast(r.message||'Enregistrement impossible.')})};
   // impression : la page elle-même (zone d'impression), en A4 portrait ou paysage ; « Enregistrer en PDF » est proposé par Android
   window.print=function(){const a=$('#printArea');N.imprimerPage(!!(a&&/landscape/.test(a.innerHTML)))};
+  acts.deconnexion=()=>verrouiller();
   // sauvegarde complète réservée à l'application activée (pas pendant l'essai)
   const sauvegarder=acts.backup;
   acts.backup=function(...a){if((S.school.licence||{}).type==='essai')return toast('La sauvegarde est disponible après l’activation de l’application (Paramètres › Activation).');return sauvegarder.apply(this,a)};

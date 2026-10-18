@@ -1,3 +1,4 @@
+import json
 """AKWA SCHOOL v8 : données, comptes et page de l'interface (sans Qt)."""
 from datetime import date, datetime, timezone
 
@@ -72,6 +73,12 @@ def test_compte_enseignant(st):
     assert st.authentifier("raka", mdp2)["provisoire"]
     st.ecrire(ETAT.replace('"compte":{"login":"raka","actif":true}', '"compte":{"login":"raka","actif":false}'))
     with pytest.raises(Erreur, match="désactivé"):
+        st.authentifier("raka", mdp2)
+    # enseignant retiré du personnel : refus, jamais de session du directeur
+    o = json.loads(ETAT)
+    o["teachers"] = [t for t in o["teachers"] if t["id"] != "t1"]
+    st.ecrire(json.dumps(o))
+    with pytest.raises(Erreur, match="inexistant"):
         st.authentifier("raka", mdp2)
 
 
