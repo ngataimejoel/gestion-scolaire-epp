@@ -249,8 +249,8 @@ dialog.wide{width:min(820px,96vw)}
 /* ---------- Document imprimable (bulletin, demande…) : sobre, lisible en noir et blanc ---------- */
 #printArea{display:none}
 .paper{background:#fff;color:#111;border:1px solid #d9d9d9;border-radius:8px;padding:22px;font-size:12.5px}
-.paper table{min-width:0;width:100%}.paper th,.paper td{border:1px solid #888;padding:5px 8px;color:#111;background:#fff;white-space:normal}
-.paper th{font-size:11px;letter-spacing:.3px}.paper tbody tr:last-child td{border-bottom:1px solid #888}.paper tbody tr:hover{background:none}
+.paper table{min-width:0;width:100%}.paper th,.paper td{border:1px solid #000;padding:5px 8px;color:#111;background:#fff;white-space:normal}
+.paper th{font-size:11px;letter-spacing:.3px}.paper tbody tr:last-child td{border-bottom:1px solid #000}.paper tbody tr:hover{background:none}
 .ent{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;font-family:"Times New Roman",Times,serif;font-size:10.5px;line-height:1.3;color:#111;border-bottom:1.5px solid #111;padding-bottom:6px;margin-bottom:10px}
 .ent .lf{display:flex;flex-direction:column;flex:0 1 58%;text-transform:uppercase}.ent .lf .ent-sep{margin-left:18%}
 .ent .rt{display:flex;flex-direction:column;align-items:center;text-align:center;flex:0 0 auto;min-width:32%}.ent .rt .rep{font-size:13px}
@@ -259,7 +259,7 @@ dialog.wide{width:min(820px,96vw)}
 .ent-x{text-align:center;font-size:11px;margin:-4px 0 8px}
 .dtitle{text-align:center;margin:8px 0 12px}.dtitle h2{margin:0;font-size:16px;letter-spacing:.5px}
 .dmeta{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;margin:8px 0 12px}
-.dfoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;border:1px solid #888;padding:8px}
+.dfoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;border:1px solid #000;padding:8px}
 .sig{display:flex;justify-content:space-between;margin-top:14px;font-size:12px;gap:10px}.sig span{flex:1;text-align:center}
 .box{display:inline-block;width:12px;height:12px;border:1px solid #111;vertical-align:-2px;margin-right:4px}
 
@@ -281,6 +281,8 @@ dialog.wide{width:min(820px,96vw)}
  html,body{background:#fff!important}body{color:#000}
  .app,.bnav,.toast,dialog,.drawer,.scrim,.tip{display:none!important}
  #printArea{display:block}
+  .paper table{border-collapse:collapse!important}.paper th,.paper td{border-color:#000!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
  #printArea .paper{border:0;padding:0;border-radius:0}
  .pb{page-break-after:always}.pb:last-child{page-break-after:auto}
 }
