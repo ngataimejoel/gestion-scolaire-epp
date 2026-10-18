@@ -56,7 +56,7 @@
 #akwaVerrou .bx{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:12px}
 #akwaVerrou h1{margin:0;font:700 22px var(--disp);color:var(--acc)}#akwaVerrou h1 b{color:var(--org)}
 #akwaVerrou p{margin:0}#akwaVerrou input{width:100%;padding:11px 12px;font-size:16px}#akwaVerrou .btn{justify-content:center;padding:11px 12px}
-#akwaVerrou .lien{background:none;border:0;color:var(--acc);font-weight:600;padding:4px}#akwaVerrou .code{font-size:22px;font-weight:700;letter-spacing:2px;text-align:center}`;
+#akwaVerrou .lien{background:none;border:0;color:var(--acc);font-weight:600;padding:4px}#akwaVerrou .code{font-size:22px;font-weight:700;letter-spacing:2px;text-align:center}#akwaVerrou .niv{display:flex;flex-wrap:wrap;gap:10px 16px}#akwaVerrou .niv label{display:flex;gap:6px;align-items:center;font-weight:600}#akwaVerrou .niv input{width:auto}`;
  function ecran(html,onok){
   let v=document.getElementById('akwaVerrou');
   if(!v){v=document.createElement('div');v.id='akwaVerrou';document.body.appendChild(v)}
@@ -75,6 +75,8 @@
  }
  // espace enseignant seul : sa classe sans école ; le mot de passe « admin » du téléphone est le sien
  const estSolo=()=>{try{return !!(S.school.solo&&S.teachers.some(t=>t.id===S.school.solo.tid))}catch(e){return false}};
+ // compte enseignant supprimé ou désactivé dans les données : refus (jamais de repli sur le directeur)
+ const refusEns=r=>{if(!r.ok||r.role!=='ens')return '';const t=S.teachers.find(x=>x.id===r.tid);const m=!t||!t.compte?'Utilisateur inexistant.':!t.actif||!t.compte.actif?'Compte désactivé. Adressez-vous au directeur.':'';if(m)N.deconnecter();return m};
  const sessionDe=r=>r.role==='ens'?{role:'ens',tid:r.tid}:estSolo()?{role:'ens',tid:S.school.solo.tid,solo:true}:{role:'dir'};
  const espace=()=>session&&session.solo?'enseignant':'ecole';
  const licEns=e=>/^ens/.test(e.type||'');
@@ -99,27 +101,38 @@
    if(a!==b)return err('Les deux mots de passe sont différents.');
    if(!N.definirAdmin(a,''))return err('Enregistrement impossible.');
    N.connecter('admin',a);
-   const t={id:uid(),nom:majNomComplet(nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),tel:'',photo:'',actif:true,compte:null};
+   const t={id:uid(),nom:majNomComplet(nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),classes:[f.get('cls')],tel:'',photo:'',actif:true,compte:null};
    S.teachers=[t];S.students=[];S.school.solo={tid:t.id};S.school.name=ec.toUpperCase();appliquerEcole(o);
    session={role:'ens',tid:t.id,solo:true};N.demarrerEssai();APP.enregistrer();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',premierLancement);
  }
- function creerDirecteur(){
-  ecran(`<p><b>Bienvenue.</b> Choisissez le mot de passe administrateur du téléphone. Il sera demandé à chaque ouverture et pour les corrections.</p>
-${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contact']])}${champs(CH_IEPP)}<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Créer</button>`,(f,err)=>{
-   const a=f.get('a'),b=f.get('b'),o=lireChamps(f,[...CH_DIR,...CH_IEPP],err);if(!o)return;
+ // création en deux pages : 1. le directeur et son mot de passe ; 2. les renseignements de l'inspection
+ function creerDirecteur(p1){
+  const f=ecran(`<p><b>Bienvenue.</b> Page 1 sur 2 : vos renseignements et le mot de passe administrateur du téléphone (demandé à chaque ouverture et pour les corrections).</p>
+${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contact']])}<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Suivant</button>`,(f,err)=>{
+   const a=f.get('a'),b=f.get('b'),o=lireChamps(f,CH_DIR,err);if(!o)return;
    if(a.length<6)return err('Le mot de passe doit compter 6 caractères au moins.');
    if(a!==b)return err('Les deux mots de passe sont différents.');
-   if(!N.definirAdmin(a,''))return err('Enregistrement impossible.');
-   N.connecter('admin',a);session={role:'dir'};appliquerEcole(o);APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+   creerDirecteur2({...o,a});
   });
+  if(p1)for(const k of['director','dirTel'])f.querySelector(`[name=${k}]`).value=p1[k]||'';
+ }
+ function creerDirecteur2(p1){
+  const f=ecran(`<p>Page 2 sur 2 : renseignements de l’école et de l’inspection.</p><p class="sub">Niveaux de l’école :</p><div class="niv">${TOUS_NIVEAUX.map(c=>`<label><input type="checkbox" name="niveaux" value="${c}" checked> ${c}</label>`).join('')}</div>${champs(CH_IEPP)}<button class="btn pri">Créer</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
+   const niveaux=f.getAll('niveaux');if(!niveaux.length)return err('Cochez au moins un niveau.');
+   const o=lireChamps(f,CH_IEPP,err);if(!o)return;o.niveaux=niveaux;
+   if(!N.definirAdmin(p1.a,''))return err('Enregistrement impossible.');
+   N.connecter('admin',p1.a);session={role:'dir'};appliquerEcole({director:p1.director,dirTel:p1.dirTel,...o});APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+  });
+  f.querySelector('[data-retour]').addEventListener('click',()=>creerDirecteur(p1));
  }
  function connexion(){
   const so=estSolo()&&S.teachers.find(x=>x.id===S.school.solo.tid);
   const f=ecran(`${so?`<p>Espace enseignant de <b>${esc(so.nom)}</b> (${esc(so.classe)}).</p><input name="l" value="admin" type="hidden">`:`<p>Identifiant : <b>admin</b> pour le directeur, ou celui remis à l’enseignant.</p><input name="l" value="admin" autocomplete="username" autocapitalize="none">`}<input type="password" name="m" placeholder="Mot de passe" autocomplete="current-password" autofocus><button class="btn pri">Ouvrir</button><button type="button" class="lien" data-oubli>Mot de passe oublié ?</button>`,(f,err)=>{
    const r=json(N.connecter(f.get('l'),f.get('m')));
    if(!r.ok)return err(r.message||'Identifiant ou mot de passe incorrect.');
+   const refus=refusEns(r);if(refus)return err(refus);
    session=sessionDe(r);
    if(r.provisoire)return nouveauMotDePasse();
    licenceOuApp();
@@ -140,7 +153,7 @@ ${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contac
    const l=String(f.get('l')).trim().toLowerCase();
    const r=json(!l||l==='admin'?N.recupererAdmin(f.get('c'),f.get('n')):N.recupererCompte(l,f.get('c'),f.get('n')));
    if(!r.ok)return err(r.message||'Code de secours incorrect.');
-   const c=json(N.connecter(l||'admin',f.get('n')));session=sessionDe(c);
+   const c=json(N.connecter(l||'admin',f.get('n')));const refus=refusEns(c);if(refus)return err(refus);session=sessionDe(c);
    afficherCode(r.secours,licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',connexion);
@@ -180,6 +193,7 @@ ${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contac
    attendre(id=>N.enregistrerFichier(id,nom,type,t)).then(r=>{if(r.ok)toast('Fichier enregistré : '+nom);else if(!r.annule)toast(r.message||'Enregistrement impossible.')})};
   // impression : la page elle-même (zone d'impression), en A4 portrait ou paysage ; « Enregistrer en PDF » est proposé par Android
   window.print=function(){const a=$('#printArea');N.imprimerPage(!!(a&&/landscape/.test(a.innerHTML)))};
+  acts.deconnexion=()=>verrouiller();
   // sauvegarde complète réservée à l'application activée (pas pendant l'essai)
   const sauvegarder=acts.backup;
   acts.backup=function(...a){if((S.school.licence||{}).type==='essai')return toast('La sauvegarde est disponible après l’activation de l’application (Paramètres › Activation).');return sauvegarder.apply(this,a)};

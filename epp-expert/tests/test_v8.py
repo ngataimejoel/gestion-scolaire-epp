@@ -1,3 +1,4 @@
+import json
 """AKWA SCHOOL v8 : données, comptes et page de l'interface (sans Qt)."""
 from datetime import date, datetime, timezone
 
@@ -73,6 +74,12 @@ def test_compte_enseignant(st):
     st.ecrire(ETAT.replace('"compte":{"login":"raka","actif":true}', '"compte":{"login":"raka","actif":false}'))
     with pytest.raises(Erreur, match="désactivé"):
         st.authentifier("raka", mdp2)
+    # enseignant retiré du personnel : refus, jamais de session du directeur
+    o = json.loads(ETAT)
+    o["teachers"] = [t for t in o["teachers"] if t["id"] != "t1"]
+    st.ecrire(json.dumps(o))
+    with pytest.raises(Erreur, match="inexistant"):
+        st.authentifier("raka", mdp2)
 
 
 def test_licence_pour_la_page():
@@ -119,7 +126,9 @@ def test_activation_transmet_l_espace(monkeypatch):
 def test_renseignements_de_creation(st):
     st.creer_admin("MotDePasse!2026")
     st.completer_ecole({"director": "M. Kone Ali", "dirTel": "0700000000", "secteur": "Ouaninou 1", "iepp": "ouaninou",
-                        "inspNom": "M. Bamba", "inspTel": "0101", "cpNom": "Mme Yao", "cpTel": "0202"})
+                        "inspNom": "M. Bamba", "inspTel": "0101", "cpNom": "Mme Yao", "cpTel": "0202",
+                        "niveaux": ["CP1", "CP2", "CE1"]})
     sc = st.lire()["school"]
+    assert sc["niveaux"] == ["CP1", "CP2", "CE1"]
     assert sc["iepp"] == "IEPP OUANINOU" and sc["inspection"].endswith("PRIMAIRE DE OUANINOU")
     assert sc["cpNom"] == "Mme Yao" and st.lire()["grades"] == {}

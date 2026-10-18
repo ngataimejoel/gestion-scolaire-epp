@@ -249,8 +249,8 @@ dialog.wide{width:min(820px,96vw)}
 /* ---------- Document imprimable (bulletin, demande…) : sobre, lisible en noir et blanc ---------- */
 #printArea{display:none}
 .paper{background:#fff;color:#111;border:1px solid #d9d9d9;border-radius:8px;padding:22px;font-size:12.5px}
-.paper table{min-width:0;width:100%}.paper th,.paper td{border:1px solid #888;padding:5px 8px;color:#111;background:#fff;white-space:normal}
-.paper th{font-size:11px;letter-spacing:.3px}.paper tbody tr:last-child td{border-bottom:1px solid #888}.paper tbody tr:hover{background:none}
+.paper table{min-width:0;width:100%}.paper th,.paper td{border:1px solid #000;padding:5px 8px;color:#111;background:#fff;white-space:normal}
+.paper th{font-size:11px;letter-spacing:.3px}.paper tbody tr:last-child td{border-bottom:1px solid #000}.paper tbody tr:hover{background:none}
 .ent{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;font-family:"Times New Roman",Times,serif;font-size:10.5px;line-height:1.3;color:#111;border-bottom:1.5px solid #111;padding-bottom:6px;margin-bottom:10px}
 .ent .lf{display:flex;flex-direction:column;flex:0 1 58%;text-transform:uppercase}.ent .lf .ent-sep{margin-left:18%}
 .ent .rt{display:flex;flex-direction:column;align-items:center;text-align:center;flex:0 0 auto;min-width:32%}.ent .rt .rep{font-size:13px}
@@ -259,7 +259,7 @@ dialog.wide{width:min(820px,96vw)}
 .ent-x{text-align:center;font-size:11px;margin:-4px 0 8px}
 .dtitle{text-align:center;margin:8px 0 12px}.dtitle h2{margin:0;font-size:16px;letter-spacing:.5px}
 .dmeta{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;margin:8px 0 12px}
-.dfoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;border:1px solid #888;padding:8px}
+.dfoot{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:10px;border:1px solid #000;padding:8px}
 .sig{display:flex;justify-content:space-between;margin-top:14px;font-size:12px;gap:10px}.sig span{flex:1;text-align:center}
 .box{display:inline-block;width:12px;height:12px;border:1px solid #111;vertical-align:-2px;margin-right:4px}
 
@@ -281,6 +281,8 @@ dialog.wide{width:min(820px,96vw)}
  html,body{background:#fff!important}body{color:#000}
  .app,.bnav,.toast,dialog,.drawer,.scrim,.tip{display:none!important}
  #printArea{display:block}
+  .paper table{border-collapse:collapse!important}.paper th,.paper td{border-color:#000!important}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
  #printArea .paper{border:0;padding:0;border-radius:0}
  .pb{page-break-after:always}.pb:last-child{page-break-after:auto}
 }
@@ -1634,6 +1636,9 @@ return '<svg class="qr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+(n+8)+
    1. RÉGLAGES (repris de l'application AKWA SCHOOL, modifiables à la main)
    =================================================================== */
 const CLASSES=['CP1','CP2','CE1','CE2','CM1','CM2'];
+// niveaux ouverts dans l'école (cochés à la création ou dans Paramètres) : CLASSES ne garde que ceux-là
+const TOUS_NIVEAUX=CLASSES.slice();
+const appliquerNiveaux=()=>{const n=(typeof S!=='undefined'&&S&&S.school&&S.school.niveaux)||[];const L=TOUS_NIVEAUX.filter(c=>n.includes(c));CLASSES.splice(0,CLASSES.length,...(L.length?L:TOUS_NIVEAUX))};
 const AGE_NORMAL={CP1:6,CP2:7,CE1:8,CE2:9,CM1:10,CM2:11};
 // Grilles de notation de l'application : COEF = note sur 10 avec coefficient, BAREME = note sur le barème de la matière
 const CP_MATIERES=['ECRITURE','E.D.H.C','EXPRESSION ECRITE','MATHEMATIQUE','ORTHOGRAPHE','DESSIN','CHANT ET POESIE','LECTURE'];
@@ -1736,6 +1741,7 @@ function genNotes(students,grades,evals,trous){
    const r=Math.max(.12,Math.min(.97,.56+b+(((k*7+i*3+n*5)%7)-3)/22));grades[key]=Math.round(r*noteMax(s.classe,w)*2)/2}))});
 }
 function seed(){
+ CLASSES.splice(0,CLASSES.length,...TOUS_NIVEAUX);   // démonstration : tous les niveaux
  const conges=[ // dates d'exemple : vérifiez le calendrier officiel de l'année
   ['2026-11-01','','Toussaint'],['2026-11-15','','Journée nationale de la paix'],['2026-12-19','2027-01-04','Congés de Noël'],
   ['2027-02-13','2027-02-21','Congés de février'],['2027-03-10','','Fin du Ramadan (à confirmer)'],['2027-03-29','','Lundi de Pâques'],
@@ -1838,7 +1844,11 @@ const missingNotes=(cls,n)=>active().filter(s=>(!cls||s.classe===cls)&&!isAbs(s.
 function decisionProp(s){if(s.statut!=='Inscrit')return s.statut;const a=mga(s);return a==null?'':a>=info(s.classe).seuil?'Admis':'Redoublant'}
 const decisionOf=s=>s.decision||decisionProp(s);
 const decTag=d=>d?`<span class="tag ${d==='Admis'?'ok':d==='Redoublant'?'warn':'bad'}">${d}</span>`:'<span class="tag">MGA incomplète</span>';
-const teacherOf=c=>S.teachers.find(t=>t.classe===c);
+// un enseignant peut tenir plusieurs classes (multigrade, classes jumelées) : t.classes, t.classe = la première
+const clsDe=t=>!t?[]:Array.isArray(t.classes)&&t.classes.length?t.classes:t.classe?[t.classe]:[];
+const clsTxt=t=>clsDe(t).join(' / ');
+const setCls=(t,L)=>{L=CLASSES.filter(c=>L.includes(c));t.classes=L;t.classe=L[0]||''};
+const teacherOf=c=>S.teachers.find(t=>clsDe(t).includes(c));
 const absOf=id=>Object.entries(S.att).filter(([,m])=>m[id]).map(([d,m])=>({d,v:m[id]})).sort((a,b)=>b.d.localeCompare(a.d));
 const isFemme=t=>/^(mme|mlle)/i.test(t.nom)||/ice$|rice|adjointe|Directrice/.test(t.fonction);
 function licence(){
@@ -2052,9 +2062,9 @@ pages['eleves-classes']=()=>{const ev=S.school.evalCourante;return `${ph('Élèv
   <div class="bar" style="margin:0">${go('eleves-liste',{cls:c,q:'',st:'',doc:''},ic('users')+'Liste')}${go('notes-saisie',{nCls:c},ic('edit')+'Notes')}${go('absences-appel',{aCls:c},ic('clip')+'Appel')}${go('notes-resultats',{rCls:c},ic('award')+'Classement')}</div></div>`}).join('')}</div>`};
 
 pages['eleves-personnel']=()=>`${ph('Élèves & personnel','Enseignants et agents. Cliquez sur un nom pour voir sa fiche et ses demandes d’autorisation.',`<button class="btn pri" data-act="addTea">${ic('plus')}Ajouter un membre</button>`)}${seg('eleves')}
- <div class="tw"><table><thead><tr><th>Nom</th><th>Matricule</th><th>Fonction</th><th>Emploi / grade</th><th>Classe</th><th>Téléphone</th><th></th></tr></thead><tbody>${S.teachers.map(t=>`<tr><td><div class="who">${avatar(t)}<button class="lk" data-act="ficheP" data-id="${t.id}">${esc(t.nom)}</button></div></td><td>${esc(t.matricule)}</td><td>${esc(t.fonction)}</td><td>${esc(emploiGrade(t))}</td><td>${t.classe?clsLink(t.classe):'<span class="tag">—</span>'}</td><td>${esc(t.tel)}</td><td class="r"><button class="ib" data-act="editTea" data-id="${t.id}" title="Modifier">${ic('edit')}</button><button class="ib dng" data-act="delTea" data-id="${t.id}" title="Retirer">${ic('trash')}</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">Aucun membre enregistré.</td></tr>'}</tbody></table></div>`;
-function teaForm(t={}){ui.tmpPhoto=undefined;ui.tmpAvis=undefined;return `<div class="fg"><div class="full" style="display:flex;align-items:center;gap:12px"><span id="phPrev">${avatar(t.id?t:{nom:'? ?'},'lg')}</span><label class="btn sm">${ic('cam')}Choisir une photo<input type="file" accept="image/*" data-ch="photo" hidden></label></div>${field('Nom complet (avec M. ou Mme)',`<input name="nom" required value="${esc(t.nom)}" autofocus>`,1)}${field('Matricule',`<input name="matricule" value="${esc(t.matricule)}">`)}${field('Fonction',`<select name="fonction">${opts(FONCTIONS,t.fonction||'Instituteur')}</select>`)}${field('Emploi',`<select name="grade">${opts(GRADES,t.grade||GRADES[0])}</select>`)}${field('Grade (ex. B3)',`<input name="echelon" value="${esc(t.echelon)}" autocapitalize="characters" maxlength="6">`)}${field('Classe tenue',`<select name="classe">${opts(CLASSES,t.classe,'Aucune')}</select>`)}${field('Téléphone',`<input name="tel" value="${esc(t.tel)}">`,1)}<div class="full" style="display:flex;align-items:center;gap:12px"><span id="avPrev">${t.avis?`<img src="${t.avis}" alt="Avis" style="height:64px;border-radius:6px">`:''}</span><label class="btn sm">${ic('cam')}Avis d’affectation ou de mutation (photo)<input type="file" accept="image/*" data-ch="avisAff" hidden></label></div></div>`}
-function saveTea(f,t){t.nom=f.get('nom').trim();t.matricule=f.get('matricule').trim();t.fonction=f.get('fonction');t.grade=f.get('grade');t.echelon=(f.get('echelon')||'').trim().toUpperCase();t.classe=f.get('classe');t.tel=f.get('tel').trim();if(ui.tmpPhoto!==undefined)t.photo=ui.tmpPhoto;if(ui.tmpAvis!==undefined)t.avis=ui.tmpAvis;if(t.classe)S.teachers.forEach(o=>{if(o!==t&&o.classe===t.classe)o.classe=''})}
+ <div class="tw"><table><thead><tr><th>Nom</th><th>Matricule</th><th>Fonction</th><th>Emploi / grade</th><th>Classe</th><th>Téléphone</th><th></th></tr></thead><tbody>${S.teachers.map(t=>`<tr><td><div class="who">${avatar(t)}<button class="lk" data-act="ficheP" data-id="${t.id}">${esc(t.nom)}</button></div></td><td>${esc(t.matricule)}</td><td>${esc(t.fonction)}</td><td>${esc(emploiGrade(t))}</td><td>${clsDe(t).length?clsDe(t).map(clsLink).join(' '):'<span class="tag">—</span>'}</td><td>${esc(t.tel)}</td><td class="r"><button class="ib" data-act="editTea" data-id="${t.id}" title="Modifier">${ic('edit')}</button><button class="ib dng" data-act="delTea" data-id="${t.id}" title="Retirer">${ic('trash')}</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">Aucun membre enregistré.</td></tr>'}</tbody></table></div>`;
+function teaForm(t={}){ui.tmpPhoto=undefined;ui.tmpAvis=undefined;return `<div class="fg"><div class="full" style="display:flex;align-items:center;gap:12px"><span id="phPrev">${avatar(t.id?t:{nom:'? ?'},'lg')}</span><label class="btn sm">${ic('cam')}Choisir une photo<input type="file" accept="image/*" data-ch="photo" hidden></label></div>${field('Nom complet (avec M. ou Mme)',`<input name="nom" required value="${esc(t.nom)}" autofocus>`,1)}${field('Matricule',`<input name="matricule" value="${esc(t.matricule)}">`)}${field('Fonction',`<select name="fonction">${opts(FONCTIONS,t.fonction||'Instituteur')}</select>`)}${field('Emploi',`<select name="grade">${opts(GRADES,t.grade||GRADES[0])}</select>`)}${field('Grade (ex. B3)',`<input name="echelon" value="${esc(t.echelon)}" autocapitalize="characters" maxlength="6">`)}${field('Classe(s) tenue(s) : plusieurs pour une classe multigrade ou jumelée',`<div class="bar" style="margin:0;flex-wrap:wrap;gap:14px">${CLASSES.map(c=>`<label class="chk"><input type="checkbox" name="classes" value="${c}"${clsDe(t).includes(c)?' checked':''}>${c}</label>`).join('')}</div>`,1)}${field('Téléphone',`<input name="tel" value="${esc(t.tel)}">`,1)}<div class="full" style="display:flex;align-items:center;gap:12px"><span id="avPrev">${t.avis?`<img src="${t.avis}" alt="Avis" style="height:64px;border-radius:6px">`:''}</span><label class="btn sm">${ic('cam')}Avis d’affectation ou de mutation (photo)<input type="file" accept="image/*" data-ch="avisAff" hidden></label></div></div>`}
+function saveTea(f,t){t.nom=f.get('nom').trim();t.matricule=f.get('matricule').trim();t.fonction=f.get('fonction');t.grade=f.get('grade');t.echelon=(f.get('echelon')||'').trim().toUpperCase();setCls(t,f.getAll('classes'));t.tel=f.get('tel').trim();if(ui.tmpPhoto!==undefined)t.photo=ui.tmpPhoto;if(ui.tmpAvis!==undefined)t.avis=ui.tmpAvis;S.teachers.forEach(o=>{if(o!==t&&clsDe(o).some(c=>clsDe(t).includes(c)))setCls(o,clsDe(o).filter(c=>!clsDe(t).includes(c)))})}
 
 /* ---------- 6.3 Notes & bulletins ---------- */
 pages['notes-saisie']=()=>{
@@ -2174,8 +2184,8 @@ const sxCells=L=>sexCount(L).map((v,i)=>`<td${i===2?' style="font-weight:700"':'
 const moisInfo=m=>{const y=m>=9?startYear():startYear()+1;return {y,mm:`${y}-${pad(m,2)}`,jours:JOURS_MOIS[m]||0}};
 const absMois=(L,mm)=>Object.entries(S.att).filter(([d])=>d.startsWith(mm)).reduce((k,[,o])=>k+L.filter(s=>o[s.id]).length,0);
 function blocEnseignants(){
- const ens=S.teachers.filter(t=>t.classe||/Instit/.test(t.fonction)),fem=ens.filter(isFemme).length;
- return `<table class="small"><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Matricule</th><th>Fonction</th><th>Genre</th><th>Emploi / grade</th><th>Cours tenu</th><th>Contact</th></tr></thead><tbody>${ens.map((t,i)=>`<tr><td>${i+1}</td><td class="nm">${esc(t.nom)}</td><td>${esc(t.matricule)}</td><td>${esc(t.fonction)}</td><td>${isFemme(t)?'F':'M'}</td><td>${esc(emploiGrade(t))}</td><td>${t.classe||'—'}</td><td>${esc(t.tel)}</td></tr>`).join('')}</tbody></table>
+ const ens=S.teachers.filter(t=>clsDe(t).length||/Instit/.test(t.fonction)),fem=ens.filter(isFemme).length;
+ return `<table class="small"><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Matricule</th><th>Fonction</th><th>Genre</th><th>Emploi / grade</th><th>Cours tenu</th><th>Contact</th></tr></thead><tbody>${ens.map((t,i)=>`<tr><td>${i+1}</td><td class="nm">${esc(t.nom)}</td><td>${esc(t.matricule)}</td><td>${esc(t.fonction)}</td><td>${isFemme(t)?'F':'M'}</td><td>${esc(emploiGrade(t))}</td><td>${clsTxt(t)||'—'}</td><td>${esc(t.tel)}</td></tr>`).join('')}</tbody></table>
  <p class="note-small">Personnel enseignant : <b>${ens.length}</b> dont <b>${fem}</b> femme(s).</p>`;
 }
 function blocEffectifs(){
@@ -2207,7 +2217,7 @@ function blocFreq(m){
 }
 function blocPersonnel(m){
  const {mm}=moisInfo(m),persAbs=t=>S.auth.filter(a=>a.pid===t.id&&a.statut==='Accordée').reduce((k,a)=>k+schoolDays(a.du,a.au).filter(d=>d.startsWith(mm)).length,0);
- return `<table class="small"><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Cours tenu</th><th>Jours d’absence autorisés</th><th>Observations</th></tr></thead><tbody>${S.teachers.map((t,i)=>`<tr><td>${i+1}</td><td class="nm">${esc(t.nom)}</td><td>${t.classe||'—'}</td><td>${persAbs(t)}</td><td></td></tr>`).join('')}</tbody></table>`;
+ return `<table class="small"><thead><tr><th>N°</th><th>Nom et prénoms</th><th>Cours tenu</th><th>Jours d’absence autorisés</th><th>Observations</th></tr></thead><tbody>${S.teachers.map((t,i)=>`<tr><td>${i+1}</td><td class="nm">${esc(t.nom)}</td><td>${clsTxt(t)||'—'}</td><td>${persAbs(t)}</td><td></td></tr>`).join('')}</tbody></table>`;
 }
 function blocEvalsMois(m){
  const {mm}=moisInfo(m),act=active();
@@ -2520,7 +2530,7 @@ pages['parametres']=()=>{
  const lb=(k,lab)=>`<div class="logo-box">${sc[k]||k==='armoiries'?`<img src="${sc[k]||ARMOIRIES}" alt="">`:'<span class="ph0">Aucun</span>'}<div style="display:grid;gap:6px"><b>${lab}</b><div class="bar" style="margin:0"><label class="btn sm">${ic('up')}Choisir<input type="file" accept="image/*" data-ch="logoUp" data-k="${k}" hidden></label>${sc[k]?`<button class="btn sm dng" data-act="logoDel" data-k="${k}">Retirer</button>`:''}</div></div></div>`;
  return `${ph('Paramètres','Identité de l’école, en-tête des documents, calendrier, sécurité et activation.')}
  <div class="grid g2 mb">
-  <div class="card"><h3>Établissement</h3><form id="setForm" style="margin-top:12px"><div class="fg">${field('École',`<input name="name" value="${esc(sc.name)}" required>`)}${field('IEPP',`<input name="iepp" value="${esc(sc.iepp)}">`)}${field('DRENAET',`<input name="drenaet" value="${esc(sc.drenaet)}">`)}${field('Directeur / Directrice',`<input name="director" value="${esc(sc.director)}">`)}${field('Contact du directeur',`<input name="dirTel" value="${esc(sc.dirTel||'')}" inputmode="tel">`)}${field('Secteur pédagogique',`<input name="secteur" value="${esc(sc.secteur||'')}">`)}${field('Inspecteur (nom et prénoms)',`<input name="inspNom" value="${esc(sc.inspNom||'')}">`)}${field('Contact de l’inspecteur',`<input name="inspTel" value="${esc(sc.inspTel||'')}" inputmode="tel">`)}${field('Conseiller pédagogique (nom et prénoms)',`<input name="cpNom" value="${esc(sc.cpNom||'')}">`)}${field('Contact du conseiller pédagogique',`<input name="cpTel" value="${esc(sc.cpTel||'')}" inputmode="tel">`)}${field('Année scolaire',`<select name="year">${opts(['2025–2026','2026–2027','2027–2028','2028–2029'],sc.year)}</select>`)}${field('Évaluation en cours',`<select name="evalCourante">${evOpts(sc.evalCourante,false)}</select>`)}${field('Localité (ville)',`<input name="localite" value="${esc(sc.localite)}">`)}${field('Sous-préfecture',`<input name="sp" value="${esc(sc.sp)}" list="dl-sp">`)}${field('Code DREN',`<input name="codedren" value="${esc(sc.codedren)}">`)}${field('Code IEPP',`<input name="codeiep" value="${esc(sc.codeiep)}">`)}${field('Code de l’école',`<input name="codeecole" value="${esc(sc.codeecole)}" placeholder="Ex. : E000000">`)}
+  <div class="card"><h3>Établissement</h3><form id="setForm" style="margin-top:12px"><div class="fg">${field('École',`<input name="name" value="${esc(sc.name)}" required>`)}${field('IEPP',`<input name="iepp" value="${esc(sc.iepp)}">`)}${field('DRENAET',`<input name="drenaet" value="${esc(sc.drenaet)}">`)}${field('Directeur / Directrice',`<input name="director" value="${esc(sc.director)}">`)}${field('Contact du directeur',`<input name="dirTel" value="${esc(sc.dirTel||'')}" inputmode="tel">`)}${field('Secteur pédagogique',`<input name="secteur" value="${esc(sc.secteur||'')}">`)}${field('Niveaux de l’école',`<div class="bar" style="margin:0;flex-wrap:wrap;gap:14px">${TOUS_NIVEAUX.map(c=>`<label class="chk"><input type="checkbox" name="niveaux" value="${c}"${CLASSES.includes(c)?' checked':''}>${c}</label>`).join('')}</div>`,1)}${field('Inspecteur (nom et prénoms)',`<input name="inspNom" value="${esc(sc.inspNom||'')}">`)}${field('Contact de l’inspecteur',`<input name="inspTel" value="${esc(sc.inspTel||'')}" inputmode="tel">`)}${field('Conseiller pédagogique (nom et prénoms)',`<input name="cpNom" value="${esc(sc.cpNom||'')}">`)}${field('Contact du conseiller pédagogique',`<input name="cpTel" value="${esc(sc.cpTel||'')}" inputmode="tel">`)}${field('Année scolaire',`<select name="year">${opts(['2025–2026','2026–2027','2027–2028','2028–2029'],sc.year)}</select>`)}${field('Évaluation en cours',`<select name="evalCourante">${evOpts(sc.evalCourante,false)}</select>`)}${field('Localité (ville)',`<input name="localite" value="${esc(sc.localite)}">`)}${field('Sous-préfecture',`<input name="sp" value="${esc(sc.sp)}" list="dl-sp">`)}${field('Code DREN',`<input name="codedren" value="${esc(sc.codedren)}">`)}${field('Code IEPP',`<input name="codeiep" value="${esc(sc.codeiep)}">`)}${field('Code de l’école',`<input name="codeecole" value="${esc(sc.codeecole)}" placeholder="Ex. : E000000">`)}
   <div class="full sub" style="margin-top:4px"><b style="color:var(--ink)">En-tête de tous les documents</b> (modèle de la fiche scolaire)</div>${field('Ministère',`<textarea name="ministere" rows="2">${esc(sc.ministere)}</textarea>`,1)}${field('Direction régionale',`<textarea name="direction" rows="2">${esc(sc.direction)}</textarea>`,1)}${field('Inspection',`<textarea name="inspection" rows="2">${esc(sc.inspection)}</textarea>`,1)}
   ${field('Ligne d’en-tête supplémentaire (documents imprimés)',`<input name="entete" value="${esc(sc.entete)}" placeholder="Ex. : BP 12 Ouaninou · Tél. 07 00 00 00 00">`,1)}</div><div style="margin-top:14px"><button class="btn pri" type="submit">Enregistrer</button></div></form></div>
   <div class="card" style="display:grid;gap:12px;align-content:start"><h3>Logos des documents</h3><div class="sub" style="margin-top:-8px">Imprimés en haut des bulletins, rapports et demandes.</div>${lb('armoiries','Armoiries (à droite)')}${lb('logoIepp','Logo de l’IEPP (sous l’entête, à gauche)')}${lb('logoEcole','Logo de l’école (sous l’entête, à gauche)')}
@@ -2598,9 +2608,9 @@ function ficheEleve(s){
  ${auths.length?`<h4 style="margin-top:12px">Demandes d’autorisation</h4><div class="lst">${auths.map(a=>`<button data-act="go" data-to="absences-autorisations" data-set='{"auQui":"eleve","auSt":""}'><span>${a.ref} · ${esc(a.motif)}</span><span class="m">${a.statut}</span></button>`).join('')}</div>`:''}</section></div>`;
 }
 function ficheProf(t){
- const auths=S.auth.filter(a=>a.pid===t.id),eff=t.classe?active().filter(s=>s.classe===t.classe).length:0;
+ const auths=S.auth.filter(a=>a.pid===t.id),eff=active().filter(s=>clsDe(t).includes(s.classe)).length;
  return `<div class="dh"><span>Fiche personnel</span><button class="ib" data-act="closeDrawer" aria-label="Fermer">${ic('x')}</button></div><div class="dbody">
- <div class="dhero">${avatar(t,'xl')}<div><h2>${esc(t.nom)}</h2><div class="sub">${esc(t.fonction)} · ${esc(emploiGrade(t))}</div><div class="bar" style="margin:6px 0 0">${t.classe?clsLink(t.classe)+`<span class="sub">${eff} élèves</span>`:'<span class="tag">Sans classe</span>'}</div></div></div>
+ <div class="dhero">${avatar(t,'xl')}<div><h2>${esc(t.nom)}</h2><div class="sub">${esc(t.fonction)} · ${esc(emploiGrade(t))}</div><div class="bar" style="margin:6px 0 0">${clsDe(t).length?clsDe(t).map(clsLink).join(' ')+`<span class="sub">${eff} élèves</span>`:'<span class="tag">Sans classe</span>'}</div></div></div>
  <div class="dact"><button class="btn sm" data-act="editTea" data-id="${t.id}">${ic('edit')}Modifier</button><button class="btn sm" data-act="addAuth" data-qui="personnel" data-id="${t.id}">${ic('cal')}Demande d’absence</button>${t.classe?go('notes-resultats',{rCls:t.classe},ic('award')+'Résultats de sa classe'):''}</div>
  <section><h4>Dossier</h4><dl class="kvs"><dt>Matricule</dt><dd>${esc(t.matricule)||'—'}</dd><dt>Emploi / grade</dt><dd>${esc(emploiGrade(t))||'—'}</dd><dt>Téléphone</dt><dd>${esc(t.tel)||'—'}</dd></dl>${t.avis?`<h4 style="margin-top:10px">Avis d’affectation ou de mutation</h4><a href="${t.avis}" target="_blank"><img src="${t.avis}" alt="Avis d’affectation" style="max-width:100%;border:1px solid var(--line);border-radius:6px"></a>`:''}</section>
  <section><h4>Demandes d’autorisation</h4><div class="lst">${auths.map(a=>`<button data-act="go" data-to="absences-autorisations" data-set='{"auQui":"personnel","auSt":""}'><span><b>${a.ref}</b> · ${esc(a.motif)}<br><span class="sub">${fmtDate(a.du)}${a.au!==a.du?' → '+fmtDate(a.au):''} · ${plural(authDays(a),'jour')}</span></span><span class="m"><span class="tag ${a.statut==='Accordée'?'ok':a.statut==='Refusée'?'bad':'warn'}">${a.statut}</span></span></button>`).join('')||'<div class="sub">Aucune demande.</div>'}</div></section></div>`;
@@ -2619,7 +2629,7 @@ function closeDrawer(){ui.drawer=null;drawDrawer()}
 function searchItems(q){
  q=norm(q);if(!q)return [];
  const st=S.students.filter(s=>norm(s.nom+s.prenoms+s.prenoms+s.nom+s.mat+(s.matNat||'')).includes(q)).sort(byClass).slice(0,6).map(s=>({act:'fiche',id:s.id,html:`${avatar(s)}<span><b>${esc(fullName(s))}</b><small>${s.classe} · ${esc(s.mat)}${s.statut!=='Inscrit'?' · '+s.statut:''}</small></span><span class="k">Élève</span>`}));
- const te=S.teachers.filter(t=>norm(t.nom+t.fonction).includes(q)).slice(0,3).map(t=>({act:'ficheP',id:t.id,html:`${avatar(t)}<span><b>${esc(t.nom)}</b><small>${esc(t.fonction)}${t.classe?' · '+t.classe:''}</small></span><span class="k">Personnel</span>`}));
+ const te=S.teachers.filter(t=>norm(t.nom+t.fonction).includes(q)).slice(0,3).map(t=>({act:'ficheP',id:t.id,html:`${avatar(t)}<span><b>${esc(t.nom)}</b><small>${esc(t.fonction)}${clsTxt(t)?' · '+clsTxt(t):''}</small></span><span class="k">Personnel</span>`}));
  const sc=SCREENS.filter(x=>norm(x.lab+x.grp).includes(q)).slice(0,5).map(x=>({act:'go',to:x.to,set:x.set,html:`<span class="av">${ic(grpOf(x.to).ic)}</span><span><b>${x.lab}</b><small>${x.grp||'Accueil'}</small></span><span class="k">Écran</span>`}));
  const cl=CLASSES.filter(c=>norm(c)===q).map(c=>({act:'go',to:'eleves-liste',set:{cls:c,q:'',st:'',doc:''},html:`<span class="av">${c}</span><span><b>Classe ${c}</b><small>${active().filter(s=>s.classe===c).length} élèves</small></span><span class="k">Classe</span>`}));
  return [...cl,...st,...te,...sc];
@@ -2708,7 +2718,7 @@ const acts={
    if(au<du){toast('La date de fin est avant la date de début.');return false}
    let pid='',lab=nom;
    if(q==='eleve'){const s=S.students.find(x=>nom.includes(x.mat))||S.students.find(x=>norm(fullName(x))===norm(nom));if(!s){toast('Élève introuvable : choisissez-le dans la liste proposée.');return false}pid=s.id;lab=fullName(s)}
-   else{const m=S.teachers.find(x=>norm(x.nom)===norm(nom));if(m){pid=m.id;lab=m.nom}}
+   else{const m=S.teachers.find(x=>norm(x.nom)===norm(nom));if(!m){toast(S.teachers.length?'Personne introuvable dans le personnel : choisissez-la dans la liste proposée.':'Aucun membre du personnel enregistré : ajoutez d’abord la personne dans Élèves & personnel › Personnel.');return false}pid=m.id;lab=m.nom}
    const n=S.auth.reduce((k,a)=>Math.max(k,parseInt(a.ref.split('-').pop())||0),0)+1;
    const a={id:uid(),ref:`AUT-${startYear()}-${pad(n)}`,qui:q,pid,nom:lab,du,au,motif:f.get('motif'),precision:f.get('precision').trim(),statut:'En attente',cree:today};
    S.auth.push(a);log(`Demande ${a.ref} : ${lab}`);toast(`Demande ${a.ref} enregistrée`);Object.assign(ui,{auSt:'',auQui:''});
@@ -2723,7 +2733,7 @@ const acts={
  printAuth(t){const a=S.auth.find(x=>x.id===t.dataset.id),s=a.qui==='eleve'?S.students.find(x=>x.id===a.pid):null,m=a.qui==='personnel'?S.teachers.find(x=>x.id===a.pid):null;
   if(a.qui==='personnel')return printDocs([lettreAbsence(a,m)],false,true);
   printDocs([`${entete()}<div class="dtitle"><h2>DEMANDE D’AUTORISATION D’ABSENCE</h2><div>N° ${esc(a.ref)} du ${fmtDate(a.cree)}</div></div>
-  <div class="dmeta"><span>Nom et prénoms : <b>${esc(a.nom)}</b></span><span>${s?`Matricule : <b>${esc(s.mat)}</b> · Classe : <b>${s.classe}</b>`:`Fonction : <b>${esc(m?.fonction||'—')}</b>${m?.classe?' · Classe : <b>'+m.classe+'</b>':''}`}</span>
+  <div class="dmeta"><span>Nom et prénoms : <b>${esc(a.nom)}</b></span><span>${s?`Matricule : <b>${esc(s.mat)}</b> · Classe : <b>${s.classe}</b>`:`Fonction : <b>${esc(m?.fonction||'—')}</b>${clsTxt(m)?' · Classe : <b>'+clsTxt(m)+'</b>':''}`}</span>
   <span>Période : du <b>${fmtDate(a.du)}</b> au <b>${fmtDate(a.au)}</b></span><span>Nombre de jours de classe : <b>${authDays(a)}</b></span><span>Motif : <b>${esc(a.motif)}</b></span><span>${a.precision?'Précision : '+esc(a.precision):''}</span></div>
   <div class="dfoot"><span>Décision du Directeur :</span><span><i class="box"></i>Accordée</span><span><i class="box"></i>Refusée</span><span>Statut actuel : <b>${a.statut}</b></span></div>
   <div class="sig"><span>${s?'Le parent / tuteur':'L’intéressé(e)'}</span><span>Le Directeur<i class="cachet"></i>${esc(S.school.director)}</span></div>`])},
@@ -2763,7 +2773,7 @@ const acts={
   const row=(lab,L)=>`<tr><td><b>${lab}</b></td>${M.map(([,f])=>sxCells(f(L))).join('')}<td>${S.students.filter(s=>s.statut!=='Inscrit'&&(lab==='TOTAL'||lab==='Total CP'?L.some(x=>x.classe===s.classe):s.classe===lab)).length}</td></tr>`;
   printList('Tableau des effectifs des élèves',`<table class="small"><thead><tr><th rowspan="2">Classe</th>${M.map(([l])=>`<th colspan="3">${l.toUpperCase()}</th>`).join('')}<th rowspan="2">ABANDONS</th></tr><tr>${M.map(()=>'<th>G</th><th>F</th><th>T</th>').join('')}</tr></thead><tbody>${CLASSES.map(c=>row(c,act.filter(s=>s.classe===c))).join('')}${row('Total CP',act.filter(s=>s.classe==='CP1'||s.classe==='CP2'))}${row('TOTAL',act)}</tbody></table>${signature()}`,true)},
  expStu(){const sc=S.school,d=x=>x?x.split('-'):['','',''];download('akwa-school-eleves.csv',csvOut([COLS_ELEVES,...S.students.filter(s=>s.statut==='Inscrit').sort(byClass).map(s=>{const [y,m,j]=d(s.naissance),sp=s.acte?.sp?spNom(s.acte.sp).toUpperCase():'';const nom=p=>`${p?.nom||''} ${p?.prenoms||''}`.trim();return [sc.codedren,sc.codeiep,spNom(sc.iepp).replace(/^IEPP\s+/i,''),sc.codeecole,sc.name,s.matNat||s.mat,s.nom,s.prenoms,s.sexe==='Masculin'?'MASCULIN':'FEMININ',j?String(+j):'',m?String(+m):'',y||'',s.nationalite||NAT_DEFAUT,(s.lieu||'').toUpperCase(),spCode(sp),sp,nom(s.pere).toUpperCase(),nom(s.mere).toUpperCase(),s.extrait&&s.acte?.num?s.acte.num:'0',(s.extrait&&s.acte?.centre||'').toUpperCase(),s.pere?.domicile||s.mere?.domicile||'',s.classe]})]),'text/csv');toast('Export des élèves téléchargé (colonnes ELEVES)')},
- expTea(){download('akwa-school-personnel.csv',csvOut([['Nom','Matricule','Fonction','Emploi','Grade','Classe','Téléphone'],...S.teachers.map(t=>[t.nom,t.matricule,t.fonction,t.grade,t.echelon||'',t.classe,t.tel])]),'text/csv');toast('Export du personnel téléchargé')},
+ expTea(){download('akwa-school-personnel.csv',csvOut([['Nom','Matricule','Fonction','Emploi','Grade','Classe','Téléphone'],...S.teachers.map(t=>[t.nom,t.matricule,t.fonction,t.grade,t.echelon||'',clsTxt(t),t.tel])]),'text/csv');toast('Export du personnel téléchargé')},
  expNotes(){const rows=[['Classe','Matricule','Nom et prénoms','Évaluation','Matière','Note','Sur','Moyenne de l’évaluation']];active().sort(byClass).forEach(s=>[1,2,3,4].forEach(n=>{const r=evalRes(s,n);if(!r)return;matieres(s.classe,n).forEach(([m,w])=>rows.push([s.classe,s.mat,fullName(s),evalLabel(s.classe,n),m,r.abs?'Absent':fmtIn(gv(s.id,n,m)),noteMax(s.classe,w),fmtIn(r.moy)]))}));download('akwa-school-notes.csv',csvOut(rows),'text/csv');toast('Export des notes téléchargé')},
  expAges(){download('akwa-school-ages.csv',csvOut([['Âge',...GROUPS.flatMap(([l])=>[l+' G',l+' F',l+' T'])],...agesData()]),'text/csv');toast('Tableau des âges téléchargé')},
  tpl(){const sc=S.school;download('modele-import-eleves.csv',csvOut([COLS_ELEVES,[sc.codedren,sc.codeiep,'OUANINOU',sc.codeecole,sc.name,'00000000A','KOUADIO','MARIE CLAIRE','FEMININ','14','5','2018','IVOIRIENNE','OUANINOU','SP000725','OUANINOU','KOUADIO KOFFI','YAO AYA','245','OUANINOU','OUANINOU','CE1']]),'text/csv')},
@@ -2814,7 +2824,7 @@ const chs={
   t.dataset.old=t.value=fmtIn(v);t.classList.remove('okf');void t.offsetWidth;t.classList.add('okf');refreshNotes();
  },
  deci(t){const s=S.students.find(x=>x.id===t.dataset.id);s.decision=t.value===decisionProp(s)?'':t.value;save();render()},
- teach(t){const c=t.dataset.c;S.teachers.forEach(x=>{if(x.classe===c)x.classe=''});if(t.value){const m=S.teachers.find(x=>x.id===t.value);m.classe=c;log(`${m.nom} affecté(e) en ${c}`)}save();toast('Affectation enregistrée');render()},
+ teach(t){const c=t.dataset.c;S.teachers.forEach(x=>{if(clsDe(x).includes(c))setCls(x,clsDe(x).filter(k=>k!==c))});if(t.value){const m=S.teachers.find(x=>x.id===t.value);setCls(m,[...clsDe(m),c]);log(`${m.nom} affecté(e) en ${c}`)}save();toast('Affectation enregistrée');render()},
  theme(t){S.school.theme=t.value;save();applyTheme()},
  avisAff(t){const f=t.files[0];if(!f)return;readImage(f,1600).then(u=>{ui.tmpAvis=u;$('#avPrev').innerHTML=`<img src="${u}" alt="Avis" style="height:64px;border-radius:6px">`}).catch(()=>toast('Image illisible'))},
  photo(t){const f=t.files[0];if(!f)return;readImage(f).then(u=>{ui.tmpPhoto=u;$('#phPrev').innerHTML=`<img class="av lg" src="${u}" alt="">`}).catch(()=>toast('Image illisible'))},
@@ -2834,7 +2844,7 @@ document.addEventListener('keydown',e=>{
 });
 document.addEventListener('submit',e=>{
  const f=e.target,id=f.id;if(!['setForm','cgForm','pwdForm','actForm'].includes(id))return;e.preventDefault();const d=new FormData(f);
- if(id==='setForm'){['dirTel','secteur','inspNom','inspTel','cpNom','cpTel'].forEach(k=>{if(d.has(k))S.school[k]=String(d.get(k)).trim()});Object.assign(S.school,{name:d.get('name').trim(),iepp:d.get('iepp').trim(),drenaet:d.get('drenaet').trim(),director:d.get('director').trim()||'Le Directeur',year:d.get('year'),evalCourante:Number(d.get('evalCourante')),entete:d.get('entete').trim(),localite:d.get('localite').trim(),sp:d.get('sp').trim(),codedren:d.get('codedren').trim(),codeiep:d.get('codeiep').trim(),codeecole:d.get('codeecole').trim(),ministere:d.get('ministere').trim()||ENTETE.ministere,direction:d.get('direction').trim()||ENTETE.direction,inspection:d.get('inspection').trim()||ENTETE.inspection});ui.nEv=ui.rEv=String(S.school.evalCourante);log('Paramètres de l’école modifiés');toast('Paramètres enregistrés')}
+ if(id==='setForm'){const nv=d.getAll('niveaux');if(!nv.length){toast('Cochez au moins un niveau.');return}S.school.niveaux=nv;['dirTel','secteur','inspNom','inspTel','cpNom','cpTel'].forEach(k=>{if(d.has(k))S.school[k]=String(d.get(k)).trim()});Object.assign(S.school,{name:d.get('name').trim(),iepp:d.get('iepp').trim(),drenaet:d.get('drenaet').trim(),director:d.get('director').trim()||'Le Directeur',year:d.get('year'),evalCourante:Number(d.get('evalCourante')),entete:d.get('entete').trim(),localite:d.get('localite').trim(),sp:d.get('sp').trim(),codedren:d.get('codedren').trim(),codeiep:d.get('codeiep').trim(),codeecole:d.get('codeecole').trim(),ministere:d.get('ministere').trim()||ENTETE.ministere,direction:d.get('direction').trim()||ENTETE.direction,inspection:d.get('inspection').trim()||ENTETE.inspection});ui.nEv=ui.rEv=String(S.school.evalCourante);log('Paramètres de l’école modifiés');toast('Paramètres enregistrés')}
  if(id==='cgForm'){const du=d.get('du'),au=d.get('au');if(au&&au<du)return toast('La date de fin est avant la date de début.');S.conges.push({id:uid(),lib:d.get('lib').trim(),du,au:au&&au!==du?au:''});toast('Ajouté au calendrier')}
  if(id==='pwdForm'){if(d.get('old')!==S.school.adminPwd)return toast('Mot de passe actuel incorrect');S.school.adminPwd=d.get('nw');log('Mot de passe administrateur changé');toast('Mot de passe changé')}
  if(id==='actForm'){const c=d.get('code').trim().toUpperCase(),m=c.match(/^AKWA-(1AN|VIE)-[A-Z0-9]{4}-[A-Z0-9]{4}$/);if(!m)return toast('Code invalide. Format attendu : AKWA-1AN-XXXX-XXXX');S.school.licence=m[1]==='VIE'?{type:'vie'}:{type:'an',fin:addDays(today,365)};log(`Activation : licence ${m[1]==='VIE'?'à vie':'1 an'}`);toast('Application activée');applyTheme()}
@@ -2887,7 +2897,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
    o.messages=[{id:uid(),t:Date.now()-36e5*20,dest:'',titre:'Conseil des maîtres',texte:'Conseil des maîtres vendredi à 15 h dans ma classe. Merci d’apporter vos cahiers de préparation.',lus:{}}];
    const t0=o.teachers[0];if(t0)o.messages[0].lus[t0.id]=Date.now()-36e5*18;
   }
-  o.teachers.forEach((t,i)=>{if(t.compte===undefined)t.compte=i<4?{login:loginDe(t.nom),actif:true,cree:addDays(today,-10)}:null;if(t.actif==null)t.actif=true});
+  o.teachers.forEach((t,i)=>{if(t.compte===undefined)t.compte=i<4?{login:loginDe(t.nom),actif:true,cree:addDays(today,-10)}:null;if(t.actif==null)t.actif=true;if(!Array.isArray(t.classes))t.classes=t.classe?[t.classe]:[]});
   const ev=o.school.evalCourante;CLASSES.forEach(c=>{const k=c+'|'+ev;if(!o.saisie[k])o.saisie[k]={fermee:false,fin:addDays(today,3)}});
   return o;
  }
@@ -2896,7 +2906,8 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  const oldSave=save;
  // ---------- profil ----------
  const prof=()=>S.session.role==='ens'?S.teachers.find(t=>t.id===S.session.tid):null;
- const maClasse=()=>prof()?.classe||'';
+ const maClasse=()=>clsDe(prof())[0]||'';
+ const mesClasses=()=>clsDe(prof());
  window.estEnseignant=()=>!!prof();
  // espace enseignant seul (sans école) : l'enseignant tient lui-même sa classe ; le directeur le rattache plus tard
  const solo=()=>!!(prof()&&S.school.solo);
@@ -2908,7 +2919,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
   const L=MENU0.filter(m=>!prof()||solo()||!['admin','parametres'].includes(m.id)).map(m=>({...m,tabs:m.tabs.filter(([t])=>!prof()||!(CACHE_ENS[m.id]||[]).includes(t)&&!(m.id==='admin'&&t!=='donnees'))}));
   MENU.splice(0,MENU.length,...L);
  }
- window.visList=list=>{if(!prof()||list!==CLASSES)return list;return CLASSES.filter(c=>c===maClasse())};
+ window.visList=list=>{if(!prof()||list!==CLASSES)return list;return CLASSES.filter(c=>mesClasses().includes(c))};
  const nonLus=()=>prof()?S.messages.filter(m=>(!m.dest||m.dest===prof().id)&&!m.lus[prof().id]):[];
  const enAttente=(c,n)=>Object.keys(S.attente).filter(k=>{const[id,e]=k.split('|');const s=S.students.find(x=>x.id===id);return s&&s.classe===c&&String(e)===String(n)}).length;
  const sk=(c,n)=>S.saisie[c+'|'+n]||(S.saisie[c+'|'+n]={fermee:false,fin:''});
@@ -2917,12 +2928,14 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  // ---------- rendu ----------
  const render0=render;
  render=function(){
-  ensure8(S);menuDuProfil();
+  appliquerNiveaux();ensure8(S);menuDuProfil();
+  if(S.session&&S.session.role==='ens'&&!prof()){document.body.classList.add('ens');MENU.splice(0,MENU.length);$('#nav').innerHTML='';$('#bnav').innerHTML='';$('#crumb').innerHTML='';
+   $('#view').innerHTML=`<div class="card"><h3>Utilisateur inexistant</h3><div class="sub">Ce compte enseignant a été supprimé. Reconnectez-vous avec un compte valide.</div>${window.APP?`<div class="bar" style="margin:12px 0 0"><button class="btn pri" data-act="deconnexion">Se déconnecter</button></div>`:''}</div>`;return}
   const p=prof();document.body.classList.toggle('ens',!!p);document.body.classList.toggle('solo',solo());
-  if(p){['nCls','aCls','rCls','fCls','repCls'].forEach(k=>ui[k]=p.classe);ui.cls=p.classe;
+  if(p){['nCls','aCls','rCls','fCls','repCls','cls'].forEach(k=>{if(!mesClasses().includes(ui[k]))ui[k]=maClasse()});
    const r=route();if(!MENU.some(m=>r===m.id||r.startsWith(m.id+'-'))||(r.startsWith('admin')&&r!=='admin-donnees')||(CACHE_ENS[r.split('-')[0]]||[]).includes(r.split('-')[1])){location.hash='#accueil';return}}
   render0();
-  const opt=[['dir','Directeur (administrateur)'],...S.teachers.filter(t=>t.compte&&t.compte.actif&&t.actif).map(t=>['ens:'+t.id,`${t.nom} – ${t.classe||'sans classe'}`])];
+  const opt=[['dir','Directeur (administrateur)'],...S.teachers.filter(t=>t.compte&&t.compte.actif&&t.actif).map(t=>['ens:'+t.id,`${t.nom} – ${clsTxt(t)||'sans classe'}`])];
   if(window.APP)APP.bandeau();else $('#crumb').insertAdjacentHTML('beforeend',`<span class="sp"></span><label class="sub" style="margin-left:auto;display:flex;gap:6px;align-items:center">${ic('users')}Profil de démonstration <select data-ch="profil" aria-label="Profil">${opts(opt,p?'ens:'+p.id:'dir')}</select></label>`);
   const r=route();
   if(r==='notes-saisie')apresSaisie();
@@ -2938,7 +2951,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  }
  const acc0=pages.accueil;
  pages.accueil=()=>{const p=prof();if(!p)return acc0();
-  const n=S.school.evalCourante,c=p.classe,x=sk(c,n),manq=missingNotes(c,n),nl=nonLus();
+  const n=S.school.evalCourante,c=mesClasses().includes(ui.nCls)?ui.nCls:maClasse(),x=sk(c,n),manq=missingNotes(c,n),nl=nonLus();
   return `${ph('Bonjour '+esc(p.nom),`Compte enseignant : vous voyez et saisissez seulement la classe de <b>${c}</b>.`)}
   ${nl.length?`<div class="note mb">${ic('mail')}<span><b>${nl.length} message(s) du directeur.</b> <button class="btn sm" data-act="lireMsg">Lire</button></span></div>`:''}
   <div class="grid g2 mb"><div class="card"><h3>À faire</h3><ul style="margin:8px 0 0;padding-left:18px">
@@ -2957,7 +2970,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
   return `${ph('Élèves & personnel','Comptes des enseignants créés par le directeur : chacun ne voit que sa classe, sur l’ordinateur et sur le téléphone.')}${seg('eleves')}<div class="bar">${pills('ensTab',null,T)}</div>${corps}`;
  };
  function ensComptes(){
-  return `<div class="tw"><table><thead><tr><th>Enseignant</th><th>Classe</th><th>Identifiant</th><th>État</th><th class="r">Actions</th></tr></thead><tbody>${S.teachers.map(t=>`<tr><td><b>${esc(t.nom)}</b><div class="sub">${esc(t.grade||t.fonction||'')}</div></td><td>${t.classe||'—'}</td>
+  return `<div class="tw"><table><thead><tr><th>Enseignant</th><th>Classe</th><th>Identifiant</th><th>État</th><th class="r">Actions</th></tr></thead><tbody>${S.teachers.map(t=>`<tr><td><b>${esc(t.nom)}</b><div class="sub">${esc(t.grade||t.fonction||'')}</div></td><td>${clsTxt(t)||'—'}</td>
    <td>${t.compte?esc(t.compte.login):'<span class="sub">Aucun compte</span>'}</td>
    <td>${!t.actif?'<span class="tag">Fiche désactivée : compte et téléphones bloqués</span>':t.compte?(t.compte.actif?'<span class="tag acc">Actif</span>':'<span class="tag">Désactivé</span>'):'—'}</td>
    <td class="r">${t.compte?`<button class="btn sm" data-act="ensReinit" data-id="${t.id}">Mot de passe provisoire</button> <button class="btn sm" data-act="ensActif" data-id="${t.id}">${t.compte.actif?'Désactiver':'Activer'}</button>`:`<button class="btn sm pri" data-act="ensCreer" data-id="${t.id}">${ic('plus')}Créer le compte</button>`}
@@ -2987,7 +3000,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
  Object.assign(acts,{
   ensCreer(t){const m=S.teachers.find(x=>x.id===t.dataset.id),mdp='Prov-'+Math.random().toString(36).slice(2,7).toUpperCase();
    modal('Créer le compte de '+esc(m.nom),field('Identifiant',`<input name="login" value="${esc(loginDe(m.nom))}" required autofocus>`)+`<p class="sub">Mot de passe provisoire : <b>${mdp}</b>. L’enseignant le changera à sa première connexion et recevra son code de secours.</p>`,
-    {ok:'Créer',onok:f=>{const l=f.get('login').trim();if(S.teachers.some(x=>x.compte&&x.compte.login===l)){toast('Identifiant déjà utilisé');return false}m.compte={login:l,actif:true,cree:today};log(`Compte enseignant créé : ${l} (${m.classe})`);save();render()}})},
+    {ok:'Créer',onok:f=>{const l=f.get('login').trim();if(S.teachers.some(x=>x.compte&&x.compte.login===l)){toast('Identifiant déjà utilisé');return false}m.compte={login:l,actif:true,cree:today};log(`Compte enseignant créé : ${l} (${clsTxt(m)})`);save();render()}})},
   ensReinit(t){const m=S.teachers.find(x=>x.id===t.dataset.id);modal('Mot de passe provisoire',`<p>Nouveau mot de passe provisoire de <b>${esc(m.nom)}</b> : <b>Prov-${Math.random().toString(36).slice(2,7).toUpperCase()}</b></p>`,{noFoot:true});log(`Mot de passe réinitialisé : ${m.compte.login}`)},
   ensActif(t){const m=S.teachers.find(x=>x.id===t.dataset.id);m.compte.actif=!m.compte.actif;log(`Compte ${m.compte.login} ${m.compte.actif?'activé':'désactivé (téléphones bloqués)'}`);save();render()},
   ensFiche(t){const m=S.teachers.find(x=>x.id===t.dataset.id);m.actif=!m.actif;if(!m.actif&&m.compte)m.compte.actif=false;log(`Fiche de ${m.nom} ${m.actif?'réactivée':'désactivée : compte et téléphones bloqués'}`);save();render()},
@@ -3024,7 +3037,7 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
   if(!await askPwd(`Rattacher à l’école l’espace de <b>${esc(m.nom)}</b> (${m.classe}) : ses élèves, notes, absences et demandes ?`))return;
   const c=m.classe;let ens=S.teachers.find(z=>norm(z.nom)===norm(m.nom));
   if(!ens){ens={...m,id:uid(),compte:null,actif:true};S.teachers.push(ens)}
-  S.teachers.forEach(z=>{if(z!==ens&&z.classe===c)z.classe=''});ens.classe=c;
+  S.teachers.forEach(z=>{if(z!==ens&&clsDe(z).includes(c))setCls(z,clsDe(z).filter(k=>k!==c))});setCls(ens,[...clsDe(ens),c]);
   const ids={};let nE=0,nN=0;
   o.students.forEach(s=>{const k=S.students.find(z=>(s.matNat&&z.matNat===s.matNat)||(norm(fullName(z))===norm(fullName(s))&&z.classe===s.classe));
    if(k)ids[s.id]=k.id;else{const n={...s,id:uid(),mat:nextMat()};S.students.push(n);ids[s.id]=n.id;nE++}});
@@ -3040,18 +3053,18 @@ document.head.insertAdjacentHTML('beforeend','<style>input.grade.att{background:
   log(`Espace enseignant rattaché : ${m.nom} (${c}), ${plural(nE,'élève')} ajouté(s), ${plural(nN,'note')}`);save();render();
   toast(`Espace de ${m.nom} rattaché : ${plural(nE,'élève')} ajouté(s), ${plural(nN,'note')} reprise(s). Créez maintenant son compte enseignant.`)})};
  // espace enseignant seul : ses élèves restent dans sa classe
- const doImport0=acts.doImport;acts.doImport=function(){const p=solo()&&prof();if(p&&ui.imp){const n=ui.imp.items.filter(i=>i.state==='ok'&&i.s.classe!==p.classe).length;ui.imp.items.forEach(i=>{if(i.state==='ok'&&i.s.classe!==p.classe)i.state='autre'});if(n)toast(`${plural(n,'élève')} d’une autre classe ignoré(s)`)}return doImport0.apply(this,arguments)};
- ['addStu','editStu'].forEach(k=>{const f=acts[k];acts[k]=async function(t){await f.apply(this,arguments);const p=prof(),s=p&&$('#dlg [name=classe]');if(s){s.value=p.classe;[...s.options].forEach(o=>{if(o.value!==p.classe)o.remove()});chs.stuCls(s)}}});
+ const doImport0=acts.doImport;acts.doImport=function(){const p=solo()&&prof();if(p&&ui.imp){const n=ui.imp.items.filter(i=>i.state==='ok'&&!mesClasses().includes(i.s.classe)).length;ui.imp.items.forEach(i=>{if(i.state==='ok'&&!mesClasses().includes(i.s.classe))i.state='autre'});if(n)toast(`${plural(n,'élève')} d’une autre classe ignoré(s)`)}return doImport0.apply(this,arguments)};
+ ['addStu','editStu'].forEach(k=>{const f=acts[k];acts[k]=async function(t){await f.apply(this,arguments);const p=prof(),s=p&&$('#dlg [name=classe]');if(s){if(!mesClasses().includes(s.value))s.value=maClasse();[...s.options].forEach(o=>{if(!mesClasses().includes(o.value))o.remove()});chs.stuCls(s)}}});
  ['teach','stuSt'].forEach(k=>{const f=chs[k];chs[k]=function(t){if(soloEssai(k)){toast(MSG_ACHAT);render();return}if(prof()&&!(solo()&&SOLO_OK.includes(k))){toast(k==='teach'?'Seul le directeur affecte les classes.':'Seul le directeur peut modifier un élève.');render();return}return f.apply(this,arguments)}});
  // demandes d'autorisation : l'enseignant demande pour lui-même ou pour un élève de sa classe, et ne voit que celles-là
- window.authVisible=a=>{const p=prof();if(!p)return true;if(a.qui==='personnel')return a.pid===p.id;const s=S.students.find(x=>x.id===a.pid);return !!s&&s.classe===p.classe};
+ window.authVisible=a=>{const p=prof();if(!p)return true;if(a.qui==='personnel')return a.pid===p.id;const s=S.students.find(x=>x.id===a.pid);return !!s&&mesClasses().includes(s.classe)};
  const addAuth0=acts.addAuth;acts.addAuth=function(t){const p=prof();if(!p)return addAuth0.call(this,t);
   const id=t?.dataset?.id,qui=t?.dataset?.qui;addAuth0.call(this,qui?t:{dataset:{qui:'personnel',id:p.id}});
-  $$('#dl-personnel option').forEach(o=>{if(o.value!==p.nom)o.remove()});$$('#dl-eleve option').forEach(o=>{if(!o.value.endsWith(' – '+p.classe))o.remove()});
+  $$('#dl-personnel option').forEach(o=>{if(o.value!==p.nom)o.remove()});$$('#dl-eleve option').forEach(o=>{if(!mesClasses().some(c=>o.value.endsWith(' – '+c)))o.remove()});
   const i=$('#authNom');if(i&&$('[name=qui]').value==='personnel')i.value=p.nom};
  const authQui0=chs.authQui;chs.authQui=function(t){authQui0.call(this,t);const p=prof();if(p&&t.value==='personnel')$('#authNom').value=p.nom};
  // liste de la classe par ordre alphabétique
- const printStu0=acts.printStu;acts.printStu=function(){const p=prof();if(!p)return printStu0.call(this);printList(`Liste de la classe ${p.classe} · ordre alphabétique`,stuTable(active().filter(s=>s.classe===p.classe).sort(byName)))};
+ const printStu0=acts.printStu;acts.printStu=function(){const p=prof();if(!p)return printStu0.call(this);printList(`Liste de la classe ${clsTxt(p)} · ordre alphabétique`,stuTable(active().filter(s=>mesClasses().includes(s.classe)).sort((a,b)=>CLASSES.indexOf(a.classe)-CLASSES.indexOf(b.classe)||byName(a,b))))};
  const pa0=acts.pa;acts.pa=function(t){if(prof()&&(S.att[ui.aDate]||{})[t.dataset.id]){toast('Absence déjà enregistrée : elle ne peut plus être modifiée.');return}return pa0.call(this,t)};
  const allPres0=acts.allPres;acts.allPres=function(){if(!prof())return allPres0.call(this);(S.appel[ui.aDate]||(S.appel[ui.aDate]={}))[ui.aCls]=true;save();toast(`${ui.aCls} : les autres élèves sont présents`);render()};
  chs.grade=async function(t){const p=prof(),n=Number(ui.nEv);

@@ -35,6 +35,11 @@ CREATE TABLE IF NOT EXISTS journal (t TEXT NOT NULL, qui TEXT NOT NULL, action T
 """
 
 
+
+def _classes(t: dict) -> str:
+    """Classe(s) tenue(s) : plusieurs pour une classe multigrade ou jumelée (« CP1 / CP2 »)."""
+    return " / ".join(t.get("classes") or ([t["classe"]] if t.get("classe") else []))
+
 class Erreur(Exception):
     """Message destiné à l'utilisateur."""
 
@@ -168,15 +173,18 @@ class Stockage:
         nom = "Directeur (administrateur)"
         if c["role"] == "ens":
             t = self._enseignant(c["tid"])
-            if not t or not t.get("actif", True) or not (t.get("compte") or {}).get("actif"):
+            if not t or not t.get("compte"):
+                time.sleep(0.4)
+                raise Erreur("Utilisateur inexistant.")
+            if not t.get("actif", True) or not t["compte"].get("actif"):
                 raise Erreur("Compte désactivé. Adressez-vous au directeur.")
-            nom = f"{t.get('nom', '')} – {t.get('classe') or 'sans classe'}"
+            nom = f"{t.get('nom', '')} – {_classes(t) or 'sans classe'}"
         with self.conn:
             self._journal(c["login"], "Connexion")
         solo = self.solo() if c["role"] == "dir" else None
         if solo:    # espace enseignant seul : le compte admin est celui de l'enseignant
             return {"role": "ens", "tid": solo["id"], "solo": True, "login": c["login"], "provisoire": False,
-                    "nom": f"{solo.get('nom', '')} – {solo.get('classe') or 'sans classe'}"}
+                    "nom": f"{solo.get('nom', '')} – {_classes(solo) or 'sans classe'}"}
         return {"role": c["role"], "tid": c["tid"], "login": c["login"], "nom": nom, "provisoire": bool(c["provisoire"])}
 
     def solo(self) -> dict | None:
@@ -189,7 +197,7 @@ class Stockage:
         """Renseignements saisis à la création (directeur, secteur, inspection, inspecteur, conseiller pédagogique)."""
         o = self.lire() or _squelette()
         sc = o.setdefault("school", {})
-        sc.update({k: str(v).strip() for k, v in champs.items()})
+        sc.update({k: v if isinstance(v, list) else str(v).strip() for k, v in champs.items()})
         lieu = re.sub(r"^IEPP\s+", "", sc.get("iepp", ""), flags=re.I).strip().upper()
         if lieu:
             sc["iepp"] = f"IEPP {lieu}"
@@ -202,7 +210,7 @@ class Stockage:
         mots = nom.split()
         nom = " ".join([mots[0].upper()] + ["-".join(x.capitalize() for x in m.split("-")) for m in mots[1:]]) if mots else ""
         t = {"id": "ens" + secrets.token_hex(4), "nom": nom, "matricule": "", "fonction": "Instituteur",
-             "grade": "", "classe": classe, "tel": "", "photo": "", "actif": True, "compte": None}
+             "grade": "", "classe": classe, "classes": [classe], "tel": "", "photo": "", "actif": True, "compte": None}
         school = {"solo": {"tid": t["id"]}, "name": ecole.strip().upper()}
         self.ecrire(json.dumps({**_squelette(), "school": school, "teachers": [t]}))
         return code

@@ -51,53 +51,6 @@ jobs:
       - name: Tests automatiques
         run: python -m pytest -q -rs
 
-      - name: Construire l'exécutable (PyInstaller)
-        run: pyinstaller --noconfirm --clean packaging/gestion_scolaire.spec
-
-      - name: Auto-test de l'exécutable (sans Python)
-        run: |
-          $p = Start-Process dist\GestionScolaireEPP\GestionScolaireEPP.exe -ArgumentList "--selftest","--rapport","$pwd\selftest_exe.txt" -Wait -PassThru
-          Get-Content selftest_exe.txt
-          if ($p.ExitCode -ne 0) { throw "auto-test de l'exécutable en échec ($($p.ExitCode))" }
-
-      - name: Construire l'installateur (Inno Setup)
-        run: |
-          if (-not (Get-Command ISCC.exe -ErrorAction SilentlyContinue)) { choco install innosetup -y --no-progress }
-          $iscc = (Get-Command ISCC.exe -ErrorAction SilentlyContinue).Source
-          if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc packaging\installer.iss
-          if ($LASTEXITCODE -ne 0) { throw "ISCC en échec" }
-          Get-ChildItem dist\*.exe
-
-      - name: Installation silencieuse, auto-test, mise à jour, désinstallation
-        run: |
-          $setup = (Get-ChildItem dist\AkwaSchool-Setup-*.exe).FullName
-          $dir = "$env:RUNNER_TEMP\EPPInstall"
-          $data = "$env:LOCALAPPDATA\GestionScolaireEPP"
-          # 1. installation
-          $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "installation en échec" }
-          if (-not (Test-Path "$dir\GestionScolaireEPP.exe")) { throw "exécutable absent après installation" }
-          if (Test-Path "$dir\*.sqlite") { throw "la base ne doit pas être dans le dossier d'installation" }
-          $menu = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\AKWA SCHOOL\AKWA SCHOOL.lnk"
-          if (-not (Test-Path $menu)) { throw "raccourci AKWA SCHOOL absent du menu Démarrer" }
-          $p = Start-Process "$dir\GestionScolaireEPP.exe" -ArgumentList "--selftest","--rapport","$pwd\selftest_installe.txt" -Wait -PassThru
-          Get-Content selftest_installe.txt
-          if ($p.ExitCode -ne 0) { throw "auto-test après installation en échec" }
-          # 2. données de l'utilisateur simulées
-          New-Item -ItemType Directory -Force $data | Out-Null
-          Set-Content "$data\temoin.txt" "données de l'école"
-          # 3. mise à jour (réinstallation par-dessus)
-          $p = Start-Process $setup -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "mise à jour en échec" }
-          if (-not (Test-Path "$data\temoin.txt")) { throw "données perdues lors de la mise à jour" }
-          # 4. désinstallation silencieuse : les données doivent rester
-          $p = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
-          Start-Sleep -Seconds 5
-          if (Test-Path "$dir\GestionScolaireEPP.exe") { throw "programme non supprimé par la désinstallation" }
-          if (-not (Test-Path "$data\temoin.txt")) { throw "données supprimées par la désinstallation" }
-          Write-Host "Installation, mise à jour et désinstallation : OK (données conservées)"
-
       # Outil du fournisseur (création des codes) : fichier de compilation seulement, jamais publié
       - name: Construire le générateur de codes (outil du fournisseur)
         run: |
@@ -109,14 +62,6 @@ jobs:
         with:
           name: GenerateurCodes-fournisseur
           path: epp-expert/dist_fournisseur/GenerateurCodes.exe
-          if-no-files-found: error
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: AkwaSchool-Setup
-          path: |
-            epp-expert/dist/AkwaSchool-Setup-*.exe
-            epp-expert/selftest_*.txt
           if-no-files-found: error
 
   # Application Android (android/) : client de synchronisation testé contre le vrai serveur Python, puis APK signé.
@@ -276,10 +221,6 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: AkwaSchool-Setup
-          path: setup
-      - uses: actions/download-artifact@v4
-        with:
           name: AkwaSchool-v8-Setup
           path: setup_v8
       - uses: actions/download-artifact@v4
@@ -291,32 +232,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
         run: |
-          exe=$(ls setup/dist/AkwaSchool-Setup-*.exe 2>/dev/null || ls setup/AkwaSchool-Setup-*.exe)
-          cp "$exe" AkwaSchool-Setup.exe
+          # une seule application Windows : AKWA SCHOOL v8 ; AkwaSchool-Setup.exe (ancien lien public) donne aussi la v8
           exe8=$(ls setup_v8/dist/AkwaSchool-v8-Setup-*.exe 2>/dev/null || ls setup_v8/AkwaSchool-v8-Setup-*.exe)
           cp "$exe8" AkwaSchool-v8-Setup.exe
+          cp "$exe8" AkwaSchool-Setup.exe
           version="${TAG#expert-v}"
           cp android/AkwaSchool.apk AkwaSchool.apk
           cp android/AkwaSchool.apk "AkwaSchool-${version}.apk"
           cat > notes.md <<NOTES
           AKWA SCHOOL – Gestion scolaire EPP, version ${version}, pour Windows 10 et 11.
 
-          Téléchargez **AkwaSchool-Setup.exe** ci-dessous, puis lancez-le. Si l'application est déjà installée,
+          Téléchargez **AkwaSchool-v8-Setup.exe** ci-dessous, puis lancez-le. Si l'application est déjà installée,
           ce même fichier la met à jour : les données de l'école sont conservées.
-
-          **AKWA SCHOOL v8** (application distincte, avec l'interface v8) : téléchargez **AkwaSchool-v8-Setup.exe**.
-          Elle s'installe à côté d'AKWA SCHOOL, avec ses propres données ; la licence de l'ordinateur est commune.
+          (AkwaSchool-Setup.exe est le même installateur, gardé pour les anciens liens.)
 
           **Téléphones Android (8 ou plus récent)** : téléchargez **AkwaSchool.apk** sur le téléphone et ouvrez-le
-          pour l'installer. Le téléphone se synchronise avec l'ordinateur de l'école par le Wi-Fi, sans Internet
-          (sur l'ordinateur : Rapports & administration › Téléphones).
+          pour l'installer. Il fonctionne seul, sans Internet ; il échange ses données avec l'ordinateur par la sauvegarde.
           NOTES
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             # version créée depuis la page GitHub (Releases › Draft a new release) : on y joint l'installateur
-            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber AkwaSchool-Setup.exe "$exe" AkwaSchool-v8-Setup.exe "$exe8" \
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber AkwaSchool-Setup.exe AkwaSchool-v8-Setup.exe "$exe8" \
               AkwaSchool.apk "AkwaSchool-${version}.apk"
             gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file notes.md --latest
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "AKWA SCHOOL ${version}" \
-              --notes-file notes.md --latest AkwaSchool-Setup.exe "$exe" AkwaSchool-v8-Setup.exe "$exe8" AkwaSchool.apk "AkwaSchool-${version}.apk"
+              --notes-file notes.md --latest AkwaSchool-Setup.exe AkwaSchool-v8-Setup.exe "$exe8" AkwaSchool.apk "AkwaSchool-${version}.apk"
           fi
