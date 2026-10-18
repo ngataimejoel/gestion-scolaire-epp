@@ -2707,7 +2707,7 @@ const acts={
    if(au<du){toast('La date de fin est avant la date de début.');return false}
    let pid='',lab=nom;
    if(q==='eleve'){const s=S.students.find(x=>nom.includes(x.mat))||S.students.find(x=>norm(fullName(x))===norm(nom));if(!s){toast('Élève introuvable : choisissez-le dans la liste proposée.');return false}pid=s.id;lab=fullName(s)}
-   else{const m=S.teachers.find(x=>norm(x.nom)===norm(nom));if(m){pid=m.id;lab=m.nom}}
+   else{const m=S.teachers.find(x=>norm(x.nom)===norm(nom));if(!m){toast(S.teachers.length?'Personne introuvable dans le personnel : choisissez-la dans la liste proposée.':'Aucun membre du personnel enregistré : ajoutez d’abord la personne dans Élèves & personnel › Personnel.');return false}pid=m.id;lab=m.nom}
    const n=S.auth.reduce((k,a)=>Math.max(k,parseInt(a.ref.split('-').pop())||0),0)+1;
    const a={id:uid(),ref:`AUT-${startYear()}-${pad(n)}`,qui:q,pid,nom:lab,du,au,motif:f.get('motif'),precision:f.get('precision').trim(),statut:'En attente',cree:today};
    S.auth.push(a);log(`Demande ${a.ref} : ${lab}`);toast(`Demande ${a.ref} enregistrée`);Object.assign(ui,{auSt:'',auQui:''});
