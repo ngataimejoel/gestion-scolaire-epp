@@ -56,7 +56,7 @@
 #akwaVerrou .bx{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:12px}
 #akwaVerrou h1{margin:0;font:700 22px var(--disp);color:var(--acc)}#akwaVerrou h1 b{color:var(--org)}
 #akwaVerrou p{margin:0}#akwaVerrou input{width:100%;padding:11px 12px;font-size:16px}#akwaVerrou .btn{justify-content:center;padding:11px 12px}
-#akwaVerrou .lien{background:none;border:0;color:var(--acc);font-weight:600;padding:4px}#akwaVerrou .code{font-size:22px;font-weight:700;letter-spacing:2px;text-align:center}`;
+#akwaVerrou .lien{background:none;border:0;color:var(--acc);font-weight:600;padding:4px}#akwaVerrou .code{font-size:22px;font-weight:700;letter-spacing:2px;text-align:center}#akwaVerrou .niv{display:flex;flex-wrap:wrap;gap:10px 16px}#akwaVerrou .niv label{display:flex;gap:6px;align-items:center;font-weight:600}#akwaVerrou .niv input{width:auto}`;
  function ecran(html,onok){
   let v=document.getElementById('akwaVerrou');
   if(!v){v=document.createElement('div');v.id='akwaVerrou';document.body.appendChild(v)}
@@ -101,21 +101,31 @@
    if(a!==b)return err('Les deux mots de passe sont différents.');
    if(!N.definirAdmin(a,''))return err('Enregistrement impossible.');
    N.connecter('admin',a);
-   const t={id:uid(),nom:majNomComplet(nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),tel:'',photo:'',actif:true,compte:null};
+   const t={id:uid(),nom:majNomComplet(nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),classes:[f.get('cls')],tel:'',photo:'',actif:true,compte:null};
    S.teachers=[t];S.students=[];S.school.solo={tid:t.id};S.school.name=ec.toUpperCase();appliquerEcole(o);
    session={role:'ens',tid:t.id,solo:true};N.demarrerEssai();APP.enregistrer();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',premierLancement);
  }
- function creerDirecteur(){
-  ecran(`<p><b>Bienvenue.</b> Choisissez le mot de passe administrateur du téléphone. Il sera demandé à chaque ouverture et pour les corrections.</p>
-${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contact']])}${champs(CH_IEPP)}<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Créer</button>`,(f,err)=>{
-   const a=f.get('a'),b=f.get('b'),o=lireChamps(f,[...CH_DIR,...CH_IEPP],err);if(!o)return;
+ // création en deux pages : 1. le directeur et son mot de passe ; 2. les renseignements de l'inspection
+ function creerDirecteur(p1){
+  const f=ecran(`<p><b>Bienvenue.</b> Page 1 sur 2 : vos renseignements et le mot de passe administrateur du téléphone (demandé à chaque ouverture et pour les corrections).</p>
+${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contact']])}<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Suivant</button>`,(f,err)=>{
+   const a=f.get('a'),b=f.get('b'),o=lireChamps(f,CH_DIR,err);if(!o)return;
    if(a.length<6)return err('Le mot de passe doit compter 6 caractères au moins.');
    if(a!==b)return err('Les deux mots de passe sont différents.');
-   if(!N.definirAdmin(a,''))return err('Enregistrement impossible.');
-   N.connecter('admin',a);session={role:'dir'};appliquerEcole(o);APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+   creerDirecteur2({...o,a});
   });
+  if(p1)for(const k of['director','dirTel'])f.querySelector(`[name=${k}]`).value=p1[k]||'';
+ }
+ function creerDirecteur2(p1){
+  const f=ecran(`<p>Page 2 sur 2 : renseignements de l’école et de l’inspection.</p><p class="sub">Niveaux de l’école :</p><div class="niv">${TOUS_NIVEAUX.map(c=>`<label><input type="checkbox" name="niveaux" value="${c}" checked> ${c}</label>`).join('')}</div>${champs(CH_IEPP)}<button class="btn pri">Créer</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
+   const niveaux=f.getAll('niveaux');if(!niveaux.length)return err('Cochez au moins un niveau.');
+   const o=lireChamps(f,CH_IEPP,err);if(!o)return;o.niveaux=niveaux;
+   if(!N.definirAdmin(p1.a,''))return err('Enregistrement impossible.');
+   N.connecter('admin',p1.a);session={role:'dir'};appliquerEcole({director:p1.director,dirTel:p1.dirTel,...o});APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+  });
+  f.querySelector('[data-retour]').addEventListener('click',()=>creerDirecteur(p1));
  }
  function connexion(){
   const so=estSolo()&&S.teachers.find(x=>x.id===S.school.solo.tid);

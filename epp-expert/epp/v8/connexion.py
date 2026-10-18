@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import (QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
-                               QPushButton, QVBoxLayout)
+from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
+                               QPushButton, QVBoxLayout, QWidget, QHBoxLayout)
 
 from epp import __version__
 from epp.ui import logo as logo_app
@@ -33,6 +33,7 @@ class _Base(QDialog):
         t.setWordWrap(True)
         t.setAlignment(Qt.AlignCenter)
         lay.addWidget(t)
+        self.texte = t
         self.form = QFormLayout()
         lay.addLayout(self.form)
         self.boutons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -61,11 +62,15 @@ CHAMPS = [("director", "Directeur (nom et prénoms)"), ("dirTel", "Contact du di
 
 
 class PremierLancement(_Base):
-    """Espace de l'école (mot de passe du directeur) ou espace enseignant seul, puis le code de secours."""
+    """Espace de l'école (mot de passe du directeur) ou espace enseignant seul, puis le code de secours.
+
+    Deux pages : 1. l'utilisateur, le directeur (nom, contact) et le mot de passe ; 2. l'inspection."""
+
+    PAGE1 = ("director", "dirTel")
 
     def __init__(self, st: Stockage):
-        super().__init__("Premier lancement", "Choisissez qui utilise cet ordinateur, puis le mot de passe. "
-                                              "Identifiant : <b>admin</b>.")
+        super().__init__("Premier lancement", "Page 1 sur 2 : qui utilise cet ordinateur, le directeur et le "
+                                              "mot de passe. Identifiant : <b>admin</b>.")
         self.st = st
         self.qui = QComboBox()
         self.qui.addItem("Le directeur (espace de l'école)", "dir")
@@ -74,37 +79,86 @@ class PremierLancement(_Base):
         self.classe.addItems(CLASSES)
         self.ecole.setPlaceholderText("facultatif")
         self.p1, self.p2 = _mdp(), _mdp()
+        self.champs = {k: QLineEdit() for k, _ in CHAMPS}
         self.form.addRow("Utilisateur", self.qui)
         self.form.addRow("Vos nom et prénoms", self.nom)
         self.form.addRow("Votre classe", self.classe)
         self.form.addRow("École", self.ecole)
-        self.champs = {k: QLineEdit() for k, _ in CHAMPS}
         for k, lib in CHAMPS:
             self.form.addRow(lib, self.champs[k])
         self.form.addRow("Mot de passe", self.p1)
         self.form.addRow("Confirmation", self.p2)
-        self.qui.currentIndexChanged.connect(self._montrer)
-        self._montrer()
+        # niveaux ouverts dans l'école (page 2, espace de l'école seulement)
+        self.niveaux = QWidget()
+        lig = QHBoxLayout(self.niveaux)
+        lig.setContentsMargins(0, 0, 0, 0)
+        self.cases = {c: QCheckBox(c) for c in CLASSES}
+        for c, b in self.cases.items():
+            b.setChecked(True)
+            lig.addWidget(b)
+        self.form.addRow("Niveaux de l'école", self.niveaux)
+        self.retour = self.boutons.addButton("Retour", QDialogButtonBox.ResetRole)
+        self.retour.clicked.connect(lambda: self._page(1))
+        self.qui.currentIndexChanged.connect(lambda: self._page(self.page))
+        self._page(1)
 
-    def _montrer(self):
+    def _page(self, n: int):
+        self.page = n
         solo = self.qui.currentData() == "solo"
+        un = n == 1
+        for w in (self.qui, self.p1, self.p2):
+            self.form.setRowVisible(w, un)
         for w in (self.nom, self.classe, self.ecole):
-            self.form.setRowVisible(w, solo)
+            self.form.setRowVisible(w, un and solo)
+        for k, e in self.champs.items():
+            self.form.setRowVisible(e, un == (k in self.PAGE1))
+        self.form.setRowVisible(self.niveaux, not un and not solo)
+        self.retour.setVisible(not un)
+        self.boutons.button(QDialogButtonBox.Ok).setText("Suivant" if un else "Créer")
+        self.texte.setText(self.texte.text().split("<br>")[0] + "<br>" + (
+            "Page 1 sur 2 : qui utilise cet ordinateur, le directeur et le mot de passe. Identifiant : <b>admin</b>."
+            if un else "Page 2 sur 2 : renseignements de l'école et de l'inspection."))
+
+    def _verifier(self, page: int):
+        for k, lib in CHAMPS:
+            if (k in self.PAGE1) == (page == 1) and not self.champs[k].text().strip():
+                raise Erreur(f"{lib} : à renseigner.")
+        if page == 2 and self.qui.currentData() != "solo" and not self._niveaux():
+            raise Erreur("Cochez au moins un niveau.")
+        if page == 1:
+            if self.qui.currentData() == "solo" and len(self.nom.text().strip()) < 3:
+                raise Erreur("Saisissez vos nom et prénoms.")
+            if len(self.p1.text()) < 6:
+                raise Erreur("Le mot de passe doit compter 6 caractères au moins.")
+            if self.p1.text() != self.p2.text():
+                raise Erreur("Les deux mots de passe ne sont pas identiques.")
+
+    def _niveaux(self) -> list[str]:
+        return [c for c, b in self.cases.items() if b.isChecked()]
+
+    def _valider(self):
+        if self.page == 1:
+            try:
+                self._verifier(1)
+            except Erreur as e:
+                QMessageBox.warning(self, TITRE, str(e))
+                return
+            self._page(2)
+            return
+        super()._valider()
 
     def valider(self):
-        for k, lib in CHAMPS:
-            if not self.champs[k].text().strip():
-                raise Erreur(f"{lib} : à renseigner.")
-        if self.p1.text() != self.p2.text():
-            raise Erreur("Les deux mots de passe ne sont pas identiques.")
+        self._verifier(1)
+        self._verifier(2)
         if self.qui.currentData() == "solo":
-            if len(self.nom.text().strip()) < 3:
-                raise Erreur("Saisissez vos nom et prénoms.")
             code = self.st.creer_espace_enseignant(self.p1.text(), self.nom.text(), self.classe.currentText(),
                                                    self.ecole.text())
         else:
             code = self.st.creer_admin(self.p1.text())
-        self.st.completer_ecole({k: e.text() for k, e in self.champs.items()})
+        champs = {k: e.text() for k, e in self.champs.items()}
+        if self.qui.currentData() != "solo":
+            champs["niveaux"] = self._niveaux()
+        self.st.completer_ecole(champs)
         self.session = self.st.authentifier(ADMIN, self.p1.text())
         afficher_code_secours(self, ADMIN, code)
 
