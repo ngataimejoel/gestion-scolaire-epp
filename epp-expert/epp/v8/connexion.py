@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QDialogButtonBox, 
 from epp import __version__
 from epp.ui import logo as logo_app
 from epp.ui.dialogs.acces import afficher_code_secours
-from epp.v8.stockage import ADMIN, Erreur, Stockage
+from epp.v8.stockage import (ADMIN, CIVILITES, TEL_ERR, Erreur, Stockage, avec_civilite, drenaet_de, ecole_nom, nom_err,
+                              tel_ci)
 
 TITRE = "AKWA SCHOOL v8"
 
@@ -56,6 +57,7 @@ class _Base(QDialog):
 CLASSES = ["CP1", "CP2", "CE1", "CE2", "CM1", "CM2"]
 # demandés à la création, pour l'école comme pour l'espace enseignant seul
 CHAMPS = [("director", "Directeur (nom et prénoms)"), ("dirTel", "Contact du directeur"),
+          ("name", "Nom de l'école (EPP …)"), ("drenaet", "DRENAET"),
           ("secteur", "Secteur pédagogique"), ("iepp", "Inspection (IEPP)"),
           ("inspNom", "Inspecteur (nom et prénoms)"), ("inspTel", "Contact de l'inspecteur"),
           ("cpNom", "Conseiller pédagogique (nom et prénoms)"), ("cpTel", "Contact du conseiller pédagogique")]
@@ -75,16 +77,30 @@ class PremierLancement(_Base):
         self.qui = QComboBox()
         self.qui.addItem("Le directeur (espace de l'école)", "dir")
         self.qui.addItem("Un enseignant seul (sans l'école)", "solo")
-        self.nom, self.classe, self.ecole = QLineEdit(), QComboBox(), QLineEdit()
+        self.nom, self.classe = QLineEdit(), QComboBox()
+        # civilité de l'utilisateur : le directeur, ou l'enseignant seul
+        self.civ = QComboBox()
+        self.civ.addItem("Choisir", "")
+        for c in CIVILITES:
+            self.civ.addItem(c, c)
         self.classe.addItems(CLASSES)
-        self.ecole.setPlaceholderText("facultatif")
         self.p1, self.p2 = _mdp(), _mdp()
         self.champs = {k: QLineEdit() for k, _ in CHAMPS}
+        for k, e in self.champs.items():
+            if k.endswith("Tel"):
+                e.setPlaceholderText("+225 07 00 00 00 00")
+        self.champs["name"].setPlaceholderText("EPP … pour une école publique")
+        self.statut = QComboBox()
+        self.statut.addItem("École publique", "publique")
+        self.statut.addItem("École privée", "privee")
+        self.champs["drenaet"].setPlaceholderText("ex. TOUBA")
         self.form.addRow("Utilisateur", self.qui)
+        self.form.addRow("Votre civilité", self.civ)
         self.form.addRow("Vos nom et prénoms", self.nom)
         self.form.addRow("Votre classe", self.classe)
-        self.form.addRow("École", self.ecole)
         for k, lib in CHAMPS:
+            if k == "name":
+                self.form.addRow("Statut de l'école", self.statut)
             self.form.addRow(lib, self.champs[k])
         self.form.addRow("Mot de passe", self.p1)
         self.form.addRow("Confirmation", self.p2)
@@ -106,13 +122,14 @@ class PremierLancement(_Base):
         self.page = n
         solo = self.qui.currentData() == "solo"
         un = n == 1
-        for w in (self.qui, self.p1, self.p2):
+        for w in (self.qui, self.civ, self.p1, self.p2):
             self.form.setRowVisible(w, un)
-        for w in (self.nom, self.classe, self.ecole):
+        for w in (self.nom, self.classe):
             self.form.setRowVisible(w, un and solo)
         for k, e in self.champs.items():
             self.form.setRowVisible(e, un == (k in self.PAGE1))
         self.form.setRowVisible(self.niveaux, not un and not solo)
+        self.form.setRowVisible(self.statut, not un)
         self.retour.setVisible(not un)
         self.boutons.button(QDialogButtonBox.Ok).setText("Suivant" if un else "Créer")
         self.texte.setText(self.texte.text().split("<br>")[0] + "<br>" + (
@@ -121,13 +138,27 @@ class PremierLancement(_Base):
 
     def _verifier(self, page: int):
         for k, lib in CHAMPS:
-            if (k in self.PAGE1) == (page == 1) and not self.champs[k].text().strip():
+            if (k in self.PAGE1) != (page == 1):
+                continue
+            v = self.champs[k].text().strip()
+            if not v:
                 raise Erreur(f"{lib} : à renseigner.")
+            if k.endswith("Tel") and not tel_ci(v):
+                raise Erreur(f"{lib} : {TEL_ERR}")
+            if k == "name" and not ecole_nom(v, self.statut.currentData() == "privee"):
+                raise Erreur("Saisissez le nom de l'école." if self.statut.currentData() == "privee"
+                             else "Une école publique a un nom commençant par EPP (ex. EPP OUANINOU 2).")
+            if k == "drenaet" and not drenaet_de(v):
+                raise Erreur(f"{lib} : à renseigner.")
+            if k in ("director", "inspNom", "cpNom") and nom_err(v, lib):
+                raise Erreur(nom_err(v, lib))
         if page == 2 and self.qui.currentData() != "solo" and not self._niveaux():
             raise Erreur("Cochez au moins un niveau.")
         if page == 1:
-            if self.qui.currentData() == "solo" and len(self.nom.text().strip()) < 3:
-                raise Erreur("Saisissez vos nom et prénoms.")
+            if not self.civ.currentData():
+                raise Erreur("Choisissez votre civilité : M., Mme ou Mlle.")
+            if self.qui.currentData() == "solo" and nom_err(self.nom.text(), "Vos nom et prénoms"):
+                raise Erreur(nom_err(self.nom.text(), "Vos nom et prénoms"))
             if len(self.p1.text()) < 6:
                 raise Erreur("Le mot de passe doit compter 6 caractères au moins.")
             if self.p1.text() != self.p2.text():
@@ -151,12 +182,14 @@ class PremierLancement(_Base):
         self._verifier(1)
         self._verifier(2)
         if self.qui.currentData() == "solo":
-            code = self.st.creer_espace_enseignant(self.p1.text(), self.nom.text(), self.classe.currentText(),
-                                                   self.ecole.text())
+            code = self.st.creer_espace_enseignant(self.p1.text(), avec_civilite(self.civ.currentData(), self.nom.text()), self.classe.currentText(),
+                                                   self.champs["name"].text())
         else:
             code = self.st.creer_admin(self.p1.text())
         champs = {k: e.text() for k, e in self.champs.items()}
+        champs["statut"] = self.statut.currentData()
         if self.qui.currentData() != "solo":
+            champs["director"] = avec_civilite(self.civ.currentData(), champs["director"])
             champs["niveaux"] = self._niveaux()
         self.st.completer_ecole(champs)
         self.session = self.st.authentifier(ADMIN, self.p1.text())

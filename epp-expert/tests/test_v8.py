@@ -132,3 +132,15 @@ def test_renseignements_de_creation(st):
     assert sc["niveaux"] == ["CP1", "CP2", "CE1"]
     assert sc["iepp"] == "IEPP OUANINOU" and sc["inspection"].endswith("PRIMAIRE DE OUANINOU")
     assert sc["cpNom"] == "Mme Yao" and st.lire()["grades"] == {}
+
+
+def test_saisies_creation():
+    from epp.v8.stockage import avec_civilite, drenaet_de, ecole_nom, nom_err, tel_ci
+    assert tel_ci("0707123456") == tel_ci("+225 07 07 12 34 56") == "+225 07 07 12 34 56"
+    assert tel_ci("00225 0512345678") == "+225 05 12 34 56 78" and tel_ci("01 12 34 56 78")
+    assert tel_ci("0812345678") is None and tel_ci("07123") is None
+    assert ecole_nom("epp  ouaninou 2") == "EPP OUANINOU 2" and ecole_nom("OUANINOU") is None
+    assert drenaet_de("touba")["drenaet"] == "DRENAET DE TOUBA" and drenaet_de("") is None
+    assert drenaet_de("DRENAET D'ABIDJAN 1")["direction"].endswith("D'ABIDJAN 1")
+    assert nom_err("KOFFI", "Nom") and nom_err("KOFFI Kk", "Nom") and not nom_err("M. KOFFI KOUADIO", "Nom")
+    assert avec_civilite("Mme", "kone awa") == "Mme KONE Awa"
