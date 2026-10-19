@@ -75,8 +75,9 @@ La CI (`.github/workflows/epp-expert-windows.yml`, tâche `android`) teste le cl
 construit `AkwaSchool.apk` et le joint à la version publiée (étiquette `expert-vX.Y.Z`), à côté de l'installateur
 Windows. Lien permanent : https://github.com/ngataimejoel/gestion-scolaire-epp/releases/latest/download/AkwaSchool.apk
 
-Signature : par défaut la clé du dépôt (`android/signature/akwa-school.p12`), pour que chaque nouvelle version
-s'installe par-dessus la précédente. Le dépôt étant public, une clé privée est préférable : créer une clé PKCS12 et
-renseigner les secrets GitHub `ANDROID_KEYSTORE_B64` (fichier en base64), `ANDROID_KEYSTORE_PASSWORD`,
-`ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`. Après ce changement, désinstaller une fois l'ancienne application sur
-chaque téléphone (puis l'associer de nouveau).
+Signature : clé privée PKCS12 gardée hors du dépôt (public), fournie à la CI par les secrets GitHub
+`ANDROID_KEYSTORE_B64` (fichier en base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
+Sans ces secrets, la tâche `android` échoue volontairement. L'ancienne clé du dépôt (`android/signature/akwa-school.p12`)
+a été retirée le 2026-10-19 : un téléphone qui a une version signée avec elle doit faire une sauvegarde, désinstaller
+l'application, installer la nouvelle puis restaurer la sauvegarde. Garder la clé et son mot de passe en lieu sûr :
+les perdre empêche toute mise à jour par-dessus les applications installées (et sur le Play Store).

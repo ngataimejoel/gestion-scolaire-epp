@@ -8,3 +8,8 @@ build/
 dist/
 selftest*.txt
 __pycache__/
+
+# clés de signature : jamais dans le dépôt public
+*.p12
+*.jks
+*.keystore
