@@ -478,3 +478,15 @@ def test_fichiers_du_telephone_acceptes_par_le_pont_java():
     assert "'copie_v8_'+JOURS" in js
     for nom in noms:
         assert re.fullmatch(motif, nom), nom
+
+
+def test_mot_de_passe_admin_bloque_apres_echecs(db):
+    """Essais en série du mot de passe administrateur (par exemple depuis un téléphone associé) : blocage
+    temporaire, même avec le bon mot de passe, puis déblocage après le délai."""
+    s = security.system_session()
+    security.create_user(db, "chef", "Chef", "Secret-2026", "ADMIN")
+    for _ in range(security.ESSAIS_ADMIN):
+        assert security.verifier_admin(db, s, "faux", "essai") is None
+    assert security.verifier_admin(db, s, "Secret-2026", "essai") is None
+    db.execute("UPDATE journal SET horodatage=datetime('now', 'localtime', '-1 hour')")
+    assert security.verifier_admin(db, s, "Secret-2026", "essai") == "chef"

@@ -52,8 +52,8 @@
  function montrerCode(code,suite){modal(`${ic('key')} Code de secours`,`<p>Il permet de choisir un nouveau mot de passe en cas d’oubli, sans Internet. Notez-le et rangez-le en lieu sûr ; il ne sert qu’une fois.</p><p style="font-size:22px;font-weight:700;letter-spacing:2px;text-align:center">${esc(code)}</p>`,{noFoot:true,onclose:suite})}
 
  // ------------------------------------------------------------------ écran de verrouillage (ouverture de l'application)
- const CSS=`#akwaVerrou{position:fixed;inset:0;z-index:2147483000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
-#akwaVerrou .bx{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:12px}
+ const CSS=`#akwaVerrou{position:fixed;inset:0;z-index:2147483000;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;scroll-padding:24px 0 40px}
+#akwaVerrou .bx{margin:auto;width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:12px}
 #akwaVerrou h1{margin:0;font:700 22px var(--disp);color:var(--acc)}#akwaVerrou h1 b{color:var(--org)}
 #akwaVerrou p{margin:0}#akwaVerrou input{width:100%;padding:11px 12px;font-size:16px}#akwaVerrou .btn{justify-content:center;padding:11px 12px}
 #akwaVerrou .lien{background:none;border:0;color:var(--acc);font-weight:600;padding:4px}#akwaVerrou .code{font-size:22px;font-weight:700;letter-spacing:2px;text-align:center}#akwaVerrou .niv{display:flex;flex-wrap:wrap;gap:10px 16px}#akwaVerrou .niv label{display:flex;gap:6px;align-items:center;font-weight:600}#akwaVerrou .niv input{width:auto}`;
@@ -61,9 +61,10 @@
   let v=document.getElementById('akwaVerrou');
   if(!v){v=document.createElement('div');v.id='akwaVerrou';document.body.appendChild(v)}
   v.innerHTML=`<form class="bx" novalidate><h1>AKWA <b>SCHOOL</b></h1>${html}<p class="err" id="vErr" hidden></p><p class="sub" style="text-align:center;font-size:12px">Version ${esc(json(N.infos()).version||'')} · interface v8</p></form>`;
+  v.scrollTop=0;
   const f=v.querySelector('form');
   f.addEventListener('submit',e=>{e.preventDefault();onok(new FormData(f),m=>{const p=f.querySelector('#vErr');p.textContent=m;p.hidden=!m})});
-  const a=f.querySelector('[autofocus]')||f.querySelector('input');if(a)setTimeout(()=>a.focus(),50);
+  const a=f.querySelector('[autofocus]')||f.querySelector('input');if(a)setTimeout(()=>{a.focus({preventScroll:true});v.scrollTop=0},50);
   return f;
  }
  // tant que l'écran de verrouillage est affiché, le reste de la page est invisible
@@ -113,7 +114,7 @@
    N.connecter('admin',a);
    const t={id:uid(),nom:avecCiv(f.get('civ'),nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),classes:[f.get('cls')],tel:'',photo:'',actif:true,compte:null};
    S.teachers=[t];S.students=[];S.school.solo={tid:t.id};appliquerEcole(o);
-   session={role:'ens',tid:t.id,solo:true};N.demarrerEssai();APP.enregistrer();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+   session={role:'ens',tid:t.id,solo:true};N.demarrerEssai();APP.enregistrer();afficherCode(N.nouveauCodeSecours(a),licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',premierLancement);
  }
@@ -134,7 +135,7 @@
    const niveaux=f.getAll('niveaux');if(!niveaux.length)return err('Cochez au moins un niveau.');
    const o=lireChamps(f,[...CH_ECOLE,...CH_IEPP],err);if(!o)return;o.niveaux=niveaux;
    if(!N.definirAdmin(p1.a,''))return err('Enregistrement impossible.');
-   N.connecter('admin',p1.a);session={role:'dir'};appliquerEcole({director:p1.director,dirTel:p1.dirTel,...o});APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
+   N.connecter('admin',p1.a);session={role:'dir'};appliquerEcole({director:p1.director,dirTel:p1.dirTel,...o});APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(p1.a),licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',()=>creerDirecteur(p1));
  }
@@ -210,7 +211,7 @@
   acts.backup=function(...a){if((S.school.licence||{}).type==='essai')return toast('La sauvegarde est disponible après l’activation de l’application (Paramètres › Activation).');return sauvegarder.apply(this,a)};
   Object.assign(acts,{
    verrouiller,
-   secoursNew(){askPwd('Créer un nouveau code de secours ? L’ancien ne servira plus.').then(ok=>{if(ok)setTimeout(()=>montrerCode(N.nouveauCodeSecours()),50)})},
+   secoursNew(){modal(`${ic('lock')} Nouveau code de secours`,`<p style="margin:0 0 10px">L’ancien code ne servira plus. Mot de passe administrateur :</p><input type="password" name="pwd" autofocus autocomplete="off" style="width:100%"><p class="err" id="scErr" hidden>Mot de passe incorrect.</p>`,{ok:'Créer',onok:f=>{const c=N.nouveauCodeSecours(String(f.get('pwd')||''));if(!c){$('#scErr').hidden=false;return false}setTimeout(()=>montrerCode(c),50)}})},
    pwdOubli(){closeDlg();setTimeout(()=>modal(`${ic('key')} Mot de passe oublié`,`<p class="sub" style="margin-top:0">Saisissez le code de secours, puis le nouveau mot de passe.</p>${field('Code de secours','<input name="code" autofocus autocomplete="off" placeholder="XXXX-XXXX-XXXX">',1)}${field('Nouveau mot de passe','<input name="nw" type="password" required minlength="6">',1)}`,
     {ok:'Valider',onok:f=>{const r=json(N.recupererAdmin(f.get('code'),f.get('nw')));if(!r.ok){toast(r.message||'Code de secours incorrect.');return false}closeDlg();log('Mot de passe administrateur changé avec le code de secours');setTimeout(()=>montrerCode(r.secours),50);return false}}),30)},
    ensCreer(t){const m=S.teachers.find(x=>x.id===t.dataset.id);

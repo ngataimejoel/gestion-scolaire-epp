@@ -10,6 +10,11 @@ android {
     namespace "com.akwaschool.mobile"
     compileSdk 35
 
+    // BuildConfig.DEBUG : seule une compilation de débogage échappe au contrôle de signature (Integrite)
+    buildFeatures {
+        buildConfig true
+    }
+
     defaultConfig {
         applicationId "com.akwaschool.mobile"
         minSdk 26

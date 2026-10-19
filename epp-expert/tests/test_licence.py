@@ -175,3 +175,16 @@ def test_donnees_inaccessibles_mais_conservees_apres_l_essai(service, tmp_path):
     assert len(repo.inscriptions(db, annee)) == n
     assert rapports.generer(db, s, annee, "REGISTRE", {}, tmp_path / "r.pdf").exists()
     db.close()
+
+
+def test_application_installee_ignore_cle_de_remplacement(monkeypatch):
+    """Dans l'application installée, ni l'environnement ni activation.json ne changent la clé de vérification."""
+    import json
+    import sys
+
+    livre = json.loads(Path(licence.resource_path("resources", "activation.json")).read_text(encoding="utf-8"))
+    assert (licence.URL_OFFICIELLE, licence.CLE_OFFICIELLE) == (livre["url"], livre["cle_publique"])
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("EPP_LICENCE_CLE_PUBLIQUE", "AAAA")
+    monkeypatch.setenv("EPP_ACTIVATION_URL", "http://127.0.0.1:9")
+    assert licence._config() == {"url": licence.URL_OFFICIELLE, "cle_publique": licence.CLE_OFFICIELLE}

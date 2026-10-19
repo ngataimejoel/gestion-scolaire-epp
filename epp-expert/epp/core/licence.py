@@ -64,7 +64,15 @@ class Etat:
         return "Période d'essai terminée : activez un code pour accéder à vos données (elles sont conservées)."
 
 
+# Valeurs de l'application installée : ni le fichier activation.json ni une variable d'environnement ne peuvent
+# remplacer la clé qui vérifie les licences (sinon une licence signée par une autre clé serait acceptée).
+URL_OFFICIELLE = "https://epp-expert-activation.netlify.app"
+CLE_OFFICIELLE = "mKNteal8hyAeErJGtdNFw5cpQs4pp9lmobERxpDOcgw="
+
+
 def _config() -> dict:
+    if getattr(sys, "frozen", False):
+        return {"url": URL_OFFICIELLE, "cle_publique": CLE_OFFICIELLE}
     cfg = {"url": "", "cle_publique": ""}
     try:
         cfg.update(json.loads(Path(resource_path("resources", "activation.json")).read_text(encoding="utf-8")))
