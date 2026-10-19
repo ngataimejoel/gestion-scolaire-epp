@@ -264,7 +264,9 @@ class DialogueActivation(_EcranScinde):
         self.corps.addWidget(self.statut)
         self.corps.addWidget(label(
             "Saisissez le code d'activation reçu (licence d'un an ou à vie). L'activation se fait une seule "
-            "fois, avec une connexion Internet ; l'application fonctionne ensuite hors ligne.", discret=True,
+            "fois, avec une connexion Internet ; l'application fonctionne ensuite hors ligne. Sans Internet, "
+            "donnez le code de demande ci-dessous au fournisseur et saisissez le code de licence qu'il vous "
+            "remet (112 caractères).", discret=True,
             wrap=True))
         f = QFormLayout()
         self.code = QLineEdit()
@@ -273,7 +275,7 @@ class DialogueActivation(_EcranScinde):
         f.addRow("Code d'activation", self.code)
         f.addRow("Établissement", self.ecole)
         self.corps.addLayout(f)
-        self.machine = label(f"Identifiant de cet ordinateur : {licence.empreinte_machine()[:16]}", discret=True)
+        self.machine = label(f"Code de demande (activation sans Internet) : {licence.demande_hors_ligne()}", gras=True)
         self.machine.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.corps.addWidget(self.machine)
         self.erreur = label("", wrap=True)

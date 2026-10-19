@@ -28,6 +28,8 @@ public final class Licence {
     /** Clé publique du service d'activation : la même que epp/resources/activation.json (vérifié par les tests). */
     public static final String CLE_PUBLIQUE = "mKNteal8hyAeErJGtdNFw5cpQs4pp9lmobERxpDOcgw=";
     public static final String URL_ACTIVATION = "https://epp-expert-activation.netlify.app";
+    /** Licence enregistrée après une activation sans Internet : « HL: » suivi du code de licence hors ligne. */
+    public static final String PREFIXE_HL = "HL:";
     private static final long JOUR_MS = 86_400_000L;
 
     private Licence() {
@@ -54,6 +56,9 @@ public final class Licence {
 
     /** Contenu (JSON) de la licence si sa signature est valable et qu'elle concerne ce téléphone, sinon null. */
     public static String verifier(String licence, String signature, String clePublique, String machine) {
+        if (licence != null && licence.startsWith(PREFIXE_HL)) {
+            return HorsLigne.verifier(licence.substring(PREFIXE_HL.length()), machine, HorsLigne.cles(clePublique));
+        }
         if (licence == null || signature == null || licence.isEmpty() || signature.isEmpty()) {
             return null;
         }

@@ -16,6 +16,7 @@ import android.webkit.WebView;
 import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
 import com.akwaschool.mobile.noyau.Comptes;
+import com.akwaschool.mobile.noyau.HorsLigne;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
 import com.akwaschool.mobile.synchro.Client;
@@ -183,6 +184,7 @@ public class Pont {
                     .put("pin", prefs.contains("pin"))
                     .put("admin", prefs.contains("admin"))
                     .put("essai", prefs.contains("essai_debut"))
+                    .put("demande", HorsLigne.demande(machine()))
                     .toString();
         } catch (JSONException e) {
             return "{}";
@@ -828,6 +830,10 @@ public class Pont {
     /** {@code espace} : « enseignant » pour l'espace enseignant seul (codes enseignant acceptés), sinon « ecole ». */
     @JavascriptInterface
     public void activerEspace(String id, String code, String ecole, String espace) {
+        if (HorsLigne.estCode(code)) {
+            activerHorsLigne(id, code, "enseignant".equals(espace));
+            return;
+        }
         reseau.execute(() -> {
             try {
                 String version = "?";
@@ -847,6 +853,22 @@ public class Pont {
                 rendre(id, erreur(0, "Activation impossible : " + e.getMessage(), null));
             }
         });
+    }
+
+    /** Activation sans Internet : code de licence remis par le générateur hors ligne pour ce téléphone. */
+    private void activerHorsLigne(String id, String code, boolean enseignant) {
+        String c = HorsLigne.verifier(code, machine(), HorsLigne.cles(Licence.CLE_PUBLIQUE));
+        String type = c == null ? null : Protocole.champTexte(c, "type");
+        if (c == null) {
+            rendre(id, erreur(0, "Code de licence non valable pour ce téléphone : vérifiez la saisie et le code de "
+                    + "demande donné au fournisseur.", null));
+        } else if (type.startsWith("ens") && !enseignant) {
+            rendre(id, erreur(0, "Ce code est réservé à l'espace enseignant seul.", null));
+        } else {
+            prefs.edit().putString("licence", Licence.PREFIXE_HL + HorsLigne.grouper(HorsLigne.nettoyer(code)))
+                    .putString("signature", "hl").commit();
+            rendre(id, "{\"ok\":true,\"licence\":" + licence() + "}");
+        }
     }
 
     // ------------------------------------------------------------------ fichiers échangés avec l'extérieur

@@ -57,11 +57,18 @@ jobs:
           pyinstaller --noconfirm --clean --onefile --windowed --name GenerateurCodes --icon epp\resources\app.ico `
             --distpath dist_fournisseur --workpath build_fournisseur outils\generateur_codes.py
           if (-not (Test-Path dist_fournisseur\GenerateurCodes.exe)) { throw "GenerateurCodes.exe absent" }
+          # activation sans Internet (zones sans réseau) : même clé que le service, gardée chiffrée sur le poste
+          pyinstaller --noconfirm --clean --onefile --windowed --name GenerateurHorsLigne --icon epp\resources\app.ico `
+            --paths . --hidden-import epp.core.hors_ligne `
+            --distpath dist_fournisseur --workpath build_fournisseur outils\generateur_hors_ligne.py
+          if (-not (Test-Path dist_fournisseur\GenerateurHorsLigne.exe)) { throw "GenerateurHorsLigne.exe absent" }
 
       - uses: actions/upload-artifact@v4
         with:
           name: GenerateurCodes-fournisseur
-          path: epp-expert/dist_fournisseur/GenerateurCodes.exe
+          path: |
+            epp-expert/dist_fournisseur/GenerateurCodes.exe
+            epp-expert/dist_fournisseur/GenerateurHorsLigne.exe
           if-no-files-found: error
 
   # Application Android (android/) : client de synchronisation testé contre le vrai serveur Python, puis APK signé.
@@ -136,11 +143,20 @@ jobs:
           "$outils/aapt2" dump badging AkwaSchool.apk | head -3
           unzip -l AkwaSchool.apk | grep -E "assets/www/(index.html|pont_android.js)"
           ls -l AkwaSchool.apk
+          # générateur hors ligne (outil du fournisseur) : jamais joint aux versions publiées
+          cp generateur/build/outputs/apk/release/generateur-release.apk GenerateurHorsLigne.apk
+          "$outils/apksigner" verify GenerateurHorsLigne.apk
 
       - uses: actions/upload-artifact@v4
         with:
           name: AkwaSchool-Android
           path: epp-expert/android/AkwaSchool.apk
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GenerateurHorsLigne-Android-fournisseur
+          path: epp-expert/android/GenerateurHorsLigne.apk
           if-no-files-found: error
 
   # AKWA SCHOOL v8 : application distincte (interface du prototype HTML v8 dans le moteur web de Qt)

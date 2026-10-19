@@ -1,0 +1,61 @@
+plugins {
+    id "com.android.application"
+}
+
+// Générateur de codes de licence hors ligne : outil du fournisseur, jamais publié avec l'application des écoles.
+// Il reprend le format et la signature du téléphone (noyau/HorsLigne.java, noyau/Ed25519.java), copiés ici.
+def noyau = layout.buildDirectory.dir("generated/noyau")
+def copierNoyau = tasks.register("copierNoyau", Copy) {
+    from("../app/src/main/java") {
+        include "com/akwaschool/mobile/noyau/Ed25519.java", "com/akwaschool/mobile/noyau/HorsLigne.java"
+    }
+    into noyau
+}
+preBuild.dependsOn copierNoyau
+
+android {
+    namespace "com.akwaschool.codes"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.akwaschool.codes"
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+    }
+
+    sourceSets {
+        main.java.srcDirs += noyau.get().asFile
+    }
+
+    def cle = System.getenv("ANDROID_KEYSTORE_FILE")
+    signingConfigs {
+        if (cle) {
+            publication {
+                storeFile file(cle)
+                storeType "pkcs12"
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (cle) signingConfig signingConfigs.publication
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+}

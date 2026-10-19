@@ -23,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from epp import __version__
-from epp.core import paths
+from epp.core import hors_ligne, paths
 from epp.core.paths import resource_path
 from epp.core.security import Session
 
@@ -68,6 +68,8 @@ class Etat:
 # remplacer la clé qui vérifie les licences (sinon une licence signée par une autre clé serait acceptée).
 URL_OFFICIELLE = "https://epp-expert-activation.netlify.app"
 CLE_OFFICIELLE = "mKNteal8hyAeErJGtdNFw5cpQs4pp9lmobERxpDOcgw="
+# Clés du générateur hors ligne en plus de celle du service (codes de licence sans Internet, voir hors_ligne.py)
+CLES_HORS_LIGNE: list[str] = []
 
 
 def _config() -> dict:
@@ -207,6 +209,8 @@ def etat(maintenant: datetime | None = None) -> Etat:
 
     lic = _lire_json(FICHIER)
     contenu = verifier(lic.get("licence", ""), lic.get("signature", ""))
+    if not contenu and lic.get("hors_ligne"):
+        contenu = hors_ligne.verifier(lic["hors_ligne"], empreinte_machine(), _cles_hors_ligne())
     if contenu:
         exp = datetime.fromisoformat(contenu["expire_le"].replace("Z", "+00:00")) if contenu.get("expire_le") else None
         if exp is None:
@@ -219,10 +223,35 @@ def etat(maintenant: datetime | None = None) -> Etat:
     return Etat("essai" if reste > 0 else "essai_termine", jours_restants=max(reste, 0))
 
 
+def _cles_hors_ligne() -> list[str]:
+    return [c for c in [_config()["cle_publique"], *CLES_HORS_LIGNE] if c]
+
+
+def demande_hors_ligne() -> str:
+    """Code de demande de cet ordinateur, à donner au fournisseur pour une activation sans Internet."""
+    return hors_ligne.demande(empreinte_machine())
+
+
+def activer_hors_ligne(code: str, espace: str = "ecole") -> Etat:
+    """Enregistre un code de licence du générateur hors ligne, vérifié sur place (aucune connexion)."""
+    contenu = hors_ligne.verifier(code, empreinte_machine(), _cles_hors_ligne())
+    if not contenu:
+        raise LicenceErreur("Code de licence incorrect, ou établi pour un autre appareil. Vérifiez la saisie "
+                            f"et votre code de demande : {demande_hors_ligne()}.")
+    if contenu["type"].startswith("ens") and espace != "enseignant":
+        raise LicenceErreur("Ce code est réservé à l'espace d'un enseignant seul.")
+    _ecrire_json(FICHIER, {"hors_ligne": hors_ligne.grouper(hors_ligne.nettoyer(code)),
+                           "enregistre_le": _maintenant().isoformat()})
+    return etat()
+
+
 def activer(code: str, ecole: str = "", url: str | None = None, timeout: float = 20, espace: str = "ecole") -> Etat:
-    """Active un code auprès du service en ligne et enregistre la licence reçue.
+    """Active un code auprès du service en ligne et enregistre la licence reçue. Un code de licence du
+    générateur hors ligne (112 caractères) est vérifié sur place, sans connexion.
 
     ``espace`` : « enseignant » pour l'espace enseignant seul (seul à accepter les codes enseignant)."""
+    if hors_ligne.est_code_hors_ligne(code):
+        return activer_hors_ligne(code, espace)
     cfg = _config()
     url = (url or cfg["url"]).rstrip("/")
     if not url or not cfg["cle_publique"]:
