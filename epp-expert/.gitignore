@@ -13,3 +13,6 @@ __pycache__/
 *.p12
 *.jks
 *.keystore
+
+# secret des codes hors ligne courts, injecté par la CI (outils/injecter_cles_courtes.py)
+epp/resources/ac.dat

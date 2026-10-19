@@ -266,7 +266,7 @@ class DialogueActivation(_EcranScinde):
             "Saisissez le code d'activation reçu (licence d'un an ou à vie). L'activation se fait une seule "
             "fois, avec une connexion Internet ; l'application fonctionne ensuite hors ligne. Sans Internet, "
             "donnez le code de demande ci-dessous au fournisseur et saisissez le code de licence qu'il vous "
-            "remet (112 caractères).", discret=True,
+            "remet (25 caractères, 5 groupes de 5).", discret=True,
             wrap=True))
         f = QFormLayout()
         self.code = QLineEdit()

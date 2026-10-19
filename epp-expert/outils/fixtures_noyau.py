@@ -98,6 +98,9 @@ def preparer(dossier: Path) -> None:
         pub, machine, str(int(maintenant.timestamp() * 1000)), HL.demande(machine), graine.hex(),
         code_hl(machine, "1an", date(2027, 10, 15), 42), code_hl(machine, "ensvie", None, 7),
         code_hl(_empreinte("autre"), "vie", None, 8),
+        HL.ecrire_cles_courtes({1: HL.secret_court(graine, 1)}, masquees=True),
+        HL.coder_court(HL.secret_court(graine, 1), 1, HL.demande(machine), "1an", date(2026, 10, 15)),
+        HL.coder_court(HL.secret_court(graine, 1), 1, HL.demande(_empreinte("autre")), "vie", date(2026, 10, 15)),
     ]) + "\n", encoding="utf-8")
     # ------------------------------------------------------------------ classeur Excel du téléphone
     (dossier / "classeur.json").write_text(json.dumps({"feuilles": [
@@ -156,7 +159,12 @@ def _verifier_hors_ligne(dossier: Path) -> int:
     if c != {"type": "vie", "expire_le": None, "code": "HL-123456"}:
         print(f"ÉCHEC code hors ligne signé par le téléphone : {c}")
         return 1
-    print("ok code hors ligne signé par le téléphone, accepté par l'ordinateur")
+    court = (dossier / "hors_ligne_court.java.txt").read_text(encoding="utf-8").strip()
+    c = HL.verifier_court(court, lignes[1], HL.lire_cles_courtes(lignes[8], masquees=True))
+    if not c or c["type"] != "ensvie" or len(court) != 29:
+        print(f"ÉCHEC code court du générateur Android : {court} → {c}")
+        return 1
+    print("ok codes hors ligne du téléphone (long et court) acceptés par l'ordinateur")
     return 0
 
 

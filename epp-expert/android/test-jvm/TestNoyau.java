@@ -118,6 +118,20 @@ public final class TestNoyau {
         String parJava = HorsLigne.signer(hg, h.get(3), "vie", 0, 123456);
         verifie(HorsLigne.verifier(parJava, hm, HorsLigne.cles(hp)) != null, "code signé par le générateur Android");
         Files.write(dossier.resolve("hors_ligne.java.txt"), parJava.getBytes(StandardCharsets.UTF_8));
+        HorsLigne.clesCourtes = HorsLigne.lireClesCourtes(h.get(8), true);
+        verifie(java.util.Arrays.equals(HorsLigne.clesCourtes.get(1), HorsLigne.secretCourt(hg, 1)),
+                "secret des codes courts : démasqué comme en Python");
+        String c1 = Licence.etat(Licence.PREFIXE_HL + HorsLigne.nettoyer(h.get(9)), "hl", hp, hm, 0, 0, hn);
+        verifie(statut(c1).equals("active") && c1.contains("\"type\":\"1an\"") && c1.contains("15/10/2027"),
+                "code court 1 an fait par Python : " + h.get(9) + " → " + c1);
+        verifie(Licence.verifier(Licence.PREFIXE_HL + h.get(10), "hl", hp, hm) == null, "code court d'un autre appareil refusé");
+        String c9 = h.get(9), cAbime = c9.substring(0, 7) + (c9.charAt(7) == '2' ? '3' : '2') + c9.substring(8);
+        verifie(HorsLigne.verifierCourt(cAbime, hm, HorsLigne.clesCourtes) == null, "code court modifié refusé");
+        verifie(HorsLigne.verifierCourt(h.get(9), hm, HorsLigne.lireClesCourtes("2:" + h.get(8).substring(2), true)) == null,
+                "code court d'un numéro de clé retiré refusé");
+        String court = HorsLigne.coderCourt(HorsLigne.secretCourt(hg, 1), 1, h.get(3), "ensvie", 300);
+        verifie(court.length() == 29 && HorsLigne.estCode(court.toLowerCase()), "code court du générateur Android : " + court);
+        Files.write(dossier.resolve("hors_ligne_court.java.txt"), court.getBytes(StandardCharsets.UTF_8));
 
         // ------------------------------------------------------------ sauvegarde chiffrée
         byte[] donnees = "{\"ecole\":\"EPP « ESSAI »\"}".getBytes(StandardCharsets.UTF_8);

@@ -77,6 +77,7 @@ public class Pont {
         this.activite = activite;
         this.web = web;
         this.prefs = activite.getSharedPreferences("akwa", Context.MODE_PRIVATE);
+        HorsLigne.clesCourtes = HorsLigne.lireClesCourtes(BuildConfig.AC, true);
     }
 
     void fermer() {
@@ -857,7 +858,7 @@ public class Pont {
 
     /** Activation sans Internet : code de licence remis par le générateur hors ligne pour ce téléphone. */
     private void activerHorsLigne(String id, String code, boolean enseignant) {
-        String c = HorsLigne.verifier(code, machine(), HorsLigne.cles(Licence.CLE_PUBLIQUE));
+        String c = HorsLigne.verifierEnregistre(code, machine(), Licence.CLE_PUBLIQUE);
         String type = c == null ? null : Protocole.champTexte(c, "type");
         if (c == null) {
             rendre(id, erreur(0, "Code de licence non valable pour ce téléphone : vérifiez la saisie et le code de "
@@ -865,7 +866,7 @@ public class Pont {
         } else if (type.startsWith("ens") && !enseignant) {
             rendre(id, erreur(0, "Ce code est réservé à l'espace enseignant seul.", null));
         } else {
-            prefs.edit().putString("licence", Licence.PREFIXE_HL + HorsLigne.grouper(HorsLigne.nettoyer(code)))
+            prefs.edit().putString("licence", Licence.PREFIXE_HL + HorsLigne.nettoyer(code))
                     .putString("signature", "hl").commit();
             rendre(id, "{\"ok\":true,\"licence\":" + licence() + "}");
         }

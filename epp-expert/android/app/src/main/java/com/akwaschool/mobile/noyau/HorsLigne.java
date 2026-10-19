@@ -5,15 +5,22 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
+import java.security.InvalidKeyException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Activation sans Internet (zones sans réseau), mêmes règles que epp/core/hors_ligne.py : le téléphone affiche un
  * code de demande (16 caractères) ; le générateur du fournisseur renvoie un code de licence signé (Ed25519) pour
- * ce téléphone seulement (112 caractères), vérifié ici sans connexion.
+ * ce téléphone seulement, vérifié ici sans connexion : code court de 25 caractères (5-5-5-5-5, scellé HMAC par un
+ * secret injecté masqué à la compilation, voir hors_ligne.py) ou ancien code long de 112 caractères (Ed25519).
  */
 public final class HorsLigne {
     public static final String ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
@@ -22,6 +29,9 @@ public final class HorsLigne {
     public static final int LONGUEUR_CODE = 112;
     /** Clés publiques supplémentaires (générateur hors ligne doté de sa propre clé), en plus de celle du service. */
     public static final String[] CLES_SUPP = {};
+    public static final int LONGUEUR_COURT = 25;
+    /** Secrets des codes courts de cette version (numéro → secret), installés au démarrage depuis BuildConfig. */
+    public static volatile Map<Integer, byte[]> clesCourtes = new TreeMap<>();
 
     private HorsLigne() {
     }
@@ -37,7 +47,8 @@ public final class HorsLigne {
     }
 
     public static boolean estCode(String texte) {
-        return nettoyer(texte).length() >= 100;
+        int n = nettoyer(texte).length();
+        return n == LONGUEUR_COURT || n >= 100;
     }
 
     static char controle(String c15) {
@@ -173,5 +184,133 @@ public final class HorsLigne {
         byte[] tout = Arrays.copyOf(charge, 70);
         System.arraycopy(sig, 0, tout, 6, 64);
         return grouper(coder(tout));
+    }
+
+    // ------------------------------------------------------------------ code court (25 caractères)
+    private static byte[] sha256(byte[]... parties) {
+        try {
+            MessageDigest d = MessageDigest.getInstance("SHA-256");
+            for (byte[] p : parties) {
+                d.update(p);
+            }
+            return d.digest();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static byte[] ascii(String s) {
+        return s.getBytes(StandardCharsets.US_ASCII);
+    }
+
+    /** Secret n° {@code numero}, dérivé à sens unique de la clé maîtresse (générateur du fournisseur). */
+    public static byte[] secretCourt(byte[] graine, int numero) {
+        return sha256(ascii("AKWA-CODE25|" + numero + "|"), graine);
+    }
+
+    private static byte[] xor(byte[] a, byte[] b) {
+        byte[] r = new byte[a.length];
+        for (int i = 0; i < a.length; i++) {
+            r[i] = (byte) (a[i] ^ b[i]);
+        }
+        return r;
+    }
+
+    /** « 1:base64,2:base64 » → secrets ; {@code masquees} : valeurs injectées dans l'application. */
+    public static Map<Integer, byte[]> lireClesCourtes(String texte, boolean masquees) {
+        Map<Integer, byte[]> cles = new TreeMap<>();
+        for (String partie : (texte == null ? "" : texte).replace(';', ',').split(",")) {
+            int p = partie.indexOf(':');
+            try {
+                int n = Integer.parseInt(partie.substring(0, Math.max(p, 0)).trim());
+                byte[] b = Base64.getDecoder().decode(partie.substring(p + 1).trim());
+                if (n >= 1 && n <= 7 && b.length == 32) {
+                    cles.put(n, masquees ? xor(b, sha256(ascii("AKWA-AC|" + n))) : b);
+                }
+            } catch (IllegalArgumentException | StringIndexOutOfBoundsException e) {
+                // partie illisible : ignorée
+            }
+        }
+        return cles;
+    }
+
+    private static BigInteger sceau(byte[] secret, String demande15, int charge) {
+        try {
+            Mac m = Mac.getInstance("HmacSHA256");
+            m.init(new SecretKeySpec(secret, "HmacSHA256"));
+            m.update(ascii("AKWA-HL25|" + demande15));
+            byte[] h = m.doFinal(new byte[]{(byte) (charge >> 16), (byte) (charge >> 8), (byte) charge});
+            return new BigInteger(1, Arrays.copyOf(h, 14)).shiftRight(7);
+        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** Code court groupé 5-5-5-5-5 ; {@code jourEmission} : jours depuis le 1er janvier 2026. */
+    public static String coderCourt(byte[] secret, int numero, String demande, String type, int jourEmission) {
+        String d15 = demandeValide(demande);
+        int t = Arrays.asList(TYPES).indexOf(type);
+        if (numero < 1 || numero > 7 || t < 1 || jourEmission < 0 || jourEmission >= 1 << 14) {
+            throw new IllegalArgumentException("licence hors ligne impossible");
+        }
+        int charge = numero << 17 | t << 14 | jourEmission;
+        BigInteger v = BigInteger.valueOf(charge).shiftLeft(105).or(sceau(secret, d15, charge));
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < LONGUEUR_COURT; i++) {
+            if (i > 0 && i % 5 == 0) {
+                sb.append('-');
+            }
+            sb.append(ALPHABET.charAt(v.shiftRight(5 * (24 - i)).intValue() & 31));
+        }
+        return sb.toString();
+    }
+
+    /** Contenu JSON {type, expire_le, code} si le code court est scellé pour cet appareil, sinon null. */
+    public static String verifierCourt(String code, String empreinte, Map<Integer, byte[]> cles) {
+        String c = nettoyer(code);
+        if (c.length() != LONGUEUR_COURT) {
+            return null;
+        }
+        BigInteger v = BigInteger.ZERO;
+        for (char x : c.toCharArray()) {
+            v = v.shiftLeft(5).or(BigInteger.valueOf(ALPHABET.indexOf(x)));
+        }
+        int charge = v.shiftRight(105).intValue();
+        BigInteger lu = v.subtract(BigInteger.valueOf(charge).shiftLeft(105));
+        int numero = charge >> 17, t = (charge >> 14) & 7, jour = charge & 0x3FFF;
+        byte[] secret = cles.get(numero);
+        if (secret == null || t < 1 || t >= TYPES.length) {
+            return null;
+        }
+        BigInteger attendu = sceau(secret, nettoyer(demande(empreinte)).substring(0, 15), charge);
+        if (!MessageDigest.isEqual(octets14(attendu), octets14(lu))) {
+            return null;
+        }
+        String expire = TYPES[t].endsWith("1an")
+                ? "\"" + ORIGINE.plusDays(jour + 365L) + "T23:59:59+00:00\"" : "null";
+        return "{\"type\":\"" + TYPES[t] + "\",\"expire_le\":" + expire + ",\"code\":\""
+                + String.format("HC-%07d", lu.shiftRight(85).intValue()) + "\"}";
+    }
+
+    /** Numéro d'un code court (pour le registre du générateur), le même que celui que l'appareil affichera. */
+    public static String serieCourt(String code) {
+        BigInteger v = BigInteger.ZERO;
+        for (char x : nettoyer(code).toCharArray()) {
+            v = v.shiftLeft(5).or(BigInteger.valueOf(ALPHABET.indexOf(x)));
+        }
+        return String.format("HC-%07d", v.shiftRight(85).intValue() & 0xFFFFF);
+    }
+
+    private static byte[] octets14(BigInteger v) {
+        byte[] b = v.toByteArray(), r = new byte[14];
+        int n = Math.min(b.length, 14);
+        System.arraycopy(b, b.length - n, r, 14 - n, n);
+        return r;
+    }
+
+    /** Code hors ligne enregistré (court ou long) : contenu JSON s'il est valable pour cet appareil, sinon null. */
+    public static String verifierEnregistre(String code, String empreinte, String clePublique) {
+        return nettoyer(code).length() == LONGUEUR_COURT ? verifierCourt(code, empreinte, clesCourtes)
+                : verifier(code, empreinte, cles(clePublique));
     }
 }

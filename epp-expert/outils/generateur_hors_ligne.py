@@ -1,8 +1,9 @@
 """Générateur de codes de licence HORS LIGNE d'AKWA SCHOOL (outil du fournisseur, Windows).
 
 Pour les écoles sans réseau : l'appareil de l'école affiche un code de demande (16 caractères) ; ce
-générateur renvoie un code de licence signé pour cet appareil seulement (112 caractères), sans Internet.
-La clé privée est gardée chiffrée par un mot de passe dans le dossier de l'utilisateur, jamais dans le dépôt.
+générateur renvoie un code de licence scellé pour cet appareil seulement (25 caractères, 5-5-5-5-5), sans Internet.
+La clé maîtresse est gardée chiffrée par un mot de passe dans le dossier de l'utilisateur, jamais dans le dépôt.
+Le secret des applications en est dérivé (bouton « Clé pour GitHub », secret AKWA_CLES_CODES_COURTS).
 Cet outil n'est PAS livré aux écoles.
 
     python generateur_hors_ligne.py          fenêtre
@@ -24,7 +25,6 @@ from epp.core import hors_ligne  # noqa: E402
 NOM = "AKWA Codes hors ligne"
 LIBELLES = {"1an": "École, 1 an", "vie": "École, à vie", "ens1an": "Enseignant seul, 1 an",
             "ensvie": "Enseignant seul, à vie"}
-CLES_CONNUES = ["mKNteal8hyAeErJGtdNFw5cpQs4pp9lmobERxpDOcgw="]   # clés reconnues par les applications
 ITERATIONS = 300_000
 _PKCS8 = bytes.fromhex("302e020100300506032b657004220420")
 
@@ -70,7 +70,7 @@ def _cle_mdp(mdp: str, sel: bytes) -> bytes:
     return hashlib.pbkdf2_hmac("sha256", mdp.encode("utf-8"), sel, ITERATIONS, 32)
 
 
-def enregistrer_cle(graine: bytes, mdp: str) -> str:
+def enregistrer_cle(graine: bytes, mdp: str, numero: int = 1) -> str:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
     if len(mdp) < 8:
         raise Erreur("Le mot de passe doit compter 8 caractères au moins.")
@@ -78,13 +78,31 @@ def enregistrer_cle(graine: bytes, mdp: str) -> str:
     chiffre = AESGCM(_cle_mdp(mdp, sel)).encrypt(nonce, graine, b"akwa/cle-hors-ligne")
     pub = publique(graine)
     data = {"v": 1, "sel": base64.b64encode(sel).decode(), "nonce": base64.b64encode(nonce).decode(),
-            "chiffre": base64.b64encode(chiffre).decode(), "publique": pub}
+            "chiffre": base64.b64encode(chiffre).decode(), "publique": pub, "numero": numero}
     (dossier() / "cle.json").write_text(json.dumps(data, indent=1), encoding="utf-8")
     return pub
 
 
 def cle_existe() -> bool:
     return (dossier() / "cle.json").exists()
+
+
+def numero_cle() -> int:
+    """Numéro du secret des codes courts (augmenté si un secret a fuité)."""
+    return int(json.loads((dossier() / "cle.json").read_text(encoding="utf-8")).get("numero", 1))
+
+
+def changer_numero(mdp: str) -> int:
+    graine, n = ouvrir_cle(mdp), numero_cle()
+    if n >= 7:
+        raise Erreur("Dernier numéro de clé atteint : créez une nouvelle clé maîtresse.")
+    enregistrer_cle(graine, mdp, n + 1)
+    return n + 1
+
+
+def cle_github(graine: bytes, numero: int) -> str:
+    """Valeur du secret GitHub AKWA_CLES_CODES_COURTS (injecté masqué dans les applications à la compilation)."""
+    return hors_ligne.ecrire_cles_courtes({numero: hors_ligne.secret_court(graine, numero)})
 
 
 def ouvrir_cle(mdp: str) -> bytes:
@@ -99,18 +117,17 @@ def ouvrir_cle(mdp: str) -> bytes:
 
 
 # ---------------------------------------------------------------------- codes
-def generer(graine: bytes, demande: str, type_: str, aujourd_hui: date | None = None,
-            serie: int | None = None) -> dict:
-    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-    d15 = hors_ligne.demande_valide(demande)
+def generer(graine: bytes, demande: str, type_: str, aujourd_hui: date | None = None, numero: int = 1) -> dict:
+    """Code court (25 caractères) pour le code de demande saisi."""
     jour = aujourd_hui or date.today()
-    expire = jour + timedelta(days=365) if type_ in ("1an", "ens1an") else None
-    serie = secrets.randbelow(1 << 24) if serie is None else serie
-    charge = hors_ligne.charge_utile(type_, expire, serie)
-    signature = Ed25519PrivateKey.from_private_bytes(graine).sign(hors_ligne.message(d15, charge))
-    return {"code": hors_ligne.grouper(hors_ligne.coder(charge + signature)), "type": type_,
-            "expire": expire.isoformat() if expire else "", "serie": f"HL-{serie:06d}",
-            "demande": hors_ligne.grouper(d15 + hors_ligne.nettoyer(demande)[15])}
+    code = hors_ligne.coder_court(hors_ligne.secret_court(graine, numero), numero, demande, type_, jour)
+    expire = jour + timedelta(days=hors_ligne.JOURS_AN) if type_.endswith("1an") else None
+    d = hors_ligne.nettoyer(demande)
+    v = 0
+    for x in hors_ligne.nettoyer(code):
+        v = (v << 5) | hors_ligne.ALPHABET.index(x)
+    return {"code": code, "type": type_, "expire": expire.isoformat() if expire else "",
+            "serie": f"HC-{(v & ((1 << 105) - 1)) >> 85:07d}", "demande": hors_ligne.grouper(d)}
 
 
 def noter(g: dict, note: str) -> None:
@@ -135,10 +152,10 @@ def fenetre() -> int:  # pragma: no cover - interface
     etat = {"graine": None}
 
     def installer_cle() -> bool:
-        if not messagebox.askyesno(NOM, "Aucune clé de signature sur cet ordinateur.\n\nOui : importer la clé du "
-                                        "service (variable EPP_LICENCE_CLE_PRIVEE de Netlify), reconnue par toutes "
-                                        "les applications.\nNon : créer une nouvelle clé (sa clé publique devra "
-                                        "être ajoutée aux applications)."):
+        if not messagebox.askyesno(NOM, "Aucune clé maîtresse sur cet ordinateur.\n\nOui : importer la clé du "
+                                        "service (variable EPP_LICENCE_CLE_PRIVEE de Netlify), à garder en lieu sûr."
+                                        "\nNon : créer une nouvelle clé maîtresse.\n\nEnsuite, mettez la « Clé pour "
+                                        "GitHub » dans le secret AKWA_CLES_CODES_COURTS avant de compiler."):
             graine = secrets.token_bytes(32)
         else:
             texte = simpledialog.askstring(NOM, "Collez la clé privée (base64) :", parent=racine)
@@ -178,13 +195,17 @@ def fenetre() -> int:  # pragma: no cover - interface
         return 1
     racine.deiconify()
 
-    pub = publique(etat["graine"])
     cadre = ttk.Frame(racine, padding=16)
     cadre.pack(fill="both", expand=True)
     ttk.Label(cadre, text=NOM, font=("Segoe UI", 14, "bold")).pack(anchor="w")
-    ttk.Label(cadre, text="Clé publique : " + pub + ("  (reconnue par les applications)" if pub in CLES_CONNUES
-                                                     else "  (à ajouter aux applications)"),
-              foreground="#0E6646" if pub in CLES_CONNUES else "#B35A0E", wraplength=580).pack(anchor="w", pady=4)
+    info = ttk.Label(cadre, wraplength=580)
+    info.pack(anchor="w", pady=4)
+
+    def afficher_numero():
+        info.config(text=f"Clé n° {numero_cle()} : les applications compilées avec la même « Clé pour GitHub » "
+                         "acceptent les codes.")
+
+    afficher_numero()
     ttk.Label(cadre, text="Code de demande affiché par l'appareil de l'école :").pack(anchor="w", pady=(12, 0))
     demande = ttk.Entry(cadre, font=("Consolas", 13))
     demande.pack(fill="x")
@@ -195,11 +216,11 @@ def fenetre() -> int:  # pragma: no cover - interface
     ttk.Label(cadre, text="Établissement ou note (registre) :").pack(anchor="w", pady=(10, 0))
     note = ttk.Entry(cadre)
     note.pack(fill="x")
-    sortie = tk.Text(cadre, height=8, font=("Consolas", 13), wrap="word")
+    sortie = tk.Text(cadre, height=4, font=("Consolas", 13), wrap="word")
 
     def lancer():
         try:
-            g = generer(etat["graine"], demande.get(), list(LIBELLES)[choix.current()])
+            g = generer(etat["graine"], demande.get(), list(LIBELLES)[choix.current()], numero=numero_cle())
         except (hors_ligne.CodeInvalide, ValueError) as e:
             messagebox.showerror(NOM, str(e))
             return
@@ -210,6 +231,28 @@ def fenetre() -> int:  # pragma: no cover - interface
         racine.clipboard_clear()
         racine.clipboard_append(g["code"])
 
+    def github():
+        v = cle_github(etat["graine"], numero_cle())
+        racine.clipboard_clear()
+        racine.clipboard_append(v)
+        messagebox.showinfo(NOM, "Clé copiée. Collez-la dans GitHub › Settings › Secrets and variables › Actions, "
+                                 "secret AKWA_CLES_CODES_COURTS, puis compilez une nouvelle version.\n\nNe la "
+                                 "donnez à personne d'autre.")
+
+    def nouveau_numero():
+        if not messagebox.askyesno(NOM, "À faire seulement si des codes pirates circulent : les codes de la clé "
+                                        "actuelle seront refusés par la prochaine version des applications. "
+                                        "Continuer ?"):
+            return
+        m = simpledialog.askstring(NOM, "Mot de passe du générateur :", show="•", parent=racine)
+        try:
+            changer_numero(m or "")
+        except Erreur as e:
+            messagebox.showerror(NOM, str(e))
+            return
+        afficher_numero()
+        github()
+
     def exporter():
         f = filedialog.asksaveasfilename(defaultextension=".csv", initialfile="registre-codes-hors-ligne.csv")
         if f and (dossier() / "registre.csv").exists():
@@ -219,6 +262,10 @@ def fenetre() -> int:  # pragma: no cover - interface
     barre.pack(fill="x", pady=12)
     ttk.Button(barre, text="Générer le code de licence", command=lancer).pack(side="left")
     ttk.Button(barre, text="Exporter le registre", command=exporter).pack(side="right")
+    barre2 = ttk.Frame(cadre)
+    barre2.pack(fill="x", side="bottom", pady=(8, 0))
+    ttk.Button(barre2, text="Clé pour GitHub", command=github).pack(side="left")
+    ttk.Button(barre2, text="Changer de numéro de clé (fuite)", command=nouveau_numero).pack(side="right")
     ttk.Label(cadre, text="Code de licence à saisir sur l'appareil de l'école (copié automatiquement) :").pack(
         anchor="w")
     sortie.pack(fill="both", expand=True)

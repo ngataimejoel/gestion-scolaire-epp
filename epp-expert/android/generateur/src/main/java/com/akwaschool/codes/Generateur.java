@@ -39,14 +39,13 @@ import java.util.Locale;
 
 /**
  * Générateur de codes de licence hors ligne (outil du fournisseur, sans réseau) : saisit le code de demande affiché
- * par l'appareil de l'école et renvoie le code de licence signé pour cet appareil. La clé de signature est gardée
- * chiffrée par un mot de passe ; elle est oubliée dès que l'application passe en arrière-plan.
+ * par l'appareil de l'école et renvoie le code de licence de 25 caractères (5-5-5-5-5) pour cet appareil. La clé
+ * maîtresse est gardée chiffrée par un mot de passe ; elle est oubliée dès que l'application passe en arrière-plan.
+ * Le secret des applications en est dérivé (« Clé pour GitHub », secret AKWA_CLES_CODES_COURTS).
  */
 public final class Generateur extends Activity {
     static final String[] TYPES = {"1an", "vie", "ens1an", "ensvie"};
     static final String[] LIBELLES = {"École, 1 an", "École, à vie", "Enseignant seul, 1 an", "Enseignant seul, à vie"};
-    /** Clés reconnues par les applications des écoles (Licence.CLE_PUBLIQUE et HorsLigne.CLES_SUPP). */
-    static final String CLE_SERVICE = "mKNteal8hyAeErJGtdNFw5cpQs4pp9lmobERxpDOcgw=";
 
     private SharedPreferences prefs;
     private byte[] graine;
@@ -142,8 +141,8 @@ public final class Generateur extends Activity {
     private void ecranInstaller() {
         nouvellePage("AKWA Codes hors ligne");
         page.addView(texte("Collez la clé privée du service (variable EPP_LICENCE_CLE_PRIVEE de Netlify) : les codes "
-                + "seront reconnus par toutes les applications. Laissez vide pour créer une nouvelle clé (sa clé publique "
-                + "devra alors être ajoutée aux applications)."));
+                + "à garder en lieu sûr. Laissez vide pour créer une nouvelle clé maîtresse. Ensuite, mettez la « Clé pour "
+                + "GitHub » dans le secret AKWA_CLES_CODES_COURTS avant de compiler les applications."));
         EditText cle = champ("Clé privée (base64), facultative", true);
         page.addView(texte("Mot de passe du générateur (8 caractères au moins) :"));
         EditText m1 = champ("Mot de passe", true), m2 = champ("Confirmation", true);
@@ -200,12 +199,10 @@ public final class Generateur extends Activity {
     // ------------------------------------------------------------------ codes
     private void ecranPrincipal() {
         nouvellePage("AKWA Codes hors ligne");
-        String pub = Cle.publique(graine);
-        boolean connue = Arrays.asList(HorsLigne.cles(CLE_SERVICE)).contains(pub);
-        TextView cle = texte("Clé publique : " + pub + (connue ? " (reconnue par les applications)"
-                : " (à ajouter aux applications)"));
-        cle.setTextColor(connue ? Color.rgb(14, 102, 70) : Color.rgb(179, 90, 14));
-        cle.setTextIsSelectable(true);
+        int numero = prefs.getInt("numero", 1);
+        TextView cle = texte("Clé n° " + numero + " : les applications compilées avec la même « Clé pour GitHub » "
+                + "acceptent les codes.");
+        cle.setTextColor(Color.rgb(14, 102, 70));
         page.addView(cle);
         page.addView(texte("Code de demande affiché par l'appareil de l'école :"));
         EditText demande = champ("XXXX-XXXX-XXXX-XXXX", false);
@@ -228,16 +225,16 @@ public final class Generateur extends Activity {
             int i = type.getSelectedItemPosition();
             boolean an = TYPES[i].endsWith("1an");
             LocalDate expire = an ? LocalDate.now().plusDays(365) : null;
-            int jour = expire == null ? 0 : (int) ChronoUnit.DAYS.between(HorsLigne.ORIGINE, expire);
-            int serie = new SecureRandom().nextInt(1 << 24);
+            int emis = (int) ChronoUnit.DAYS.between(HorsLigne.ORIGINE, LocalDate.now());
             String code;
             try {
-                code = HorsLigne.signer(graine, demande.getText().toString(), TYPES[i], jour, serie);
+                code = HorsLigne.coderCourt(HorsLigne.secretCourt(graine, numero), numero,
+                        demande.getText().toString(), TYPES[i], emis);
             } catch (IllegalArgumentException e) {
                 message(e.getMessage());
                 return;
             }
-            String num = String.format(Locale.ROOT, "HL-%06d", serie);
+            String num = HorsLigne.serieCourt(code);
             String d16 = HorsLigne.grouper(HorsLigne.nettoyer(demande.getText().toString()));
             noter(new String[]{new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).format(new Date()), num,
                     LIBELLES[i], expire == null ? "" : expire.toString(), d16, note.getText().toString().trim()});
@@ -252,6 +249,23 @@ public final class Generateur extends Activity {
                 partager("Code de licence AKWA SCHOOL", dernier[0]);
             }
         });
+        bouton("Clé pour GitHub", v -> new AlertDialog.Builder(this)
+                .setMessage("Valeur du secret GitHub AKWA_CLES_CODES_COURTS (Settings › Secrets and variables › Actions)."
+                        + " Ne la donnez à personne d'autre.")
+                .setPositiveButton("Copier", (d, w) -> copier(numero + ":" + java.util.Base64.getEncoder().encodeToString(HorsLigne.secretCourt(graine, numero))))
+                .setNegativeButton("Fermer", null).show());
+        bouton("Changer de numéro de clé (fuite)", v -> new AlertDialog.Builder(this)
+                .setMessage("À faire seulement si des codes pirates circulent : la prochaine version des applications "
+                        + "refusera les codes de la clé n° " + numero + ". Continuer ?")
+                .setPositiveButton("Oui", (d, w) -> {
+                    if (numero >= 7) {
+                        message("Dernier numéro atteint : créez une nouvelle clé maîtresse.");
+                        return;
+                    }
+                    prefs.edit().putInt("numero", numero + 1).commit();
+                    ecranPrincipal();
+                })
+                .setNegativeButton("Non", null).show());
         bouton("Partager le registre", v -> {
             File f = registre();
             try {

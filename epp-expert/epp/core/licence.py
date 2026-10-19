@@ -210,7 +210,7 @@ def etat(maintenant: datetime | None = None) -> Etat:
     lic = _lire_json(FICHIER)
     contenu = verifier(lic.get("licence", ""), lic.get("signature", ""))
     if not contenu and lic.get("hors_ligne"):
-        contenu = hors_ligne.verifier(lic["hors_ligne"], empreinte_machine(), _cles_hors_ligne())
+        contenu = _verifier_hors_ligne(lic["hors_ligne"])
     if contenu:
         exp = datetime.fromisoformat(contenu["expire_le"].replace("Z", "+00:00")) if contenu.get("expire_le") else None
         if exp is None:
@@ -227,6 +227,24 @@ def _cles_hors_ligne() -> list[str]:
     return [c for c in [_config()["cle_publique"], *CLES_HORS_LIGNE] if c]
 
 
+def _cles_courtes() -> dict[int, bytes]:
+    """Secrets des codes courts : injectés masqués par la CI (resources/ac.dat) ; hors application installée,
+    la variable EPP_CLES_COURTES (« 1:base64 ») sert aux essais."""
+    if not getattr(sys, "frozen", False) and os.environ.get("EPP_CLES_COURTES"):
+        return hors_ligne.lire_cles_courtes(os.environ["EPP_CLES_COURTES"])
+    try:
+        return hors_ligne.lire_cles_courtes(Path(resource_path("resources", "ac.dat")).read_text(encoding="ascii"),
+                                            masquees=True)
+    except OSError:
+        return {}
+
+
+def _verifier_hors_ligne(code: str) -> dict | None:
+    if hors_ligne.est_code_court(code):
+        return hors_ligne.verifier_court(code, empreinte_machine(), _cles_courtes())
+    return hors_ligne.verifier(code, empreinte_machine(), _cles_hors_ligne())
+
+
 def demande_hors_ligne() -> str:
     """Code de demande de cet ordinateur, à donner au fournisseur pour une activation sans Internet."""
     return hors_ligne.demande(empreinte_machine())
@@ -234,23 +252,25 @@ def demande_hors_ligne() -> str:
 
 def activer_hors_ligne(code: str, espace: str = "ecole") -> Etat:
     """Enregistre un code de licence du générateur hors ligne, vérifié sur place (aucune connexion)."""
-    contenu = hors_ligne.verifier(code, empreinte_machine(), _cles_hors_ligne())
+    contenu = _verifier_hors_ligne(code)
     if not contenu:
         raise LicenceErreur("Code de licence incorrect, ou établi pour un autre appareil. Vérifiez la saisie "
                             f"et votre code de demande : {demande_hors_ligne()}.")
     if contenu["type"].startswith("ens") and espace != "enseignant":
         raise LicenceErreur("Ce code est réservé à l'espace d'un enseignant seul.")
-    _ecrire_json(FICHIER, {"hors_ligne": hors_ligne.grouper(hors_ligne.nettoyer(code)),
+    c = hors_ligne.nettoyer(code)
+    _ecrire_json(FICHIER, {"hors_ligne": hors_ligne.grouper_court(c) if len(c) == hors_ligne.LONGUEUR_COURT
+                           else hors_ligne.grouper(c),
                            "enregistre_le": _maintenant().isoformat()})
     return etat()
 
 
 def activer(code: str, ecole: str = "", url: str | None = None, timeout: float = 20, espace: str = "ecole") -> Etat:
     """Active un code auprès du service en ligne et enregistre la licence reçue. Un code de licence du
-    générateur hors ligne (112 caractères) est vérifié sur place, sans connexion.
+    générateur hors ligne (25 caractères, ou 112 pour l'ancien format) est vérifié sur place, sans connexion.
 
     ``espace`` : « enseignant » pour l'espace enseignant seul (seul à accepter les codes enseignant)."""
-    if hors_ligne.est_code_hors_ligne(code):
+    if hors_ligne.est_code_court(code) or hors_ligne.est_code_hors_ligne(code):
         return activer_hors_ligne(code, espace)
     cfg = _config()
     url = (url or cfg["url"]).rstrip("/")

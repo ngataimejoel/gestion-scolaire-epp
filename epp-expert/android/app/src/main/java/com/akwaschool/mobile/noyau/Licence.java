@@ -57,7 +57,7 @@ public final class Licence {
     /** Contenu (JSON) de la licence si sa signature est valable et qu'elle concerne ce téléphone, sinon null. */
     public static String verifier(String licence, String signature, String clePublique, String machine) {
         if (licence != null && licence.startsWith(PREFIXE_HL)) {
-            return HorsLigne.verifier(licence.substring(PREFIXE_HL.length()), machine, HorsLigne.cles(clePublique));
+            return HorsLigne.verifierEnregistre(licence.substring(PREFIXE_HL.length()), machine, clePublique);
         }
         if (licence == null || signature == null || licence.isEmpty() || signature.isEmpty()) {
             return null;

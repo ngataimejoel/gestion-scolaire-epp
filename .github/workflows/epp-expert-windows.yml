@@ -127,7 +127,14 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          AKWA_CLES_CODES_COURTS: ${{ secrets.AKWA_CLES_CODES_COURTS }}
+          EXIGER_CLES: ${{ github.event_name == 'release' && '1' || '' }}
         run: |
+          # codes hors ligne de 25 caractères : sans le secret, l'APK les refuse (bloquant pour une version publiée)
+          if [ -z "$AKWA_CLES_CODES_COURTS" ]; then
+            echo "::$([ -n "$EXIGER_CLES" ] && echo error || echo warning)::Secret AKWA_CLES_CODES_COURTS absent : codes hors ligne de 25 caractères refusés."
+            if [ -n "$EXIGER_CLES" ]; then exit 1; fi
+          fi
           # clé privée uniquement dans les secrets GitHub : pas de clé dans le dépôt public
           if [ -z "$ANDROID_KEYSTORE_B64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
             echo "::error::Secrets de signature Android manquants (ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)"
@@ -180,6 +187,12 @@ jobs:
 
       - name: Tests de l'application v8
         run: python -m pytest -q -rs tests/test_v8.py
+
+      # secret des codes hors ligne de 25 caractères (bouton « Clé pour GitHub » du générateur), jamais versionné
+      - name: Injecter le secret des codes hors ligne
+        env:
+          AKWA_CLES_CODES_COURTS: ${{ secrets.AKWA_CLES_CODES_COURTS }}
+        run: python outils/injecter_cles_courtes.py ${{ github.event_name == 'release' && '--exiger' || '' }}
 
       - name: Construire l'exécutable v8 (PyInstaller)
         run: pyinstaller --noconfirm --clean packaging/akwa_v8.spec
