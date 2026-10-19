@@ -39,6 +39,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle etat) {
         super.onCreate(etat);
+        if (!Integrite.conforme(this)) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("AKWA SCHOOL")
+                    .setMessage("Cette copie d'AKWA SCHOOL a été modifiée et ne peut pas s'ouvrir. "
+                            + "Installez l'application officielle depuis le lien de N'GATTA.")
+                    .setCancelable(false)
+                    .setPositiveButton("Fermer", (d, i) -> finish())
+                    .show();
+            return;
+        }
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
@@ -113,7 +123,7 @@ public class MainActivity extends Activity {
     protected void onNewIntent(Intent i) {
         super.onNewIntent(i);
         setIntent(i);
-        recu(i);
+        if (web != null) recu(i);
     }
 
     /** Fichier ouvert avec AKWA SCHOOL depuis une autre application (réponse de l'ordinateur reçue par WhatsApp). */
@@ -190,6 +200,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (web == null) { finish(); return; }
         web.evaluateJavascript("window.akwaArriere ? String(akwaArriere()) : 'false'", v -> {
             if (!"\"true\"".equals(v)) {
                 finish();
@@ -200,19 +211,19 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        web.evaluateJavascript("window.akwaPause && akwaPause()", null);
+        if (web != null) web.evaluateJavascript("window.akwaPause && akwaPause()", null);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        web.evaluateJavascript("window.akwaReprise && akwaReprise()", null);
+        if (web != null) web.evaluateJavascript("window.akwaReprise && akwaReprise()", null);
     }
 
     @Override
     protected void onDestroy() {
-        pont.fermer();
-        web.destroy();
+        if (pont != null) pont.fermer();
+        if (web != null) web.destroy();
         super.onDestroy();
     }
 }

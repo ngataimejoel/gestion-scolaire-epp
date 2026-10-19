@@ -5,7 +5,7 @@
 ; d'installation : une mise à jour ou une désinstallation les conserve, sauf demande explicite.
 #define AppName "AKWA SCHOOL v8"
 #ifndef AppVersion
-  #define AppVersion "1.5.0"
+  #define AppVersion "1.5.1"
 #endif
 #define AppExe "AkwaSchoolV8.exe"
 

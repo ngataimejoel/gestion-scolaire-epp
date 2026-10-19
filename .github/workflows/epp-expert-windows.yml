@@ -121,10 +121,14 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          if [ -n "$ANDROID_KEYSTORE_B64" ]; then
-            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/akwa.p12"
-            export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/akwa.p12"
+          # clé privée uniquement dans les secrets GitHub : pas de clé dans le dépôt public
+          if [ -z "$ANDROID_KEYSTORE_B64" ] || [ -z "$ANDROID_KEYSTORE_PASSWORD" ] || [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ]; then
+            echo "::error::Secrets de signature Android manquants (ANDROID_KEYSTORE_B64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD)"
+            exit 1
           fi
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/akwa.p12"
+          export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/akwa.p12"
+          trap 'rm -f "$RUNNER_TEMP/akwa.p12"' EXIT
           gradle --no-daemon --stacktrace assembleRelease
           cp app/build/outputs/apk/release/app-release.apk AkwaSchool.apk
           outils=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
