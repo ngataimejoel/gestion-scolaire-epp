@@ -52,8 +52,8 @@
  function montrerCode(code,suite){modal(`${ic('key')} Code de secours`,`<p>Il permet de choisir un nouveau mot de passe en cas d’oubli, sans Internet. Notez-le et rangez-le en lieu sûr ; il ne sert qu’une fois.</p><p style="font-size:22px;font-weight:700;letter-spacing:2px;text-align:center">${esc(code)}</p>`,{noFoot:true,onclose:suite})}
 
  // ------------------------------------------------------------------ écran de verrouillage (ouverture de l'application)
- const CSS=`#akwaVerrou{position:fixed;inset:0;z-index:2147483000;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto}
-#akwaVerrou .bx{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:12px}
+ const CSS=`#akwaVerrou{position:fixed;inset:0;z-index:2147483000;background:var(--bg);display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow:auto;scroll-padding:24px 0 40px}
+#akwaVerrou .bx{margin:auto;width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:grid;gap:12px}
 #akwaVerrou h1{margin:0;font:700 22px var(--disp);color:var(--acc)}#akwaVerrou h1 b{color:var(--org)}
 #akwaVerrou p{margin:0}#akwaVerrou input{width:100%;padding:11px 12px;font-size:16px}#akwaVerrou .btn{justify-content:center;padding:11px 12px}
 #akwaVerrou .lien{background:none;border:0;color:var(--acc);font-weight:600;padding:4px}#akwaVerrou .code{font-size:22px;font-weight:700;letter-spacing:2px;text-align:center}#akwaVerrou .niv{display:flex;flex-wrap:wrap;gap:10px 16px}#akwaVerrou .niv label{display:flex;gap:6px;align-items:center;font-weight:600}#akwaVerrou .niv input{width:auto}`;
@@ -61,9 +61,10 @@
   let v=document.getElementById('akwaVerrou');
   if(!v){v=document.createElement('div');v.id='akwaVerrou';document.body.appendChild(v)}
   v.innerHTML=`<form class="bx" novalidate><h1>AKWA <b>SCHOOL</b></h1>${html}<p class="err" id="vErr" hidden></p><p class="sub" style="text-align:center;font-size:12px">Version ${esc(json(N.infos()).version||'')} · interface v8</p></form>`;
+  v.scrollTop=0;
   const f=v.querySelector('form');
   f.addEventListener('submit',e=>{e.preventDefault();onok(new FormData(f),m=>{const p=f.querySelector('#vErr');p.textContent=m;p.hidden=!m})});
-  const a=f.querySelector('[autofocus]')||f.querySelector('input');if(a)setTimeout(()=>a.focus(),50);
+  const a=f.querySelector('[autofocus]')||f.querySelector('input');if(a)setTimeout(()=>{a.focus({preventScroll:true});v.scrollTop=0},50);
   return f;
  }
  // tant que l'écran de verrouillage est affiché, le reste de la page est invisible
