@@ -139,6 +139,58 @@ public final class Licence {
                 + Protocole.jsonTexte(msg) + "}";
     }
 
+    // ------------------------------------------------------------------ contrôle a posteriori des codes hors ligne
+    public static final long CONTROLE_MS = 7 * JOUR_MS;
+    public static final long DELAI_REGISTRE_MS = 30 * JOUR_MS;
+
+    /** État renvoyé quand le contrôle en ligne a refusé le code hors ligne (statut « inconnu » ou « revoque »). */
+    public static String refus(String statut) {
+        return json("expiree", null, null, 0L, false, "revoque".equals(statut)
+                ? "Code de licence annulé par le fournisseur : contactez-le ou activez un nouveau code (vos données "
+                + "sont conservées)."
+                : "Code de licence non reconnu par le fournisseur : activez un code authentique pour accéder à vos "
+                + "données (elles sont conservées).");
+    }
+
+    static String sha256Hex(String s) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (byte b : MessageDigest.getInstance("SHA-256").digest(s.getBytes(StandardCharsets.UTF_8))) {
+                sb.append(String.format("%02x", b & 0xFF));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Compare le code hors ligne au registre du fournisseur (Internet nécessaire) : « connu », « inconnu » (code
+     * pirate) ou « revoque » ; null hors connexion ou si la réponse n'est pas signée par le service.
+     */
+    public static String controlerHorsLigne(String url, String code, String machine, String clePublique) {
+        String h = sha256Hex(HorsLigne.nettoyer(code));
+        String corps = "{\"h\":" + Protocole.jsonTexte(h) + ",\"machine\":" + Protocole.jsonTexte(machine) + "}";
+        try {
+            Client.Reponse r = Client.post(url.replaceAll("/+$", "") + "/api/hors-ligne/controle",
+                    corps.getBytes(StandardCharsets.UTF_8), "application/json", null);
+            if (r.statut != 200) {
+                return null;
+            }
+            String t = r.texte(), rep = Protocole.champTexte(t, "reponse"), sig = Protocole.champTexte(t, "signature");
+            if (rep == null || sig == null
+                    || !Ed25519.verifier(Base64.getDecoder().decode(clePublique), b64u(rep), b64u(sig))) {
+                return null;
+            }
+            String c = new String(b64u(rep), StandardCharsets.UTF_8);
+            String statut = Protocole.champTexte(c, "statut");
+            return h.equals(Protocole.champTexte(c, "h")) && machine.equals(Protocole.champTexte(c, "machine"))
+                    && ("connu".equals(statut) || "inconnu".equals(statut) || "revoque".equals(statut)) ? statut : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** Résultat d'une activation réussie : licence et signature à enregistrer. */
     public static final class Activation {
         public final String licence;

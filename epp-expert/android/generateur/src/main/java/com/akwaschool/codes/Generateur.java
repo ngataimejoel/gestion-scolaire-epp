@@ -45,6 +45,7 @@ import java.util.Locale;
  */
 public final class Generateur extends Activity {
     static final String[] TYPES = {"1an", "vie", "ens1an", "ensvie"};
+    static final String URL_SERVICE = "https://epp-expert-activation.netlify.app";
     static final String[] LIBELLES = {"École, 1 an", "École, à vie", "Enseignant seul, 1 an", "Enseignant seul, à vie"};
 
     private SharedPreferences prefs;
@@ -237,7 +238,8 @@ public final class Generateur extends Activity {
             String num = HorsLigne.serieCourt(code);
             String d16 = HorsLigne.grouper(HorsLigne.nettoyer(demande.getText().toString()));
             noter(new String[]{new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.ROOT).format(new Date()), num,
-                    LIBELLES[i], expire == null ? "" : expire.toString(), d16, note.getText().toString().trim()});
+                    LIBELLES[i], expire == null ? "" : expire.toString(), d16, note.getText().toString().trim(),
+                    TYPES[i], empreinte(code)});
             dernier[0] = code;
             sortie.setText(code + "\n\n" + LIBELLES[i] + (expire == null ? "" : ", expire le " + expire) + " · " + num);
             copier(code);
@@ -266,6 +268,14 @@ public final class Generateur extends Activity {
                     ecranPrincipal();
                 })
                 .setNegativeButton("Non", null).show());
+        bouton("Envoyer le registre (Internet)", v -> {
+            EditText jeton = new EditText(this);
+            jeton.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+            jeton.setHint("EPP_ADMIN_TOKEN");
+            new AlertDialog.Builder(this).setTitle("Jeton administrateur du service").setView(jeton)
+                    .setPositiveButton("Envoyer", (d, w) -> envoyerRegistre(jeton.getText().toString().trim()))
+                    .setNegativeButton("Annuler", null).show();
+        });
         bouton("Partager le registre", v -> {
             File f = registre();
             try {
@@ -277,6 +287,64 @@ public final class Generateur extends Activity {
         });
     }
 
+    /** Empreinte envoyée au service : le code lui-même ne quitte pas l'appareil. */
+    static String empreinte(String code) {
+        try {
+            StringBuilder sb = new StringBuilder();
+            for (byte b : java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(HorsLigne.nettoyer(code).getBytes(StandardCharsets.UTF_8))) {
+                sb.append(String.format("%02x", b & 0xFF));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * Envoie les empreintes des codes émis au service : un appareil qui retrouve Internet vérifie que son code y
+     * figure (un code pirate en est absent et finit refusé).
+     */
+    private void envoyerRegistre(String jeton) {
+        File f = registre();
+        if (!f.exists() || jeton.isEmpty()) {
+            return;
+        }
+        new Thread(() -> {
+            String resultat;
+            try {
+                StringBuilder corps = new StringBuilder("{\"codes\":[");
+                int n = 0;
+                for (String ligne : Files.readAllLines(f.toPath(), StandardCharsets.UTF_8)) {
+                    String[] c = ligne.split(";", -1);
+                    if (c.length < 8 || !c[7].matches("[0-9a-f]{64}")) {
+                        continue;
+                    }
+                    corps.append(n++ > 0 ? "," : "").append("{\"h\":\"").append(c[7]).append("\",\"type\":\"")
+                            .append(c[6]).append("\",\"emis\":\"").append(c[0], 0, Math.min(10, c[0].length()))
+                            .append("\"}");
+                }
+                java.net.HttpURLConnection h = (java.net.HttpURLConnection) new java.net.URL(URL_SERVICE
+                        + "/api/admin/hors-ligne").openConnection();
+                h.setRequestMethod("POST");
+                h.setDoOutput(true);
+                h.setConnectTimeout(15000);
+                h.setReadTimeout(30000);
+                h.setRequestProperty("Content-Type", "application/json");
+                h.setRequestProperty("Authorization", "Bearer " + jeton);
+                h.getOutputStream().write(corps.append("]}").toString().getBytes(StandardCharsets.UTF_8));
+                int st = h.getResponseCode();
+                resultat = st == 200 ? "Registre envoyé : " + n + " code(s)."
+                        : st == 401 ? "Jeton refusé par le service." : "Erreur du service (" + st + ").";
+                h.disconnect();
+            } catch (IOException e) {
+                resultat = "Service injoignable : vérifiez la connexion Internet.";
+            }
+            String r = resultat;
+            runOnUiThread(() -> message(r));
+        }).start();
+    }
+
     private File registre() {
         return new File(getFilesDir(), "registre.csv");
     }
@@ -285,7 +353,7 @@ public final class Generateur extends Activity {
         File f = registre();
         StringBuilder sb = new StringBuilder();
         if (!f.exists()) {
-            sb.append("Date;Numéro;Type;Expire le;Code de demande;Établissement ou note\n");
+            sb.append("Date;Numéro;Type;Expire le;Code de demande;Établissement ou note;Type (code);Empreinte\n");
         }
         for (int i = 0; i < colonnes.length; i++) {
             sb.append(i > 0 ? ";" : "").append(colonnes[i].replace(";", ",").replace("\n", " "));

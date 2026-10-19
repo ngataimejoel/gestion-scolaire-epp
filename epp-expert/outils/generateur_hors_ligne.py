@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import csv
+import hashlib
 import json
 import os
 import secrets
@@ -23,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from epp.core import hors_ligne  # noqa: E402
 
 NOM = "AKWA Codes hors ligne"
+URL_SERVICE = "https://epp-expert-activation.netlify.app"
 LIBELLES = {"1an": "École, 1 an", "vie": "École, à vie", "ens1an": "Enseignant seul, 1 an",
             "ensvie": "Enseignant seul, à vie"}
 ITERATIONS = 300_000
@@ -130,15 +132,49 @@ def generer(graine: bytes, demande: str, type_: str, aujourd_hui: date | None = 
             "serie": f"HC-{(v & ((1 << 105) - 1)) >> 85:07d}", "demande": hors_ligne.grouper(d)}
 
 
+def empreinte_code(code: str) -> str:
+    """Empreinte envoyée au service (le code lui-même ne quitte pas le poste)."""
+    return hashlib.sha256(hors_ligne.nettoyer(code).encode()).hexdigest()
+
+
 def noter(g: dict, note: str) -> None:
     f = dossier() / "registre.csv"
     neuf = not f.exists()
     with f.open("a", newline="", encoding="utf-8-sig") as o:
         w = csv.writer(o, delimiter=";")
         if neuf:
-            w.writerow(["Date", "Numéro", "Type", "Expire le", "Code de demande", "Établissement ou note"])
+            w.writerow(["Date", "Numéro", "Type", "Expire le", "Code de demande", "Établissement ou note",
+                        "Type (code)", "Empreinte"])
         w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), g["serie"], LIBELLES[g["type"]], g["expire"],
-                    g["demande"], note])
+                    g["demande"], note, g["type"], empreinte_code(g["code"])])
+
+
+def envoyer_registre(url: str, jeton: str, timeout: float = 30) -> dict:
+    """Envoie au service les empreintes des codes émis : une application qui retrouve Internet vérifie que son
+    code y figure (un code pirate en est absent). À faire dès qu'une connexion est disponible."""
+    import urllib.error
+    import urllib.request
+    f = dossier() / "registre.csv"
+    if not f.exists():
+        return {"recus": 0, "nouveaux": 0}
+    with f.open(newline="", encoding="utf-8-sig") as o:
+        lignes = list(csv.DictReader(o, delimiter=";"))
+    codes = [{"h": r["Empreinte"], "type": r["Type (code)"], "emis": r["Date"][:10], "note": r["Établissement ou note"]}
+             for r in lignes if r.get("Empreinte")]
+    total = {"recus": 0, "nouveaux": 0}
+    for i in range(0, len(codes), 500):
+        req = urllib.request.Request(url.rstrip("/") + "/api/admin/hors-ligne", method="POST",
+                                     data=json.dumps({"codes": codes[i:i + 500]}).encode(),
+                                     headers={"Content-Type": "application/json", "Authorization": f"Bearer {jeton}"})
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                rep = json.loads(r.read().decode())
+        except urllib.error.HTTPError as e:
+            raise Erreur("Jeton refusé par le service." if e.code == 401 else f"Erreur du service ({e.code}).") from None
+        except (urllib.error.URLError, TimeoutError, OSError):
+            raise Erreur("Service injoignable : vérifiez la connexion Internet.") from None
+        total = {k: total[k] + rep.get(k, 0) for k in total}
+    return total
 
 
 # ---------------------------------------------------------------------- fenêtre
@@ -253,6 +289,18 @@ def fenetre() -> int:  # pragma: no cover - interface
         afficher_numero()
         github()
 
+    def envoyer():
+        jeton = simpledialog.askstring(NOM, "Jeton administrateur du service (EPP_ADMIN_TOKEN) :", show="•",
+                                       parent=racine)
+        if not jeton:
+            return
+        try:
+            r = envoyer_registre(URL_SERVICE, jeton)
+        except Erreur as e:
+            messagebox.showerror(NOM, str(e))
+            return
+        messagebox.showinfo(NOM, f"Registre envoyé : {r['recus']} code(s), dont {r['nouveaux']} nouveau(x).")
+
     def exporter():
         f = filedialog.asksaveasfilename(defaultextension=".csv", initialfile="registre-codes-hors-ligne.csv")
         if f and (dossier() / "registre.csv").exists():
@@ -265,6 +313,7 @@ def fenetre() -> int:  # pragma: no cover - interface
     barre2 = ttk.Frame(cadre)
     barre2.pack(fill="x", side="bottom", pady=(8, 0))
     ttk.Button(barre2, text="Clé pour GitHub", command=github).pack(side="left")
+    ttk.Button(barre2, text="Envoyer le registre (Internet)", command=envoyer).pack(side="left", padx=8)
     ttk.Button(barre2, text="Changer de numéro de clé (fuite)", command=nouveau_numero).pack(side="right")
     ttk.Label(cadre, text="Code de licence à saisir sur l'appareil de l'école (copié automatiquement) :").pack(
         anchor="w")

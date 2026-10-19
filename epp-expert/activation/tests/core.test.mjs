@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import { test } from "node:test";
-import { activer, genererCodes, liberer, lister, memoire, nouveauCode, normaliserCode, revoquer, traiter,
+import { activer, controlerHorsLigne, empreinteCode, enregistrerHorsLigne, genererCodes, liberer, lister, memoire, nouveauCode, normaliserCode, revoquer, traiter,
   verifierLicence } from "../lib/core.mjs";
 
 const { privateKey } = crypto.generateKeyPairSync("ed25519");
@@ -102,4 +102,38 @@ test("codes enseignant : seulement pour l'espace enseignant", async () => {
   const [{ code: e }] = await genererCodes(s, { type: "1an" });
   assert.ok((await activer(s, privateKey, { code: e, machine: M2, espace: "enseignant" })).licence);
   assert.ok(c2);
+});
+
+test("codes hors ligne : registre du générateur, contrôle signé, annulation", async () => {
+  const ctx = { store: memoire(), privateKey, jetonAdmin: "x".repeat(40) };
+  const req = (chemin, corps, admin) => traiter(new Request(`https://a.example${chemin}`, { method: "POST",
+    headers: admin ? { authorization: `Bearer ${"x".repeat(40)}` } : {}, body: JSON.stringify(corps) }), ctx);
+  const h = empreinteCode("6jaz6-u99ea-ts7fm-yjpc7-fnnzc");
+  assert.equal(h, empreinteCode("6JAZ6U99EATS7FMYJPC7FNNZC"));
+  const controle = async () => {
+    const r = await (await req("/api/hors-ligne/controle", { h, machine: M1 })).json();
+    assert.ok(crypto.verify(null, Buffer.from(r.reponse, "base64url"), crypto.createPublicKey(privateKey),
+      Buffer.from(r.signature, "base64url")));
+    const c = lire(r.reponse);
+    assert.equal(c.h, h); assert.equal(c.machine, M1);
+    return c.statut;
+  };
+  assert.equal(await controle(), "inconnu");                                   // code pirate : absent du registre
+  assert.equal((await req("/api/admin/hors-ligne", { codes: [{ h, type: "1an", emis: "2026-10-19" }] })).status, 401);
+  const e = await (await req("/api/admin/hors-ligne", { codes: [{ h, type: "1an", emis: "2026-10-19", note: "EPP" }] }, true)).json();
+  assert.deepEqual(e, { recus: 1, nouveaux: 1 });
+  assert.equal((await (await req("/api/admin/hors-ligne", { codes: [{ h, type: "1an" }] }, true)).json()).nouveaux, 0);
+  assert.equal(await controle(), "connu");
+  assert.equal((await req("/api/admin/hors-ligne-revoquer", { code: "6JAZ6-U99EA-TS7FM-YJPC7-FNNZC" }, true)).status, 200);
+  assert.equal(await controle(), "revoque");
+  assert.equal((await req("/api/hors-ligne/controle", { h: "x", machine: M1 })).status, 400);
+  // appareil suspect : 31 jours après son premier code pirate, tout nouveau code pirate est annulé d'emblée
+  const s = memoire(), h2 = "c".repeat(64);
+  const statut = async (hh, t) => lire((await controlerHorsLigne(s, privateKey, { h: hh, machine: M2 }, t)).reponse).statut;
+  assert.equal(await statut(h2, new Date("2026-10-01T00:00:00Z")), "inconnu");
+  assert.equal(await statut("d".repeat(64), new Date("2026-10-20T00:00:00Z")), "inconnu");
+  assert.equal(await statut("e".repeat(64), new Date("2026-11-02T00:00:00Z")), "revoque");
+  await enregistrerHorsLigne(s, [{ h: "f".repeat(64), type: "vie" }]);
+  assert.equal(await statut("f".repeat(64), new Date("2026-11-02T00:00:00Z")), "connu");   // code acheté : accepté
+  assert.equal((await req("/api/admin/hors-ligne", { codes: [{ h: "zz", type: "1an" }] }, true)).status, 400);
 });

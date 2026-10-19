@@ -46,6 +46,11 @@
    <div id="blocNouveaux" hidden style="margin-top:12px"><div id="nouveaux"></div><div class="bar" style="margin-top:8px"><button class="sm" id="copier">Copier les codes</button></div></div>
   </section>
   <section class="card">
+   <h2>Annuler un code hors ligne</h2>
+   <form class="bar" id="fHorsLigne"><input id="codeHL" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX" required style="flex:1;min-width:200px;text-transform:uppercase" autocomplete="off"><button class="dng" type="submit">Annuler ce code</button></form>
+   <p style="color:var(--mut);margin:8px 0 0">Code remis par le générateur hors ligne (registre déjà envoyé) : l'appareil le refusera dès qu'il aura Internet.</p>
+  </section>
+  <section class="card">
    <div class="bar" style="justify-content:space-between;margin-bottom:10px">
     <h2 style="margin:0">Codes créés <span id="compte" class="tag"></span></h2>
     <div class="bar"><input id="filtre" placeholder="Chercher un code, une école…"><button class="sm" id="exporter">Exporter (CSV)</button><button class="sm" id="actualiser">Actualiser</button><button class="sm" id="deconnexion">Déconnexion</button></div>
@@ -88,6 +93,9 @@
  $('#liste').addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const a=b.dataset.a,c=b.dataset.c;
   if(!confirm(a==='liberer'?`Libérer ${c} ? Il pourra être activé sur un autre ordinateur.`:`Annuler ${c} ? Il ne pourra plus être activé.`))return;
   try{await api(a,{code:c});await charger();msg(a==='liberer'?'Code libéré.':'Code annulé.')}catch(err){msg(err.message,true)}});
+ $('#fHorsLigne').addEventListener('submit',async e=>{e.preventDefault();const c=$('#codeHL').value.trim().toUpperCase();
+  if(!confirm(`Annuler le code hors ligne ${c} ?`))return;
+  try{await api('hors-ligne-revoquer',{code:c});$('#codeHL').value='';msg('Code hors ligne annulé.')}catch(err){msg(err.message,true)}});
  $('#filtre').addEventListener('input',afficher);
  $('#actualiser').addEventListener('click',()=>charger().catch(e=>msg(e.message,true)));
  $('#deconnexion').addEventListener('click',()=>{deconnecter();msg('Déconnecté.')});
