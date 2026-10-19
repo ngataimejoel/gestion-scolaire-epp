@@ -609,9 +609,17 @@ public class Pont {
         }
     }
 
-    /** Nouveau code de secours (12 caractères) : renvoyé une seule fois, à noter ; seule son empreinte est gardée. */
+    /**
+     * Nouveau code de secours (12 caractères) : renvoyé une seule fois, à noter ; seule son empreinte est gardée.
+     * Le mot de passe administrateur est exigé ici même, sinon un script de la page pourrait créer un code puis
+     * s'en servir pour changer le mot de passe (recupererAdmin).
+     */
     @JavascriptInterface
-    public String nouveauCodeSecours() {
+    public String nouveauCodeSecours(String mdp) {
+        return verifierAdmin(mdp) ? genererSecours() : null;
+    }
+
+    private String genererSecours() {
         byte[] a = Protocole.aleatoire(12);
         StringBuilder b = new StringBuilder();
         for (int i = 0; i < 12; i++) {
@@ -652,7 +660,7 @@ public class Pont {
         } catch (GeneralSecurityException e) {
             return erreur(0, "Enregistrement impossible.", null);
         }
-        String s = nouveauCodeSecours();
+        String s = genererSecours();
         return "{\"ok\":true,\"secours\":" + (s == null ? "null" : Protocole.jsonTexte(s)) + "}";
     }
 

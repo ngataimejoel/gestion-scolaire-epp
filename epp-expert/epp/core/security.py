@@ -227,10 +227,23 @@ def admin_count(db: Database) -> int:
         "WHERE r.code='ADMIN' AND u.actif=1", default=0)
 
 
+ESSAIS_ADMIN = 5           # échecs permis avant le blocage...
+BLOCAGE_ADMIN_MIN = 15     # ...pendant ce nombre de minutes (contre les essais en série depuis un téléphone)
+
+
 def verifier_admin(db: Database, s: Session, password: str, motif: str = "") -> str | None:
     """Mot de passe d'un administrateur actif (opération protégée) : renvoie son identifiant, ou None.
 
-    Chaque tentative est inscrite au journal, réussie ou non."""
+    Chaque tentative est inscrite au journal, réussie ou non. Après ESSAIS_ADMIN échecs récents du même
+    utilisateur sans réussite, toute tentative est refusée sans vérification pendant BLOCAGE_ADMIN_MIN minutes."""
+    echecs = db.scalar(
+        "SELECT COUNT(*) FROM journal WHERE utilisateur=? AND action='AUTORISATION_ADMIN_ECHEC' "
+        "AND horodatage >= datetime('now', 'localtime', ?) AND id > COALESCE((SELECT MAX(id) FROM journal "
+        "WHERE utilisateur=? AND action='AUTORISATION_ADMIN'), 0)",
+        (s.login, f"-{BLOCAGE_ADMIN_MIN} minutes", s.login), default=0)
+    if echecs >= ESSAIS_ADMIN:
+        log(db, s.login, "AUTORISATION_ADMIN_BLOQUEE", "utilisateur", motif)
+        return None
     for r in db.query("SELECT u.login, u.hash FROM utilisateur u JOIN role r ON r.id=u.role_id "
                       "WHERE r.code='ADMIN' AND u.actif=1 ORDER BY u.login"):
         if password and verify_password(password, r["hash"]):

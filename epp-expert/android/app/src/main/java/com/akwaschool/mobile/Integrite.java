@@ -1,7 +1,6 @@
 package com.akwaschool.mobile;
 
 import android.content.Context;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
@@ -20,7 +19,7 @@ final class Integrite {
     private Integrite() {}
 
     static boolean conforme(Context c) {
-        if ((c.getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0) return true;
+        if (BuildConfig.DEBUG) return true;
         try {
             for (Signature s : certificats(c)) {
                 if (EMPREINTE.equals(hex(MessageDigest.getInstance("SHA-256").digest(s.toByteArray())))) return true;
