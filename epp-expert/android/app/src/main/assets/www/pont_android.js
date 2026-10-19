@@ -88,19 +88,20 @@
  const CH_DIR=[['director','Nom et prénoms du directeur'],['dirTel','Contact du directeur']];
  const CH_IEPP=[['secteur','Secteur pédagogique'],['iepp','Inspection (IEPP), ex. OUANINOU'],['inspNom','Nom et prénoms de l’inspecteur'],['inspTel','Contact de l’inspecteur'],['cpNom','Nom et prénoms du conseiller pédagogique'],['cpTel','Contact du conseiller pédagogique']];
  // nom de l'école (EPP …) et DRENAET : demandés à la création, sans valeur par défaut
- const CH_ECOLE=[['name','Nom de l’école, ex. EPP OUANINOU 2'],['drenaet','DRENAET, ex. TOUBA']];
+ const CH_ECOLE=[['name','Nom de l’école (EPP … pour une école publique)'],['drenaet','DRENAET, ex. TOUBA']];
+ const STATUT=()=>`<div class="niv">${statutChoix()}</div>`;
  const champs=L=>L.map(([k,l])=>`<input name="${k}" placeholder="${l}"${/Tel$/.test(k)?' type="tel" inputmode="tel" autocomplete="off"':k==='name'||k==='drenaet'?' autocapitalize="characters"':''}>`).join('');
  // contacts : +225 et 10 chiffres commençant par 07, 05 ou 01 ; nom de l'école commençant par EPP
  function lireChamps(f,L,err){const o={};for(const[k,l]of L){const v=String(f.get(k)||'').trim(),lib=l.replace(/,.*$/,'');if(!v){err(lib+' : à renseigner.');return null}
    if(/Tel$/.test(k)){if(!telCI(v)){err(lib+' : '+TEL_ERR);return null}o[k]=telCI(v)}
-   else if(k==='name'){if(!ecoleNom(v)){err('Le nom de l’école doit commencer par EPP (ex. EPP OUANINOU 2).');return null}o[k]=ecoleNom(v)}
+   else if(k==='name'){const pr=f.get('statut')==='privee';if(!ecoleNom(v,pr)){err(ECOLE_ERR(pr));return null}o[k]=ecoleNom(v,pr);o.statut=pr?'privee':'publique'}
    else if(/Nom$|^director$/.test(k)){const e=nomErr(v,lib);if(e){err(e);return null}o[k]=v}
    else if(k==='drenaet'){const d=drenaetDe(v);if(!d){err(lib+' : à renseigner.');return null}Object.assign(o,d)}
    else o[k]=v}return o}
  function appliquerEcole(o){const sc=S.school;Object.assign(sc,o);const lieu=String(o.iepp||'').replace(/^IEPP\s+/i,'').trim().toUpperCase();
   if(lieu){sc.iepp='IEPP '+lieu;sc.inspection="INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE DE "+lieu}}
  function creerEnseignant(){
-  const f=ecran(`<p><b>Espace enseignant.</b> Vous tenez votre classe seul ; le directeur pourra le rattacher plus tard à l’école.</p><select name="civ"><option value="">Civilité</option>${CIVS.map(c=>`<option>${c}</option>`).join('')}</select><input name="nom" placeholder="Vos nom et prénoms" autocomplete="name"><select name="cls">${CLASSES.map(c=>`<option>${c}</option>`).join('')}</select>${champs(CH_ECOLE)}${champs(CH_DIR)}${champs(CH_IEPP)}
+  const f=ecran(`<p><b>Espace enseignant.</b> Vous tenez votre classe seul ; le directeur pourra le rattacher plus tard à l’école.</p><select name="civ"><option value="">Civilité</option>${CIVS.map(c=>`<option>${c}</option>`).join('')}</select><input name="nom" placeholder="Vos nom et prénoms" autocomplete="name"><select name="cls">${CLASSES.map(c=>`<option>${c}</option>`).join('')}</select>${STATUT()}${champs(CH_ECOLE)}${champs(CH_DIR)}${champs(CH_IEPP)}
 <input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Créer mon espace</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
    const nom=String(f.get('nom')).trim(),a=f.get('a'),b=f.get('b');
    if(!CIVS.includes(f.get('civ')))return err('Choisissez votre civilité : M., Mme ou Mlle.');
@@ -129,7 +130,7 @@
   if(p1){f.querySelector('[name=civ]').value=civDe(p1.director);f.querySelector('[name=director]').value=sansCiv(p1.director);f.querySelector('[name=dirTel]').value=p1.dirTel||''}
  }
  function creerDirecteur2(p1){
-  const f=ecran(`<p>Page 2 sur 2 : renseignements de l’école et de l’inspection.</p>${champs(CH_ECOLE)}<p class="sub">Niveaux de l’école :</p><div class="niv">${TOUS_NIVEAUX.map(c=>`<label><input type="checkbox" name="niveaux" value="${c}" checked> ${c}</label>`).join('')}</div>${champs(CH_IEPP)}<button class="btn pri">Créer</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
+  const f=ecran(`<p>Page 2 sur 2 : renseignements de l’école et de l’inspection.</p>${STATUT()}${champs(CH_ECOLE)}<p class="sub">Niveaux de l’école :</p><div class="niv">${TOUS_NIVEAUX.map(c=>`<label><input type="checkbox" name="niveaux" value="${c}" checked> ${c}</label>`).join('')}</div>${champs(CH_IEPP)}<button class="btn pri">Créer</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
    const niveaux=f.getAll('niveaux');if(!niveaux.length)return err('Cochez au moins un niveau.');
    const o=lireChamps(f,[...CH_ECOLE,...CH_IEPP],err);if(!o)return;o.niveaux=niveaux;
    if(!N.definirAdmin(p1.a,''))return err('Enregistrement impossible.');

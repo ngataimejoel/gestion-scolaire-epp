@@ -89,13 +89,18 @@ class PremierLancement(_Base):
         for k, e in self.champs.items():
             if k.endswith("Tel"):
                 e.setPlaceholderText("+225 07 00 00 00 00")
-        self.champs["name"].setPlaceholderText("ex. EPP OUANINOU 2")
+        self.champs["name"].setPlaceholderText("EPP … pour une école publique")
+        self.statut = QComboBox()
+        self.statut.addItem("École publique", "publique")
+        self.statut.addItem("École privée", "privee")
         self.champs["drenaet"].setPlaceholderText("ex. TOUBA")
         self.form.addRow("Utilisateur", self.qui)
         self.form.addRow("Votre civilité", self.civ)
         self.form.addRow("Vos nom et prénoms", self.nom)
         self.form.addRow("Votre classe", self.classe)
         for k, lib in CHAMPS:
+            if k == "name":
+                self.form.addRow("Statut de l'école", self.statut)
             self.form.addRow(lib, self.champs[k])
         self.form.addRow("Mot de passe", self.p1)
         self.form.addRow("Confirmation", self.p2)
@@ -124,6 +129,7 @@ class PremierLancement(_Base):
         for k, e in self.champs.items():
             self.form.setRowVisible(e, un == (k in self.PAGE1))
         self.form.setRowVisible(self.niveaux, not un and not solo)
+        self.form.setRowVisible(self.statut, not un)
         self.retour.setVisible(not un)
         self.boutons.button(QDialogButtonBox.Ok).setText("Suivant" if un else "Créer")
         self.texte.setText(self.texte.text().split("<br>")[0] + "<br>" + (
@@ -139,8 +145,9 @@ class PremierLancement(_Base):
                 raise Erreur(f"{lib} : à renseigner.")
             if k.endswith("Tel") and not tel_ci(v):
                 raise Erreur(f"{lib} : {TEL_ERR}")
-            if k == "name" and not ecole_nom(v):
-                raise Erreur("Le nom de l'école doit commencer par EPP (ex. EPP OUANINOU 2).")
+            if k == "name" and not ecole_nom(v, self.statut.currentData() == "privee"):
+                raise Erreur("Saisissez le nom de l'école." if self.statut.currentData() == "privee"
+                             else "Une école publique a un nom commençant par EPP (ex. EPP OUANINOU 2).")
             if k == "drenaet" and not drenaet_de(v):
                 raise Erreur(f"{lib} : à renseigner.")
             if k in ("director", "inspNom", "cpNom") and nom_err(v, lib):
@@ -180,6 +187,7 @@ class PremierLancement(_Base):
         else:
             code = self.st.creer_admin(self.p1.text())
         champs = {k: e.text() for k, e in self.champs.items()}
+        champs["statut"] = self.statut.currentData()
         if self.qui.currentData() != "solo":
             champs["director"] = avec_civilite(self.civ.currentData(), champs["director"])
             champs["niveaux"] = self._niveaux()

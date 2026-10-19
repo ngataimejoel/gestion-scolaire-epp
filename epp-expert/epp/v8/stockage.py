@@ -89,10 +89,10 @@ def tel_ci(v: str) -> str | None:
     return "+225 " + " ".join(n[i:i + 2] for i in range(0, 10, 2))
 
 
-def ecole_nom(v: str) -> str | None:
-    """Nom de l'école en majuscules ; None s'il ne commence pas par EPP."""
+def ecole_nom(v: str, prive: bool = False) -> str | None:
+    """Nom de l'école en majuscules ; None si une école publique ne commence pas par EPP (ou nom trop court)."""
     n = " ".join(str(v or "").split()).upper()
-    return n if re.match(r"^EPP\s+\S", n) else None
+    return n if (len(n) >= 3 if prive else re.match(r"^EPP\s+\S", n)) else None
 
 
 def drenaet_de(v: str) -> dict | None:
@@ -253,8 +253,8 @@ class Stockage:
         for k in ("dirTel", "inspTel", "cpTel"):
             if tel_ci(sc.get(k, "")):
                 sc[k] = tel_ci(sc[k])
-        if ecole_nom(sc.get("name", "")):
-            sc["name"] = ecole_nom(sc["name"])
+        if ecole_nom(sc.get("name", ""), sc.get("statut") == "privee"):
+            sc["name"] = ecole_nom(sc["name"], sc.get("statut") == "privee")
         if "drenaet" in champs and drenaet_de(sc.get("drenaet", "")):
             sc.update(drenaet_de(sc["drenaet"]))
         lieu = re.sub(r"^IEPP\s+", "", sc.get("iepp", ""), flags=re.I).strip().upper()
