@@ -161,6 +161,8 @@ td.r,th.r{text-align:right}td.c,th.c{text-align:center}
 /* ---------- Tableau de bord ---------- */
 .hero{position:relative;overflow:hidden;border-radius:18px;padding:22px 24px;background:var(--acc-l);color:#fff;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:14px}
 .hero::after{content:"";position:absolute;right:-60px;top:-80px;width:280px;height:280px;border-radius:50%;border:38px solid var(--org);opacity:.22;pointer-events:none}
+.hero .hst{position:absolute;top:10px;right:12px;z-index:2;display:inline-flex;align-items:center;gap:6px;background:#ffffff26;border:1px solid #ffffff45;color:#fff;padding:4px 11px;border-radius:99px;font-size:12.5px;font-weight:650;text-decoration:none}.hero .hst:hover{background:#ffffff40}.hero .hst .i{width:15px;height:15px}
+@media (max-width:900px){.hero{padding-top:44px}}
 .hero h2{margin:0;font-size:26px;letter-spacing:-.4px}.hero p{margin:4px 0 10px;opacity:.85}
 .hero .hc{display:flex;gap:6px;flex-wrap:wrap}
 .hero .hc span{background:#ffffff22;border:1px solid #ffffff30;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:600}
@@ -280,7 +282,7 @@ dialog.wide{width:min(820px,96vw)}
  .bnav a.on{color:var(--acc)}
  .g2,.s2{grid-template-columns:minmax(0,1fr);grid-column:auto}.fg{grid-template-columns:1fr}
 }
-@media (max-width:560px){.g4,.g3{grid-template-columns:minmax(0,1fr)}.hero{padding:18px}.hero h2{font-size:22px}.kv{font-size:26px}.dmeta{grid-template-columns:1fr}}
+@media (max-width:560px){.g4,.g3{grid-template-columns:minmax(0,1fr)}.hero{padding:44px 18px 18px}.hero h2{font-size:22px}.kv{font-size:26px}.dmeta{grid-template-columns:1fr}}
 @media print{
  html,body{background:#fff!important;height:auto!important;overflow:visible!important}body{color:#000}
  .app,.bnav,.toast,dialog,.drawer,.scrim,.tip{display:none!important}
@@ -1994,7 +1996,7 @@ pages.accueil=()=>{
   ...(nextEv?[`<button data-act="go" data-to="notes-saisie" data-set='{"nEv":"${nextEv.n}"}'>${dt(nextEv.d)}<span><b>${EV_GEN[nextEv.n-1]}</b><br><span class="sub">Date prévue au calendrier de l’application</span></span><span class="m"><span class="tag acc">Évaluation</span></span></button>`]:[]),
   ...up.map(c=>`<button data-act="go" data-to="parametres" data-set='{}'>${dt(c.du)}<span><b>${esc(c.lib)}</b><br><span class="sub">${c.au?`du ${fmtDate(c.du)} au ${fmtDate(c.au)}`:fmtDate(c.du)}</span></span><span class="m"><span class="tag">${c.au?'Congés':'Férié'}</span></span></button>`)].join('');
  const h=new Date().getHours(),evShort=EV_GEN[ev-1].split(' /')[0];
- return `<section class="hero"><div style="position:relative;z-index:1"><h2>${h<13?'Bonjour':'Bon après-midi'}, ${esc(S.school.director)}</h2><p>${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${esc(S.school.name)}</p>
+ return `<section class="hero"><a class="hst" href="#admin-stats" data-act="go" data-to="admin-stats" data-set='{}' title="Effectifs, réussite, âges, extraits, fonctionnement des classes et infrastructures">${ic('chart')}Statistiques</a><div style="position:relative;z-index:1"><h2>${h<13?'Bonjour':'Bon après-midi'}, ${esc(S.school.director)}</h2><p>${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})} · ${esc(S.school.name)}</p>
   <div class="hc"><span>Année ${esc(S.school.year)}</span><span>${esc(evShort)}</span><span>${esc(S.school.iepp)}</span><span class="${lic.ok?'':'o'}">${lic.lab}</span></div></div>
   <div class="qa"><button class="o" data-act="addStu">${ic('plus')}Inscrire un élève</button><button data-act="go" data-to="absences-appel" data-set='{"aDate":"${today}"}'>${ic('clip')}Faire l’appel</button><button data-act="go" data-to="notes-saisie" data-set='{}'>${ic('edit')}Saisir des notes</button><button data-act="go" data-to="admin-rapports" data-set='{}'>${ic('book')}Rapports</button></div></section>
  <div class="grid g4 mb">
@@ -2237,6 +2239,88 @@ function fonctStats(){const ens=S.teachers.filter(t=>clsDe(t).length),L=FONCTS.m
 function blocFonct(){const L=fonctStats();return `<table class="small"><thead><tr><th>Type de fonctionnement</th>${L.map(x=>`<th>${esc(x.l)}</th>`).join('')}<th>Total</th></tr></thead><tbody>
  <tr><td>Nombre de classes</td>${L.map(x=>`<td>${x.ens.length}</td>`).join('')}<td><b>${L.reduce((a,x)=>a+x.ens.length,0)}</b></td></tr>
  <tr><td>Niveaux concernés</td>${L.map(x=>`<td>${esc(x.ens.map(clsTxt).join(' ; '))||'—'}</td>`).join('')}<td></td></tr></tbody></table>${L.some(x=>x.k==='autre'&&x.ens.length)?`<p class="note-small">Autre : ${esc(L.find(x=>x.k==='autre').ens.map(t=>`${clsTxt(t)} (${t.fonctAutre})`).join(' ; '))}</p>`:''}`}
+/* ---------- Rapport d'infrastructures (S.infra, saisi dans Statistiques) ---------- */
+const INFRA0={bat:{agglo:'',prov:''},salles:{agglo:'',prov:''},
+ toil:{existe:'',eleves:{type:'',n:'',fonct:'',sep:'',nf:'',ng:''},ens:{type:'',n:'',fonct:'',sep:''}},
+ eau:{existe:'',forage:{n:'',fonct:''},puits:{n:'',fonct:''},robinet:{n:'',fonct:''}},
+ elec:{village:'',ecole:'',salles:''},loge:{existe:'',n:''},
+ mob:{tb:'',tbBon:'',bureaux:'',tableaux:''},cant:{existe:'',fonct:'',ration:'',partenaire:''},
+ locaux:{bureau:'',magasin:'',biblio:'',info:'',cloture:'',sport:''},manuels:{},
+ acces:{dist:'',route:'',reseau:'',rampe:'',pharma:''},maj:''};
+function infra(){const fus=(a,b)=>{for(const k in b){const v=b[k];if(v&&typeof v==='object'&&a[k]&&typeof a[k]==='object')fus(a[k],v);else a[k]=v}return a};return S.infra=fus(JSON.parse(JSON.stringify(INFRA0)),S.infra||{})}
+const TOIL_T=['Latrines simples','Latrines améliorées (VIP)','WC avec chasse d’eau','Autre'];
+const EAUX=[['forage','Forage (pompe)'],['puits','Puits'],['robinet','Robinet']];
+const LOCAUX=[['bureau','Bureau du directeur'],['magasin','Magasin'],['biblio','Bibliothèque'],['info','Salle informatique'],['cloture','Clôture',1],['sport','Terrain de sport']];
+const ON=[['oui','Oui'],['non','Non']],ONP=[...ON,['partiel','En partie']];
+const ROUTES=[['bonne','Bonne'],['praticable','Praticable'],['difficile','Difficile en saison des pluies']],RESEAUX=[['bon','Bon'],['faible','Faible'],['aucun','Aucun']];
+const PARTS=['État (DCS)','PAM','Communauté (COGES)','Autre'];
+const iN=v=>v===''||v==null?null:Math.max(0,parseInt(v,10)||0);
+const iT=v=>v===''||v==null?'—':esc(String(v).replace('.',','));
+const iL=(L,v)=>(L.find(a=>a[0]===v)||[,'—'])[1];
+const iSom=(...v)=>v.some(x=>iN(x)!=null)?v.reduce((a,x)=>a+(iN(x)||0),0):null;
+const iRat=(a,b)=>a&&b?String(Math.round(a/b*10)/10).replace('.',','):'—';
+const iNF=(n,f)=>{const a=iN(n),b=iN(f);return [iT(n),iT(f),a!=null&&b!=null?Math.max(0,a-b):'—']};
+const iTab=(h,rows)=>`<table class="small">${h?`<thead><tr>${h.map(x=>`<th>${x}</th>`).join('')}</tr></thead>`:''}<tbody>${rows.map(r=>`<tr>${r.map((x,i)=>i?`<td>${x}</td>`:`<td><b>${x}</b></td>`).join('')}</tr>`).join('')}</tbody></table>`;
+const iVide=v=>`<p class="sub" style="margin:4px 0">${v==='non'?'Aucun à l’école.':'Non renseigné.'}</p>`;
+function infraSections(I){
+ const act=active(),eff=act.length,fil=act.filter(s=>s.sexe==='Féminin').length,ens=S.teachers.filter(t=>clsDe(t).length).length,T=I.toil,E=I.eau,el=T.eleves;
+ const sal=iSom(I.salles.agglo,I.salles.prov),tb=iN(I.mob.tb),bon=iN(I.mob.tbBon),cab=T.existe==='oui'?iN(el.fonct):null;
+ const sep=(o,a,b,cnt)=>o.sep==='oui'?`Oui (${a} / ${b}${cnt?` : ${iT(o.nf)} / ${iT(o.ng)}`:''})`:iL(ON,o.sep);
+ const man=CLASSES.map(c=>{const m=I.manuels[c]||{},n=act.filter(s=>s.classe===c).length;return [c,n,iT(m.lec),iRat(n,iN(m.lec)),iT(m.mat),iRat(n,iN(m.mat))]});
+ const ml=iSom(...CLASSES.map(c=>(I.manuels[c]||{}).lec)),mm=iSom(...CLASSES.map(c=>(I.manuels[c]||{}).mat));
+ const R=[['Élèves par salle de classe',iRat(eff,sal)],['Élèves par enseignant',iRat(eff,ens)],['Élèves par table-banc',iRat(eff,tb)],['Élèves par cabine de toilette fonctionnelle',iRat(eff,cab)]];
+ if(T.existe==='oui'&&el.sep==='oui')R.push(['Filles par cabine des filles',iRat(fil,iN(el.nf))],['Garçons par cabine des garçons',iRat(eff-fil,iN(el.ng))]);
+ R.push(['Élèves par manuel de lecture',iRat(eff,ml)],['Élèves par manuel de mathématiques',iRat(eff,mm)]);
+ return [
+  ['Bâtiments et salles de classe',iTab(['','En dur (agglos)','Matériaux provisoires','Total'],[['Bâtiments',iT(I.bat.agglo),iT(I.bat.prov),iT(iSom(I.bat.agglo,I.bat.prov))],['Salles de classe',iT(I.salles.agglo),iT(I.salles.prov),iT(sal)]])],
+  ['Toilettes',T.existe!=='oui'?iVide(T.existe):iTab(['Pour','Type','Cabines','Fonctionnelles','Non fonctionnelles','Séparées'],[['Élèves',esc(el.type||'—'),...iNF(el.n,el.fonct),sep(el,'filles','garçons',1)],['Enseignants',esc(T.ens.type||'—'),...iNF(T.ens.n,T.ens.fonct),sep(T.ens,'hommes','femmes')]])],
+  ['Points d’eau',E.existe!=='oui'?iVide(E.existe):iTab(['Type','Nombre','Fonctionnels','Non fonctionnels'],[...EAUX.map(([k,l])=>[l,...iNF(E[k].n,E[k].fonct)]),['Total',...iNF(iSom(...EAUX.map(([k])=>E[k].n)),iSom(...EAUX.map(([k])=>E[k].fonct)))]])],
+  ['Électricité',iTab(null,[['Dans le village',iL(ON,I.elec.village)],['À l’école',iL(ON,I.elec.ecole)],['Dans les salles de classe',iL(ONP,I.elec.salles)]])],
+  ['Logements des enseignants',iTab(null,[['Logements',I.loge.existe==='oui'?`Oui : ${iT(I.loge.n)}`:iL(ON,I.loge.existe)]])],
+  ['Mobilier',iTab(null,[['Tables-bancs',iT(tb)],['Dont en bon état',iT(bon)],['Dont en mauvais état',tb!=null&&bon!=null?Math.max(0,tb-bon):'—'],['Bureaux de maître',iT(I.mob.bureaux)],['Tableaux',iT(I.mob.tableaux)]])],
+  ['Cantine scolaire',I.cant.existe!=='oui'?iVide(I.cant.existe):iTab(null,[['Fonctionnelle',iL(ON,I.cant.fonct)],['Rationnaires',iT(I.cant.ration)],['Partenaire',esc(I.cant.partenaire||'—')]])],
+  ['Autres locaux',iTab(null,LOCAUX.map(([k,l,p])=>[l,iL(p?ONP:ON,I.locaux[k])]))],
+  ['Manuels scolaires',iTab(['Niveau','Élèves','Manuels de lecture','Élèves par manuel','Manuels de mathématiques','Élèves par manuel'],[...man,['Total',eff,iT(ml),iRat(eff,ml),iT(mm),iRat(eff,mm)]])],
+  ['Accès et sécurité',iTab(null,[['Distance jusqu’à l’IEPP',I.acces.dist===''?'—':`${iT(I.acces.dist)} km`],['État de la route',iL(ROUTES,I.acces.route)],['Réseau téléphone',iL(RESEAUX,I.acces.reseau)],['Rampe pour handicapés',iL(ON,I.acces.rampe)],['Boîte à pharmacie',iL(ON,I.acces.pharma)]])],
+  ['Ratios',iTab(['Indicateur','Valeur'],R)]]}
+function infraForm(I){
+ const num=(n,v,l,dec)=>field(l,`<input name="${n}" type="number" min="0"${dec?' step="0.1" inputmode="decimal"':' step="1" inputmode="numeric"'} value="${esc(v)}">`);
+ const sel=(n,v,l,L,tog)=>field(l,`<select name="${n}"${tog?' data-ch="infraTog"':''}><option value="">Choisir</option>${opts(L,v)}</select>`);
+ const tit=t=>`<div class="full kl" style="margin-top:8px;font-size:14px;color:var(--ink)">${t}</div>`,sous=t=>`<div class="full kl">${t}</div>`;
+ const si=(n,h)=>`<div class="full fg" data-si="${n}">${h}</div>`,T=I.toil,el=T.eleves,E=I.eau,m=c=>I.manuels[c]||{};
+ return `<div class="fg">${tit('Bâtiments et salles de classe')}${num('bat.agglo',I.bat.agglo,'Bâtiments en dur (agglos)')}${num('bat.prov',I.bat.prov,'Bâtiments en matériaux provisoires')}${num('salles.agglo',I.salles.agglo,'Salles de classe en dur')}${num('salles.prov',I.salles.prov,'Salles de classe en matériaux provisoires')}
+ ${tit('Toilettes')}${sel('toil.existe',T.existe,'L’école a-t-elle des toilettes ?',ON,1)}${si('toil.existe',`${sous('Toilettes des élèves')}${sel('toil.eleves.type',el.type,'Type',TOIL_T)}${num('toil.eleves.n',el.n,'Nombre de cabines')}${num('toil.eleves.fonct',el.fonct,'Dont fonctionnelles')}${sel('toil.eleves.sep',el.sep,'Séparées filles / garçons ?',ON,1)}${si('toil.eleves.sep',num('toil.eleves.nf',el.nf,'Cabines des filles')+num('toil.eleves.ng',el.ng,'Cabines des garçons'))}${sous('Toilettes des enseignants')}${sel('toil.ens.type',T.ens.type,'Type',TOIL_T)}${num('toil.ens.n',T.ens.n,'Nombre de cabines')}${num('toil.ens.fonct',T.ens.fonct,'Dont fonctionnelles')}${sel('toil.ens.sep',T.ens.sep,'Séparées hommes / femmes ?',ON)}`)}
+ ${tit('Points d’eau')}${sel('eau.existe',E.existe,'L’école a-t-elle un point d’eau ?',ON,1)}${si('eau.existe',EAUX.map(([k,l])=>num(`eau.${k}.n`,E[k].n,`${l} : nombre`)+num(`eau.${k}.fonct`,E[k].fonct,`${l} : dont fonctionnels`)).join(''))}
+ ${tit('Électricité')}${sel('elec.village',I.elec.village,'Dans le village',ON)}${sel('elec.ecole',I.elec.ecole,'À l’école',ON)}${sel('elec.salles',I.elec.salles,'Dans les salles de classe',ONP)}
+ ${tit('Logements des enseignants')}${sel('loge.existe',I.loge.existe,'Y a-t-il des logements ?',ON,1)}${si('loge.existe',num('loge.n',I.loge.n,'Nombre de logements'))}
+ ${tit('Mobilier')}${num('mob.tb',I.mob.tb,'Tables-bancs')}${num('mob.tbBon',I.mob.tbBon,'Dont en bon état')}${num('mob.bureaux',I.mob.bureaux,'Bureaux de maître')}${num('mob.tableaux',I.mob.tableaux,'Tableaux')}
+ ${tit('Cantine scolaire')}${sel('cant.existe',I.cant.existe,'Y a-t-il une cantine ?',ON,1)}${si('cant.existe',sel('cant.fonct',I.cant.fonct,'Fonctionnelle ?',ON)+num('cant.ration',I.cant.ration,'Nombre de rationnaires')+sel('cant.partenaire',I.cant.partenaire,'Partenaire',PARTS))}
+ ${tit('Autres locaux')}${LOCAUX.map(([k,l,p])=>sel('locaux.'+k,I.locaux[k],l,p?ONP:ON)).join('')}
+ ${tit('Manuels scolaires par niveau')}${CLASSES.map(c=>num(`manuels.${c}.lec`,m(c).lec,`${c} : manuels de lecture`)+num(`manuels.${c}.mat`,m(c).mat,`${c} : manuels de mathématiques`)).join('')}
+ ${tit('Accès et sécurité')}${num('acces.dist',I.acces.dist,'Distance jusqu’à l’IEPP (km)',1)}${sel('acces.route',I.acces.route,'État de la route',ROUTES)}${sel('acces.reseau',I.acces.reseau,'Réseau téléphone',RESEAUX)}${sel('acces.rampe',I.acces.rampe,'Rampe pour handicapés',ON)}${sel('acces.pharma',I.acces.pharma,'Boîte à pharmacie',ON)}</div>`}
+function infraTog(fm){$$('[data-si]',fm).forEach(d=>{const e=fm.elements[d.dataset.si];d.style.display=e&&e.value==='oui'?'':'none'})}
+// Lit le formulaire : renvoie le nouvel objet, ou un message d'erreur
+function infraLire(f){const I=JSON.parse(JSON.stringify(infra()));
+ for(const[k,v]of f.entries()){const p=k.split('.');let o=I;p.slice(0,-1).forEach(x=>{o=o[x]=o[x]||{}});o[p.at(-1)]=String(v).trim()}
+ const L=[[I.toil.eleves,'Toilettes des élèves',],[I.toil.ens,'Toilettes des enseignants'],...EAUX.map(([k,l])=>[I.eau[k],l])];
+ for(const[o,l]of L)if((iN(o.fonct)||0)>(iN(o.n)||0))return `${l} : le nombre « dont fonctionnels » dépasse le nombre total.`;
+ const el=I.toil.eleves;if(el.sep==='oui'&&(iN(el.nf)||0)+(iN(el.ng)||0)>(iN(el.n)||0))return 'Toilettes des élèves : cabines des filles et des garçons supérieures au total.';
+ if((iN(I.mob.tbBon)||0)>(iN(I.mob.tb)||0))return 'Tables-bancs : plus en bon état que le total.';
+ I.maj=today;return I}
+// Synthèse d'une page pour l'IEPP : chiffres clés de l'école
+function synthIepp(){const sc=S.school,I=infra(),act=active(),ev=sc.evalCourante,f=act.filter(s=>s.sexe==='Féminin').length,ens=S.teachers.filter(t=>clsDe(t).length);
+ const rs=CLASSES.map(c=>reussite(c,ev)),ok=rs.reduce((a,r)=>a+r.ok,0),n=rs.reduce((a,r)=>a+r.n,0),T=I.toil,E=I.eau;
+ const hom=ens.filter(t=>civDe(t.nom)==='M.').length,fem=ens.filter(t=>/^(Mme|Mlle)$/.test(civDe(t.nom))).length;
+ const sal=iSom(I.salles.agglo,I.salles.prov),eaux=iSom(...EAUX.map(([k])=>E[k].n)),eauxF=iSom(...EAUX.map(([k])=>E[k].fonct));
+ const x=(...r)=>r.map(([a,b])=>`<tr><td><b>${a}</b></td><td>${b}</td></tr>`).join('');
+ return `${titreDoc('FICHE DE SYNTHÈSE DE L’ÉCOLE',`Année scolaire ${esc(sc.year)} · à l’attention de l’IEPP`)}
+ <h3>1. IDENTIFICATION</h3><table class="small"><tbody>${x(['École',`${esc(sc.name||'—')} (${sc.statut==='privee'?'privée':'publique'})`],['IEPP',esc(sc.iepp||'—')],['DRENAET',esc(sc.drenaet||'—')],['Directeur',`${esc(sc.director||'—')}${sc.dirTel?` · ${esc(sc.dirTel)}`:''}`],['Localité',esc(sc.localite||'—')])}</tbody></table>
+ <h3>2. ÉLÈVES</h3><table class="small"><thead><tr><th>Niveau</th><th>G</th><th>F</th><th>T</th><th>Réussite (${esc(EV_GEN[ev-1].split(' /')[0])})</th></tr></thead><tbody>${CLASSES.map((c,i)=>`<tr><td><b>${c}</b></td>${sxCells(act.filter(s=>s.classe===c))}<td>${pct(rs[i].ok,rs[i].n)}</td></tr>`).join('')}<tr><td><b>TOTAL</b></td>${sxCells(act)}<td><b>${pct(ok,n)}</b></td></tr></tbody></table>
+ <table class="small" style="margin-top:6px"><tbody>${x(['Part des filles',pct(f,act.length)],['Dossiers avec extrait de naissance',pct(act.filter(s=>s.extrait).length,act.length)],['Redoublants',act.filter(s=>s.redoublant).length],['Abandons et départs',S.students.filter(s=>s.statut!=='Inscrit').length])}</tbody></table>
+ <h3>3. ENSEIGNANTS ET CLASSES</h3><table class="small"><tbody>${x(['Enseignants tenant une classe',`${ens.length} (${hom} homme(s), ${fem} femme(s))`],['Personnel total',S.teachers.length],...fonctStats().filter(y=>y.ens.length).map(y=>[`Classes de type ${y.l.toLowerCase()}`,y.ens.length]),['Élèves par enseignant',iRat(act.length,ens.length)])}</tbody></table>
+ <h3>4. INFRASTRUCTURES</h3><table class="small"><tbody>${x(['Salles de classe',sal==null?'—':`${sal} (${iT(I.salles.agglo)} en dur, ${iT(I.salles.prov)} provisoires) · ${iRat(act.length,sal)} élèves par salle`],['Toilettes des élèves',T.existe!=='oui'?iL(ON,T.existe):`${iT(T.eleves.n)} cabine(s), ${iT(T.eleves.fonct)} fonctionnelle(s), séparées : ${iL(ON,T.eleves.sep)}`],['Points d’eau',E.existe!=='oui'?iL(ON,E.existe):`${iT(eaux)}, dont ${iT(eauxF)} fonctionnel(s)`],['Électricité à l’école',iL(ON,I.elec.ecole)],['Tables-bancs',iN(I.mob.tb)==null?'—':`${iT(I.mob.tb)} · ${iRat(act.length,iN(I.mob.tb))} élèves par table-banc`],['Cantine',I.cant.existe!=='oui'?iL(ON,I.cant.existe):`Oui, fonctionnelle : ${iL(ON,I.cant.fonct)}`],['Logements des enseignants',I.loge.existe==='oui'?iT(I.loge.n):iL(ON,I.loge.existe)])}</tbody></table>
+ ${I.maj?'':'<p class="note-small">Infrastructures non renseignées : complétez-les dans Statistiques.</p>'}${signature()}`}
+function blocInfra(){const I=infra();return `<div class="grid g2">${infraSections(I).map(([t,h])=>`<div><div class="kl" style="margin-bottom:6px">${t}</div><div class="tw">${h}</div></div>`).join('')}</div>`}
 function blocEffectifs(){
  const act=active(),red=c=>act.filter(s=>s.classe===c&&s.redoublant),nred=c=>act.filter(s=>s.classe===c&&!s.redoublant),all=c=>act.filter(s=>s.classe===c);
  const row=(lab,f)=>`<tr><td><b>${lab}</b></td>${CLASSES.map(c=>sxCells(f(c))).join('')}${sxCells(CLASSES.flatMap(f))}</tr>`;
@@ -2444,7 +2528,7 @@ function extraitsTable(){
 pages['admin-stats']=()=>{
  const st=active(),f=st.filter(s=>s.sexe==='Féminin').length,pf=f/Math.max(1,st.length)*100,docOk=st.filter(s=>s.extrait).length/Math.max(1,st.length)*100,ev=S.school.evalCourante;
  const rs=CLASSES.map(c=>reussite(c,ev)),ok=rs.reduce((a,r)=>a+r.ok,0),n=rs.reduce((a,r)=>a+r.n,0);
- return `${ph('Rapports & administration','Indicateurs calculés à partir de vos données et listes à imprimer.')}${seg('admin')}
+ return `${ph('Rapports & administration','Indicateurs calculés à partir de vos données et listes à imprimer.',`<button class="btn pri" data-act="printSynth">${ic('print')}Synthèse pour l’IEPP</button>`)}${seg('admin')}
  <div class="grid g4 mb">${mstat('Effectif inscrit',st.length,esc(S.school.year))}${mstat('Part des filles',Math.round(pf)+' %',`${f} filles sur ${st.length}`)}${mstat('Dossiers complets',Math.round(docOk)+' %','avec extrait de naissance')}${mstat('Réussite',pct(ok,n),EV_GEN[ev-1].split(' /')[0])}</div>
  <div class="grid g3 mb">
   <div class="card"><h3>Répartition garçons / filles</h3><div style="display:flex;gap:20px;align-items:center;margin-top:14px;flex-wrap:wrap"><div class="donut" style="background:conic-gradient(var(--cg) 0 ${100-pf}%,var(--surface) 0 calc(${100-pf}% + .6%),var(--cf) 0 99.4%,var(--surface) 0)"><span>${st.length}<small>élèves</small></span></div><div class="leg" style="flex-direction:column;gap:8px"><span><i class="g"></i>Garçons : <b style="color:var(--ink)">${st.length-f}</b></span><span><i class="f"></i>Filles : <b style="color:var(--ink)">${f}</b></span></div></div></div>
@@ -2452,6 +2536,7 @@ pages['admin-stats']=()=>{
   <div class="card"><h3>Listes à imprimer</h3><div class="sub">Les rapports officiels sont dans l’onglet Rapports officiels</div><div style="display:grid;gap:7px;margin-top:12px">
    <button class="btn" data-act="printEff">${ic('print')}Tableau des effectifs</button><button class="btn" data-act="printStu">${ic('print')}Registre général des élèves</button><button class="btn" data-act="printByClass">${ic('print')}État par classe</button><button class="btn" data-act="printAges">${ic('print')}Élèves par âge et extraits</button><button class="btn" data-act="printNoDoc">${ic('print')}Dossiers à régulariser</button></div></div>
  </div>
+ <div class="card mb" id="infra"><div class="hd"><div><h3>Rapport d’infrastructures</h3><div class="sub">${S.infra&&S.infra.maj?`Mis à jour le ${fmtDate(S.infra.maj)}`:'Pas encore renseigné : cliquez sur Renseigner'}</div></div><div class="bar" style="margin:0"><button class="btn sm pri" data-act="editInfra">${ic('edit')}Renseigner</button><button class="btn sm" data-act="printInfra">${ic('print')}Imprimer</button></div></div>${blocInfra()}</div>
  <div class="card mb"><div class="hd"><div><h3>Types de fonctionnement des classes</h3><div class="sub">Simple, jumelée, multigrade ou autre : repris dans le rapport de rentrée</div></div>${go('eleves-personnel',{},'Compléter dans Personnel')}</div><div class="tw">${blocFonct()}</div></div>
  <div class="card mb"><div class="hd"><div><h3>Effectifs par âge, niveau et sexe</h3><div class="sub">Âge au 1er octobre ${startYear()} · G = garçons, F = filles, T = total · avec le total CP (CP1 + CP2)</div></div><button class="btn sm" data-act="expAges">${ic('down')}Excel (CSV)</button></div><div class="tw">${agesTable()}</div></div>
  <div class="card"><div class="hd"><div><h3>Élèves avec et sans extrait de naissance</h3><div class="sub">Par niveau et par sexe</div></div>${go('eleves-liste',{doc:'no',q:'',cls:'',st:''},'Voir les élèves sans extrait')}</div><div class="tw">${extraitsTable()}</div></div>`;
@@ -2825,6 +2910,9 @@ const acts={
  printByClass(){printDocs(CLASSES.map(c=>{const t=teacherOf(c),L=active().filter(s=>s.classe===c).sort(byName);return `${entete()}<div class="dtitle"><h2>ÉTAT DES ÉLÈVES – CLASSE DE ${c}</h2><div>Enseignant(e) : ${esc(t?.nom||'—')}</div></div>${stuTable(L)}<h3>STATISTIQUES DE LA CLASSE</h3><table class="small"><thead><tr><th></th><th>G</th><th>F</th><th>T</th></tr></thead><tbody>${[['Inscrits',L],['Ivoiriens',L.filter(s=>isIvo(s))],['Étrangers',L.filter(s=>!isIvo(s))],['Avec extrait',L.filter(s=>s.extrait)],['Sans extrait',L.filter(s=>!s.extrait)],['Redoublants',L.filter(s=>s.redoublant)]].map(([l,X])=>`<tr><td style="text-align:left">${l}</td>${sxCells(X)}</tr>`).join('')}</tbody></table>${signature()}`}))},
  printNoDoc(){printList('Dossiers à régulariser (sans extrait de naissance)',stuTable(S.students.filter(s=>!s.extrait).sort(byClass)))},
  printAges(){printList('Élèves par âge, niveau et sexe',agesTable()+'<h3 style="margin:18px 0 6px">Élèves avec et sans extrait de naissance</h3>'+extraitsTable(),true)},
+ editInfra(){modal(`${ic('home')}Rapport d’infrastructures`,infraForm(infra()),{wide:true,onok:f=>{const r=infraLire(f);if(typeof r==='string'){toast(r);return false}S.infra=r;log('Rapport d’infrastructures mis à jour');toast('Infrastructures enregistrées');render()}});infraTog($('form',dlg))},
+ printSynth(){printDocs([synthIepp()],false,true)},
+ printInfra(){printDocs([titreDoc('RAPPORT D’INFRASTRUCTURES',`Année scolaire ${esc(S.school.year)}`)+infraSections(infra()).map(([t,h],i)=>`<h3>${i+1}. ${t.toUpperCase()}</h3>${h}`).join('')+signature()])},
  printEff(){const act=active(),M=[['Inscrits',L=>L],['Ivoiriens',L=>L.filter(s=>isIvo(s))],['Étrangers',L=>L.filter(s=>!isIvo(s))],['Avec extrait',L=>L.filter(s=>s.extrait)],['Sans extrait',L=>L.filter(s=>!s.extrait)],['Redoublants',L=>L.filter(s=>s.redoublant)]];
   const row=(lab,L)=>`<tr><td><b>${lab}</b></td>${M.map(([,f])=>sxCells(f(L))).join('')}<td>${S.students.filter(s=>s.statut!=='Inscrit'&&(lab==='TOTAL'||lab==='Total CP'?L.some(x=>x.classe===s.classe):s.classe===lab)).length}</td></tr>`;
   printList('Tableau des effectifs des élèves',`<table class="small"><thead><tr><th rowspan="2">Classe</th>${M.map(([l])=>`<th colspan="3">${l.toUpperCase()}</th>`).join('')}<th rowspan="2">ABANDONS</th></tr><tr>${M.map(()=>'<th>G</th><th>F</th><th>T</th>').join('')}</tr></thead><tbody>${CLASSES.map(c=>row(c,act.filter(s=>s.classe===c))).join('')}${row('Total CP',act.filter(s=>s.classe==='CP1'||s.classe==='CP2'))}${row('TOTAL',act)}</tbody></table>${signature()}`,true)},
@@ -2847,6 +2935,7 @@ function stuTable(L){return `<table><thead><tr><th>N°</th><th>Nom et prénoms</
 const majChamp=(t,f)=>{const p=t.selectionStart,v=f(t.value);if(v!==t.value){t.value=v;try{t.setSelectionRange(p,p)}catch(e){}}};
 const ins={fq(t){ui.q=t.value;$('#stuBody').innerHTML=stuRows()},majNom(t){majChamp(t,majNom)},majPrenoms(t){majChamp(t,majPrenoms)},majNomComplet(t){majChamp(t,majNomComplet)}};
 const chs={
+ infraTog(t){infraTog(t.form)},
  fcls(t){ui.cls=t.value;render()},fst(t){ui.st=t.value;render()},fdoc(t){ui.doc=t.value;render()},
  nEv(t){ui.nEv=t.value;render()},rEv(t){ui.rEv=t.value;render()},repEv(t){ui.repEv=t.value;render()},repCls(t){ui.repCls=t.value;render()},repMois(t){ui.repMois=t.value;render()},
  aDate(t){if(t.value){ui.aDate=t.value;render()}},
