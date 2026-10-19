@@ -73,6 +73,58 @@ def licence_pour_page(e: licence.Etat, aujourd_hui: date | None = None) -> dict:
     return {"type": "essai", "debut": (j - timedelta(days=max(0, licence.ESSAI_JOURS - (e.jours_restants or 0)))).isoformat()}
 
 
+
+# Saisies de la création (mêmes règles que l'interface v8, akwa_v8.html : telCI, ecoleNom, drenaetDe, nomErr)
+TEL_ERR = "10 chiffres commençant par 07 (Orange), 05 (MTN) ou 01 (Moov), indicatif +225."
+DIRECTION = "DIRECTION REGIONALE DE L'EDUCATION NATIONALE, DE L'ALPHABETISATION ET DE L'ENSEIGNEMENT TECHNIQUE"
+_CIVIL = re.compile(r"^(M\.?|MR\.?|MME\.?|MLLE\.?|DR\.?)$", re.I)
+_MOT = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+$")
+
+
+def tel_ci(v: str) -> str | None:
+    """« 0707123456 », « +225 07 07 12 34 56 »… -> « +225 07 07 12 34 56 » ; None si le numéro n'est pas valide."""
+    n = re.sub(r"^(?:\+|00)?225(?=\d{10}$)", "", re.sub(r"[\s.\-()/]", "", str(v or "")))
+    if not re.fullmatch(r"0[157]\d{8}", n):
+        return None
+    return "+225 " + " ".join(n[i:i + 2] for i in range(0, 10, 2))
+
+
+def ecole_nom(v: str) -> str | None:
+    """Nom de l'école en majuscules ; None s'il ne commence pas par EPP."""
+    n = " ".join(str(v or "").split()).upper()
+    return n if re.match(r"^EPP\s+\S", n) else None
+
+
+def drenaet_de(v: str) -> dict | None:
+    """« Touba » ou « DRENAET DE TOUBA » -> libellé DRENAET et direction régionale de l'en-tête."""
+    lieu = re.sub(r"^DRENA(?:ET)?\s*(?:(?:DE|DU|DES)\s+|D['’]\s*)?", "", " ".join(str(v or "").split()).upper()).strip()
+    if not lieu:
+        return None
+    de = "D'" if re.match(r"^[AEIOUYÀÂÉÈÊÎÔ]", lieu) else "DE "
+    return {"drenaet": f"DRENAET {de}{lieu}", "direction": f"{DIRECTION} {de}{lieu}"}
+
+
+CIVILITES = ("M.", "Mme", "Mlle")
+
+
+def avec_civilite(civ: str, nom: str) -> str:
+    """« Mme » + « kone awa » -> « Mme KONE Awa » (première partie en majuscules, comme majNomComplet)."""
+    nom = re.sub(r"^(MLLE|MME|MR|M)\.?\s+", "", " ".join(str(nom or "").split()), flags=re.I)
+    tete, _, reste = nom.partition(" ")
+    nom = (tete.upper() + (" " + " ".join(w[:1].upper() + w[1:].lower() for w in reste.split()) if reste else "")).strip()
+    return f"{civ} {nom}" if civ in CIVILITES else nom
+
+
+def nom_err(v: str, lib: str, mini: int = 2) -> str:
+    """Message d'erreur si le nom n'a pas au moins `mini` mots de 2 lettres (ex. KOFFI KOUADIO, pas « Kk »)."""
+    mots = [w for w in str(v or "").split() if not _CIVIL.match(w)]
+    if len(mots) < mini:
+        return f"{lib} : nom et prénoms en entier (ex. KOFFI KOUADIO)." if mini > 1 else f"{lib} : à renseigner."
+    if not all(_MOT.match(w) and len(set(re.sub(r"['’-]", "", w).lower())) > 1 for w in mots):
+        return f"{lib} : chaque nom compte 2 lettres au moins (ex. KOFFI KOUADIO)."
+    return ""
+
+
 def _squelette() -> dict:
     """Données vides au format de l'interface v8 (les valeurs par défaut de l'école sont ajoutées par la page)."""
     return {"v": 5, "school": {}, "students": [], "teachers": [], "grades": {}, "compAbs": {}, "att": {}, "appel": {},
@@ -198,6 +250,13 @@ class Stockage:
         o = self.lire() or _squelette()
         sc = o.setdefault("school", {})
         sc.update({k: v if isinstance(v, list) else str(v).strip() for k, v in champs.items()})
+        for k in ("dirTel", "inspTel", "cpTel"):
+            if tel_ci(sc.get(k, "")):
+                sc[k] = tel_ci(sc[k])
+        if ecole_nom(sc.get("name", "")):
+            sc["name"] = ecole_nom(sc["name"])
+        if "drenaet" in champs and drenaet_de(sc.get("drenaet", "")):
+            sc.update(drenaet_de(sc["drenaet"]))
         lieu = re.sub(r"^IEPP\s+", "", sc.get("iepp", ""), flags=re.I).strip().upper()
         if lieu:
             sc["iepp"] = f"IEPP {lieu}"
@@ -208,7 +267,9 @@ class Stockage:
         """Premier lancement en espace enseignant seul : renvoie le code de secours."""
         code = self.creer_admin(mot_de_passe)
         mots = nom.split()
+        civ = mots.pop(0) if mots and mots[0] in CIVILITES else ""
         nom = " ".join([mots[0].upper()] + ["-".join(x.capitalize() for x in m.split("-")) for m in mots[1:]]) if mots else ""
+        nom = f"{civ} {nom}".strip()
         t = {"id": "ens" + secrets.token_hex(4), "nom": nom, "matricule": "", "fonction": "Instituteur",
              "grade": "", "classe": classe, "classes": [classe], "tel": "", "photo": "", "actif": True, "compte": None}
         school = {"solo": {"tid": t["id"]}, "name": ecole.strip().upper()}

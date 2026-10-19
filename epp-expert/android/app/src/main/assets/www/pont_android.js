@@ -87,22 +87,31 @@
  // renseignements demandés à la création : directeur, secteur, inspection, inspecteur et conseiller pédagogique
  const CH_DIR=[['director','Nom et prénoms du directeur'],['dirTel','Contact du directeur']];
  const CH_IEPP=[['secteur','Secteur pédagogique'],['iepp','Inspection (IEPP), ex. OUANINOU'],['inspNom','Nom et prénoms de l’inspecteur'],['inspTel','Contact de l’inspecteur'],['cpNom','Nom et prénoms du conseiller pédagogique'],['cpTel','Contact du conseiller pédagogique']];
- const champs=L=>L.map(([k,l])=>`<input name="${k}" placeholder="${l}"${/Tel$/.test(k)?' inputmode="tel" autocomplete="off"':''}>`).join('');
- function lireChamps(f,L,err){const o={};for(const[k,l]of L){const v=String(f.get(k)||'').trim();if(!v){err(l.replace(/,.*$/,'')+' : à renseigner.');return null}o[k]=v}return o}
+ // nom de l'école (EPP …) et DRENAET : demandés à la création, sans valeur par défaut
+ const CH_ECOLE=[['name','Nom de l’école, ex. EPP OUANINOU 2'],['drenaet','DRENAET, ex. TOUBA']];
+ const champs=L=>L.map(([k,l])=>`<input name="${k}" placeholder="${l}"${/Tel$/.test(k)?' type="tel" inputmode="tel" autocomplete="off"':k==='name'||k==='drenaet'?' autocapitalize="characters"':''}>`).join('');
+ // contacts : +225 et 10 chiffres commençant par 07, 05 ou 01 ; nom de l'école commençant par EPP
+ function lireChamps(f,L,err){const o={};for(const[k,l]of L){const v=String(f.get(k)||'').trim(),lib=l.replace(/,.*$/,'');if(!v){err(lib+' : à renseigner.');return null}
+   if(/Tel$/.test(k)){if(!telCI(v)){err(lib+' : '+TEL_ERR);return null}o[k]=telCI(v)}
+   else if(k==='name'){if(!ecoleNom(v)){err('Le nom de l’école doit commencer par EPP (ex. EPP OUANINOU 2).');return null}o[k]=ecoleNom(v)}
+   else if(/Nom$|^director$/.test(k)){const e=nomErr(v,lib);if(e){err(e);return null}o[k]=v}
+   else if(k==='drenaet'){const d=drenaetDe(v);if(!d){err(lib+' : à renseigner.');return null}Object.assign(o,d)}
+   else o[k]=v}return o}
  function appliquerEcole(o){const sc=S.school;Object.assign(sc,o);const lieu=String(o.iepp||'').replace(/^IEPP\s+/i,'').trim().toUpperCase();
   if(lieu){sc.iepp='IEPP '+lieu;sc.inspection="INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE DE "+lieu}}
  function creerEnseignant(){
-  const f=ecran(`<p><b>Espace enseignant.</b> Vous tenez votre classe seul ; le directeur pourra le rattacher plus tard à l’école.</p><input name="nom" placeholder="Vos nom et prénoms" autocomplete="name"><select name="cls">${CLASSES.map(c=>`<option>${c}</option>`).join('')}</select><input name="ecole" placeholder="Nom de l’école (facultatif)">${champs(CH_DIR)}${champs(CH_IEPP)}
+  const f=ecran(`<p><b>Espace enseignant.</b> Vous tenez votre classe seul ; le directeur pourra le rattacher plus tard à l’école.</p><select name="civ"><option value="">Civilité</option>${CIVS.map(c=>`<option>${c}</option>`).join('')}</select><input name="nom" placeholder="Vos nom et prénoms" autocomplete="name"><select name="cls">${CLASSES.map(c=>`<option>${c}</option>`).join('')}</select>${champs(CH_ECOLE)}${champs(CH_DIR)}${champs(CH_IEPP)}
 <input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Créer mon espace</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
-   const nom=String(f.get('nom')).trim(),a=f.get('a'),b=f.get('b'),ec=String(f.get('ecole')).trim();
-   if(nom.length<3)return err('Saisissez vos nom et prénoms.');
-   const o=lireChamps(f,[...CH_DIR,...CH_IEPP],err);if(!o)return;
+   const nom=String(f.get('nom')).trim(),a=f.get('a'),b=f.get('b');
+   if(!CIVS.includes(f.get('civ')))return err('Choisissez votre civilité : M., Mme ou Mlle.');
+   const en=nomErr(nom,'Vos nom et prénoms');if(en)return err(en);
+   const o=lireChamps(f,[...CH_ECOLE,...CH_DIR,...CH_IEPP],err);if(!o)return;
    if(a.length<6)return err('Le mot de passe doit compter 6 caractères au moins.');
    if(a!==b)return err('Les deux mots de passe sont différents.');
    if(!N.definirAdmin(a,''))return err('Enregistrement impossible.');
    N.connecter('admin',a);
-   const t={id:uid(),nom:majNomComplet(nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),classes:[f.get('cls')],tel:'',photo:'',actif:true,compte:null};
-   S.teachers=[t];S.students=[];S.school.solo={tid:t.id};S.school.name=ec.toUpperCase();appliquerEcole(o);
+   const t={id:uid(),nom:avecCiv(f.get('civ'),nom),matricule:'',fonction:'Instituteur',grade:'',classe:f.get('cls'),classes:[f.get('cls')],tel:'',photo:'',actif:true,compte:null};
+   S.teachers=[t];S.students=[];S.school.solo={tid:t.id};appliquerEcole(o);
    session={role:'ens',tid:t.id,solo:true};N.demarrerEssai();APP.enregistrer();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
   });
   f.querySelector('[data-retour]').addEventListener('click',premierLancement);
@@ -110,18 +119,19 @@
  // création en deux pages : 1. le directeur et son mot de passe ; 2. les renseignements de l'inspection
  function creerDirecteur(p1){
   const f=ecran(`<p><b>Bienvenue.</b> Page 1 sur 2 : vos renseignements et le mot de passe administrateur du téléphone (demandé à chaque ouverture et pour les corrections).</p>
-${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contact']])}<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Suivant</button>`,(f,err)=>{
-   const a=f.get('a'),b=f.get('b'),o=lireChamps(f,CH_DIR,err);if(!o)return;
+<select name="civ"><option value="">Civilité</option>${CIVS.map(c=>`<option>${c}</option>`).join('')}</select>${champs([['director','Vos nom et prénoms (directeur)'],['dirTel','Votre contact']])}<input type="password" name="a" placeholder="Mot de passe (6 caractères au moins)" autocomplete="new-password"><input type="password" name="b" placeholder="Confirmer le mot de passe" autocomplete="new-password"><button class="btn pri">Suivant</button>`,(f,err)=>{
+   if(!CIVS.includes(f.get('civ')))return err('Choisissez votre civilité : M., Mme ou Mlle.');
+   const a=f.get('a'),b=f.get('b'),o=lireChamps(f,CH_DIR,err);if(!o)return;o.director=avecCiv(f.get('civ'),o.director);
    if(a.length<6)return err('Le mot de passe doit compter 6 caractères au moins.');
    if(a!==b)return err('Les deux mots de passe sont différents.');
    creerDirecteur2({...o,a});
   });
-  if(p1)for(const k of['director','dirTel'])f.querySelector(`[name=${k}]`).value=p1[k]||'';
+  if(p1){f.querySelector('[name=civ]').value=civDe(p1.director);f.querySelector('[name=director]').value=sansCiv(p1.director);f.querySelector('[name=dirTel]').value=p1.dirTel||''}
  }
  function creerDirecteur2(p1){
-  const f=ecran(`<p>Page 2 sur 2 : renseignements de l’école et de l’inspection.</p><p class="sub">Niveaux de l’école :</p><div class="niv">${TOUS_NIVEAUX.map(c=>`<label><input type="checkbox" name="niveaux" value="${c}" checked> ${c}</label>`).join('')}</div>${champs(CH_IEPP)}<button class="btn pri">Créer</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
+  const f=ecran(`<p>Page 2 sur 2 : renseignements de l’école et de l’inspection.</p>${champs(CH_ECOLE)}<p class="sub">Niveaux de l’école :</p><div class="niv">${TOUS_NIVEAUX.map(c=>`<label><input type="checkbox" name="niveaux" value="${c}" checked> ${c}</label>`).join('')}</div>${champs(CH_IEPP)}<button class="btn pri">Créer</button><button type="button" class="lien" data-retour>Retour</button>`,(f,err)=>{
    const niveaux=f.getAll('niveaux');if(!niveaux.length)return err('Cochez au moins un niveau.');
-   const o=lireChamps(f,CH_IEPP,err);if(!o)return;o.niveaux=niveaux;
+   const o=lireChamps(f,[...CH_ECOLE,...CH_IEPP],err);if(!o)return;o.niveaux=niveaux;
    if(!N.definirAdmin(p1.a,''))return err('Enregistrement impossible.');
    N.connecter('admin',p1.a);session={role:'dir'};appliquerEcole({director:p1.director,dirTel:p1.dirTel,...o});APP.enregistrer();N.demarrerEssai();afficherCode(N.nouveauCodeSecours(),licenceOuApp);
   });
