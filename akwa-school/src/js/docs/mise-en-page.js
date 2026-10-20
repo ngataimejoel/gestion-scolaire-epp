@@ -55,8 +55,9 @@
   function feuille(o) {
     const r = o.reglages, d = dims(r), m = (r.page && r.page.marges) || { h: 14, d: 14, b: 12, g: 14 };
     const paysage = r.page && r.page.orientation === 'paysage';
+    const a5 = r.page && r.page.papier === 'A5';
     const st = o.statut ? AK.filigrane.libelleStatut(o.statut) : '';
-    return html`<section class="feuille${paysage ? ' paysage' : ''}${o.classe ? ' ' + o.classe : ''}" style="--mt:${m.h}mm;--mr:${m.d}mm;--mb:${m.b}mm;--ml:${m.g}mm;--doc-accent:${r.couleur || '#1f4e8c'}" data-l="${d.l}" data-h="${d.h}">${AK.filigrane.calques(r.filigrane, o.statut, d.l, d.h)}<div class="zone"><div class="corps">${o.contenu}</div>${o.sansPied ? '' : pied(r, { ref: o.ref, page: o.page || 1, total: o.total || 1, statut: st })}</div></section>`;
+    return html`<section class="feuille${paysage ? ' paysage' : ''}${a5 ? ' a5' : ''}${o.classe ? ' ' + o.classe : ''}" style="--mt:${m.h}mm;--mr:${m.d}mm;--mb:${m.b}mm;--ml:${m.g}mm;--doc-accent:${r.couleur || '#1f4e8c'}${a5 ? ';width:' + d.l + 'mm;height:' + d.h + 'mm' : ''}" data-l="${d.l}" data-h="${d.h}">${AK.filigrane.calques(r.filigrane, o.statut, d.l, d.h)}<div class="zone"><div class="corps">${o.contenu}</div>${o.sansPied ? '' : pied(r, { ref: o.ref, page: o.page || 1, total: o.total || 1, statut: st })}</div></section>`;
   }
 
   /* ---------- Mesure hors écran (mêmes styles que l'impression) ---------- */
@@ -123,6 +124,36 @@
     return pages;
   }
 
+  /**
+   * Répartition de blocs (Html) sur des pages successives : un bloc n'est jamais coupé ;
+   * « garder » : nombre de blocs finaux à garder ensemble (signatures avec la conclusion).
+   */
+  function decouper(r, blocs, { suite = '', garder = 1 } = {}) {
+    const corps = zoneMesure(r);
+    const max = corps.clientHeight;
+    const tient = (L) => {
+      u.poser(corps, L);
+      return corps.scrollHeight <= max + 1;
+    };
+    const pages = [];
+    let courant = [];
+    const fin = blocs.length - garder;
+    for (let i = 0; i < blocs.length; i++) {
+      const lot = i === fin && garder > 1 ? blocs.slice(i) : [blocs[i]];
+      const entete = pages.length ? [suite] : [];
+      if (tient([...entete, ...courant, ...lot])) courant.push(...lot);
+      else if (!courant.length) courant.push(...lot);
+      else {
+        pages.push(html`${entete}${courant}`);
+        courant = [...lot];
+      }
+      if (lot.length > 1) break;
+    }
+    if (courant.length) pages.push(html`${pages.length ? suite : ''}${courant}`);
+    u.poser(corps, '');
+    return pages;
+  }
+
   /** Mise à l'échelle d'un contenu pour tenir sur une seule page (réduction plafonnée à 72 %). */
   const ZMIN = 0.72;
   function ajuster(r, contenu) {
@@ -149,5 +180,5 @@
     return { z, contenu: z < 0.999 ? html`<div class="ajuste-interne" style="width:${(100 / z).toFixed(3)}%;transform:scale(${z.toFixed(4)})">${contenu}</div>` : contenu, deborde: z <= ZMIN + 0.001 };
   }
 
-  AK.mise = { FORMATS, dims, entete, titre, infos, lieuDate, signatures, verification, pied, feuille, paginer, ajuster, ZMIN };
+  AK.mise = { FORMATS, dims, entete, titre, infos, lieuDate, signatures, verification, pied, feuille, paginer, decouper, ajuster, ZMIN };
 })(window.AK);

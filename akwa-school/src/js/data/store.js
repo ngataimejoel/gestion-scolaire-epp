@@ -35,7 +35,7 @@
         await AK.hote.enregistrer(S);
         definirStatut(AK.stockage.actif && AK.stockage.actif.ephemere ? 'ephemere' : 'ok');
         const j = u.aujourdhui();
-        if (jourCopie !== j && AK.stockage.actif && AK.hote.type === 'navigateur') {
+        if (jourCopie !== j && AK.stockage.actif && AK.hote.type !== 'bureau') {
           jourCopie = j;
           AK.stockage.actif.copie(S, 'jour').catch((e) => AK.diag.erreur(e, 'copie du jour'));
         }

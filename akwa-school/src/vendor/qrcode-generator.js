@@ -1236,4 +1236,13 @@ var QRCode=M.index,L=M.QRErrorCorrectLevel;
 function matrix(text,level){var q=new QRCode(-1,L[level||'M']);q.addData(unescape(encodeURIComponent(text)));q.make();
  var n=q.getModuleCount(),rows=[];for(var r=0;r<n;r++){var row=[];for(var c=0;c<n;c++)row.push(q.isDark(r,c));rows.push(row)}
  return {size:n,version:q.typeNumber,rows:rows}}
-return {matrix:matrix}})();
+/* Tables du code d'origine exposées pour le décodeur (AK.qrdecode) : blocs Reed-Solomon, positions des motifs
+   d'alignement, codes BCH du format et de la version, masques, arithmétique GF(256). */
+return {matrix:matrix,
+ rsBlocks:function(v,l){return M.QRRSBlock.getRSBlocks(v,l).map(function(b){return {total:b.totalCount,data:b.dataCount}})},
+ patternPosition:function(v){return M.QRUtil.getPatternPosition(v)},
+ bchTypeInfo:function(d){return M.QRUtil.getBCHTypeInfo(d)},
+ bchTypeNumber:function(v){return M.QRUtil.getBCHTypeNumber(v)},
+ mask:function(p,i,j){return M.QRUtil.getMask(p,i,j)},
+ gexp:function(n){return M.QRMath.gexp(n)},
+ glog:function(n){return M.QRMath.glog(n)}}})();

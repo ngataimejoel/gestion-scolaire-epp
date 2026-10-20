@@ -37,7 +37,7 @@
 
   /* ---------- Assistant de première ouverture ---------- */
   function assistant() {
-    const ancien = AK.hote.type === 'navigateur' ? AK.stockage.ancienneVersion() : null;
+    const ancien = AK.hote.type !== 'bureau' ? AK.stockage.ancienneVersion() : null;
     const el = ecranPlein(html`${marque('Bienvenue', 'Aucune école n’est encore enregistrée dans ce navigateur. Comment voulez-vous commencer ?')}
       <div class="ep-choix">
         ${ancien ? html`<button type="button" class="ep-option recommande" data-ep="ancien">${ic('history')}<span><b>Reprendre les données d’AKWA SCHOOL 1.x</b><small>${ancien.school && ancien.school.name ? ancien.school.name + ' · ' : ''}${u.pluriel(ancien.students.length, 'élève')} trouvés dans ce navigateur. Les anciennes données ne sont pas effacées.</small></span>${ic('chev')}</button>` : ''}
@@ -323,7 +323,7 @@
   /* ---------- Verrouillage après inactivité ---------- */
   function armerVerrou() {
     clearInterval(minuterieVerrou);
-    if (AK.hote.type !== 'navigateur') return;
+    if (!AK.hote.authentificationLocale) return;
     minuterieVerrou = setInterval(() => {
       const min = Number(S().securite.verrouMin) || 0;
       if (min > 0 && AK.session.ouverte() && AK.session.inactifDepuis() > min * 60000 && !$('#ecran-plein')) verrouiller();
@@ -449,7 +449,7 @@
       const etatHote = await AK.hote.demarrer();
       let etat = null, notes = [];
       if (etatHote) ({ etat, notes } = AK.schema.migrer(etatHote));
-      else if (AK.hote.type === 'navigateur') {
+      else if (AK.hote.type !== 'bureau') {
         const r = await AK.stockage.actif.charger();
         if (r) {
           ({ etat, notes } = AK.schema.migrer(r.S));

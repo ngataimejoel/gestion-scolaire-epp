@@ -3,14 +3,19 @@
   "ressources": {
     "logo": "assets/logo-akwa.jpg",
     "armoiries": "assets/armoiries.jpg",
-    "photos": { "maitre": "assets/photos/maitre.jpg" }
+    "photos": {
+      "maitre": "assets/photos/maitre.jpg"
+    }
   },
   "css": [
     "styles/00-tokens.css",
     "styles/01-base.css",
     "styles/02-layout.css",
     "styles/03-components.css",
-    "styles/04-ecrans.css"
+    "styles/04-ecrans.css",
+    "styles/05-documents.css",
+    "styles/06-cartes.css",
+    "styles/07-impression.css"
   ],
   "js": [
     "js/core/ns.js",
@@ -43,6 +48,22 @@
     "js/ui/dialogues.js",
     "js/ui/composants.js",
     "js/ui/tableau.js",
+    "js/docs/qr.js",
+    "js/docs/qrdecode.js",
+    "js/docs/filigrane.js",
+    "js/docs/registre.js",
+    "js/docs/modeles.js",
+    "js/docs/mise-en-page.js",
+    "js/docs/impression.js",
+    "js/docs/cartes.js",
+    "js/docs/rapports.js",
+    "js/docs/generateur.js",
+    "js/docs/verification.js",
+    "js/docs/modeles/eleves.js",
+    "js/docs/modeles/cartes.js",
+    "js/docs/modeles/listes.js",
+    "js/docs/modeles/rapports.js",
+    "js/docs/modeles/divers.js",
     "js/ui/shell.js",
     "js/screens/accueil.js",
     "@verificateur",

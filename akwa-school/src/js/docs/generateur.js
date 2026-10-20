@@ -77,6 +77,7 @@
         const s2 = d.statut(ctx, r);
         if (s2 && !statut) statut = s2;
       }
+      ctx._statutCarte = statut;
       const res = d.rendu(ctx, r, outils());
       if (res.avertissement) avertissements.push(res.avertissement);
       if (res.carte) {
@@ -85,6 +86,7 @@
       }
       let pages;
       if (res.liste) pages = M().paginer(r, res.liste);
+      else if (res.blocs) pages = M().decouper(r, res.blocs, { suite: res.suite || '', garder: res.garder || 1 });
       else if (res.pages) pages = res.pages;
       else if (res.ajuster) {
         const a = M().ajuster(r, res.contenu);

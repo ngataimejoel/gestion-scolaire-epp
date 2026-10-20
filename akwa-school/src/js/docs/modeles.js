@@ -119,6 +119,7 @@
     if (inc.length) throw E(`Champ dynamique inconnu : {${inc[0]}}. Utilisez les champs proposés sous le texte.`, 'texte');
     if (/<[a-z!/]/i.test(o.texte) || /<[a-z!/]/i.test(o.titre)) throw E('Le HTML n’est pas accepté dans les modèles : utilisez **texte** pour le gras.', 'texte');
     o.page.orientation = d.orientations && d.orientations.includes(o.page.orientation) ? o.page.orientation : (d.defauts && d.defauts.page && d.defauts.page.orientation) || 'portrait';
+    o.page.papier = (d.papiers || ['A4']).includes(o.page.papier) ? o.page.papier : (d.defauts && d.defauts.page && d.defauts.page.papier) || 'A4';
     ['h', 'd', 'b', 'g'].forEach((k) => (o.page.marges[k] = borne(o.page.marges[k], 5, 35, 14)));
     o.entete.ligneSup = String(o.entete.ligneSup || '').slice(0, 140);
     o.signatures = (Array.isArray(o.signatures) ? o.signatures : []).slice(0, 4).map((s) => ({ role: String(s.role || '').slice(0, 60), nom: String(s.nom || '').slice(0, 80), cachet: !!s.cachet, cadre: !!s.cadre }));

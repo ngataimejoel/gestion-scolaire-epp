@@ -235,7 +235,7 @@
         titre: 'Mot de passe administrateur', icone: 'lock', taille: 'sm', ok: 'Valider', proteger: false,
         corps: html`<div class="pile"><p class="mb0">${message}</p>
           <div class="champ"><label for="mdp-admin">Mot de passe du directeur</label><input id="mdp-admin" class="inp" type="password" name="pwd" autocomplete="current-password" autofocus required></div>
-          ${AK.hote.type === 'navigateur' ? html`<button type="button" class="lien petit" data-mdp-oublie>Mot de passe oublié ?</button>` : ''}</div>`,
+          ${AK.hote.authentificationLocale ? html`<button type="button" class="lien petit" data-mdp-oublie>Mot de passe oublié ?</button>` : ''}</div>`,
         async surValider(d) {
           if (!d.pwd) throw new AK.ErreurMetier('Saisissez le mot de passe.', 'pwd');
           if (!(await AK.auth.verifierAdmin(d.pwd))) {

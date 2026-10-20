@@ -87,8 +87,22 @@
             facteur = b.dataset.z === '0' ? 1 : Math.max(0.3, Math.min(2, facteur * (b.dataset.z === '+' ? 1.2 : 1 / 1.2)));
             if (b.dataset.z === '0') ajusterZoom(corps);
             else $$('.feuille-cadre', corps).forEach((c) => (c.style.zoom = facteur.toFixed(3)));
+          } else if (b.hasAttribute('data-pdf') && typeof AK.hote.exporterPdf === 'function') {
+            // vrai fichier PDF produit par l'emballage natif (APK / .exe)
+            const z = zoneImpression();
+            u.poser(z, o.feuilles);
+            await attendreImages(z);
+            try {
+              const nom = (o.nomFichier || o.titre || 'document').replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 80) + '.pdf';
+              const ou = await AK.hote.exporterPdf(nom, !!z.querySelector('.feuille.paysage'));
+              if (ou) ui.toast('PDF enregistré : ' + ou);
+            } catch (err) {
+              ui.erreur(err);
+            } finally {
+              u.poser(z, '');
+            }
           } else if (b.hasAttribute('data-imprimer') || b.hasAttribute('data-pdf')) {
-            if (b.hasAttribute('data-pdf') && AK.hote.type === 'navigateur') ui.toast('Dans la fenêtre qui s’ouvre, choisissez l’imprimante « Enregistrer au format PDF » (ou « Microsoft Print to PDF »).', { type: 'attente', duree: 7000 });
+            if (b.hasAttribute('data-pdf')) ui.toast('Dans la fenêtre qui s’ouvre, choisissez l’imprimante « Enregistrer au format PDF » (ou « Microsoft Print to PDF »).', { type: 'attente', duree: 7000 });
             if (o.avantImpression) await o.avantImpression();
             imprimer(o.feuilles);
           } else if (b.hasAttribute('data-copie')) {

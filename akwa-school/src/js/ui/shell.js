@@ -199,8 +199,8 @@
     if (st.statut === 'erreur') B.push(html`<div class="bandeau erreur" role="alert">${ic('alert')}<span><b>Enregistrement impossible.</b> ${st.message}</span><span class="espace"></span><button type="button" class="btn btn-sm" data-action="reessayer-sauvegarde">Réessayer</button><button type="button" class="btn btn-sm" data-action="aller" data-route="donnees/sauvegarde">Sauvegarder sur clé USB</button></div>`);
     if (AK.stockage.actif && AK.stockage.actif.ephemere) B.push(html`<div class="bandeau erreur">${ic('alert')}<span><b>Aucun enregistrement possible dans ce navigateur</b> (navigation privée ou stockage bloqué). Les modifications seront perdues à la fermeture : exportez une sauvegarde.</span></div>`);
     else if (AK.stockage.description().startsWith('localStorage')) B.push(html`<div class="bandeau avert">${ic('warn')}<span>Stockage de capacité limitée (IndexedDB indisponible) : évitez les photos et sauvegardez souvent.</span></div>`);
-    if (AK.session.estDirecteur() && S().securite.forcerChangement && AK.hote.type === 'navigateur') B.push(html`<div class="bandeau avert">${ic('lock')}<span>Le mot de passe administrateur est trop faible (ancienne version). Choisissez-en un nouveau.</span><span class="espace"></span><button type="button" class="btn btn-sm" data-action="changer-mdp-admin">Changer maintenant</button></div>`);
-    if (AK.session.estDirecteur() && S().securite.aSecourir && AK.hote.type === 'navigateur') B.push(html`<div class="bandeau info">${ic('key')}<span>Créez votre code de secours personnel (l’ancien code commun à toutes les installations a été désactivé).</span><span class="espace"></span><button type="button" class="btn btn-sm" data-action="nouveau-secours">Créer le code</button></div>`);
+    if (AK.session.estDirecteur() && S().securite.forcerChangement && AK.hote.authentificationLocale) B.push(html`<div class="bandeau avert">${ic('lock')}<span>Le mot de passe administrateur est trop faible (ancienne version). Choisissez-en un nouveau.</span><span class="espace"></span><button type="button" class="btn btn-sm" data-action="changer-mdp-admin">Changer maintenant</button></div>`);
+    if (AK.session.estDirecteur() && S().securite.aSecourir && AK.hote.authentificationLocale) B.push(html`<div class="bandeau info">${ic('key')}<span>Créez votre code de secours personnel (l’ancien code commun à toutes les installations a été désactivé).</span><span class="espace"></span><button type="button" class="btn btn-sm" data-action="nouveau-secours">Créer le code</button></div>`);
     u.poser($('#bandeaux'), B);
   }
   function dessinerSauvegarde(st) {
@@ -398,7 +398,7 @@
     },
     'menu-profil'(el) {
       const items = [];
-      if (AK.hote.type === 'navigateur') {
+      if (AK.hote.authentificationLocale) {
         items.push({ icone: 'key', lib: 'Changer mon mot de passe', f: () => AK.actions.lancer(AK.session.estDirecteur() ? 'changer-mdp-admin' : 'changer-mdp-ens') });
         items.push({ icone: 'lock', lib: 'Verrouiller', sous: 'L’écran reste ouvert, mot de passe requis', f: () => AK.app.verrouiller() });
         items.push('sep');

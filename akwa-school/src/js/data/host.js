@@ -101,5 +101,52 @@
     };
   }
 
-  AK.hote = window.qt && window.qt.webChannelTransport && window.APP_DATA && typeof window.QWebChannel === 'function' ? hoteBureau() : hoteNavigateur();
+  /**
+   * Emballage natif (APK Android, application Windows .exe) : contrat « AkwaNatif ».
+   * L'emballage expose window.AkwaNatif (Android : addJavascriptInterface ; Electron : preload) avec :
+   *   enregistrerFichier(nom, contenuBase64, typeMime) → chemin enregistré, ou '' si annulé   (obligatoire)
+   *   imprimer(paysage)                                → impression native de la page          (facultatif)
+   *   exporterPdf(nom, paysage)                        → vrai fichier PDF, chemin ou ''        (facultatif)
+   *   version()                                        → texte affiché dans Diagnostic         (facultatif)
+   * Les données restent dans IndexedDB (activer le stockage DOM et les bases dans la WebView).
+   * Voir packaging/ et docs/EMBALLAGE.md.
+   */
+  function hoteNatif() {
+    const N = window.AkwaNatif;
+    const base = hoteNavigateur();
+    const b64 = (blob) => new Promise((ok, ko) => {
+      const r = new FileReader();
+      r.onload = () => ok(String(r.result).split(',')[1] || '');
+      r.onerror = () => ko(r.error);
+      r.readAsDataURL(blob);
+    });
+    const appel = async (f, ...a) => {
+      const r = f.apply(N, a);
+      return r && typeof r.then === 'function' ? r : r;
+    };
+    return {
+      ...base,
+      type: 'natif',
+      libelle: 'Application installée' + (typeof N.version === 'function' ? ' ' + N.version() : ''),
+      pdfDirect: typeof N.exporterPdf === 'function',
+      async fichier(nom, contenu, type) {
+        const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type: (type || 'text/plain') + ';charset=utf-8' });
+        const chemin = await appel(N.enregistrerFichier, nom, await b64(blob), type || blob.type || 'application/octet-stream');
+        return chemin == null ? '' : String(chemin);
+      },
+      imprimer(paysage) {
+        if (typeof N.imprimer === 'function') appel(N.imprimer, !!paysage);
+        else window.print();
+      },
+      async exporterPdf(nom, paysage) {
+        return String((await appel(N.exporterPdf, nom, !!paysage)) || '');
+      }
+    };
+  }
+
+  AK.hote = window.qt && window.qt.webChannelTransport && window.APP_DATA && typeof window.QWebChannel === 'function'
+    ? hoteBureau()
+    : window.AkwaNatif && typeof window.AkwaNatif.enregistrerFichier === 'function'
+      ? hoteNatif()
+      : hoteNavigateur();
 })(window.AK);
