@@ -1,0 +1,32 @@
+/* =====================================================================================
+   Impression : seules les feuilles préparées sont imprimées (jamais les menus ou boutons).
+   Chaque feuille porte son format (pages nommées) ; marges gérées dans la feuille, donc
+   @page sans marge. Réglez la boîte d'impression sur « Marges : aucune » ou « par défaut »
+   et « Échelle : 100 % » (voir docs/GUIDE.md).
+   ===================================================================================== */
+@page { size: A4 portrait; margin: 0; }
+@page a4 { size: A4 portrait; margin: 0; }
+@page a4p { size: A4 landscape; margin: 0; }
+@page a5 { size: A5 portrait; margin: 0; }
+@page carte { size: 85.6mm 53.98mm; margin: 0; }
+@page carteP { size: 53.98mm 85.6mm; margin: 0; }
+@page badge { size: 70mm 100mm; margin: 0; }
+
+@media print {
+  html, body { height: auto !important; overflow: visible !important; background: #fff !important; }
+  body > *:not(.zone-impression) { display: none !important; }
+  .zone-impression { display: block !important; }
+  .zone-impression .feuille { box-shadow: none !important; margin: 0 !important; border: 0 !important; }
+  .zone-impression .feuille-cadre { box-shadow: none !important; margin: 0 !important; }
+  .zone-impression .num-page { display: none !important; }
+  .zone-impression .fil-impr-non { display: none !important; }
+  .zone-impression .ecran-seulement { display: none !important; }
+  .zone-impression .carte-id::after { display: none !important; }
+  .zone-impression .feuille.carte-seule { page: carte; width: 85.6mm; height: 53.98mm; }
+  .zone-impression .feuille.carte-seule.portrait-c { page: carteP; width: 53.98mm; height: 85.6mm; }
+  .zone-impression .feuille.carte-seule.badge-c { page: badge; width: 70mm; height: 100mm; }
+  .zone-impression .doc-zone textarea { border: 0; background: none; resize: none; }
+}
+@media screen {
+  .fil-ecran-non { display: none !important; }
+}

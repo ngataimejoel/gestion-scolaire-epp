@@ -1,0 +1,190 @@
+/* =====================================================================================
+   Élèves : inscription, modification, statut, suppression (corbeille), doublons.
+   Toutes les règles sont vérifiées ici, quel que soit l'écran qui appelle.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const C = AK.cfg, u = AK.u, V = AK.valid, X = AK.calc;
+  const S = () => AK.store.etat;
+  const E = (m, champ) => new AK.ErreurMetier(m, champ);
+
+  /** Prochain matricule école : AK-<2 chiffres de l'année><numéro sur 3 chiffres> */
+  function prochainMatricule() {
+    const nums = S().students.map((s) => parseInt((s.mat || '').replace(/\D/g, '').slice(2), 10) || 0);
+    const archives = Object.values(S().archives || {}).flatMap((a) => (a.students || []).map((s) => parseInt((s.mat || '').replace(/\D/g, '').slice(2), 10) || 0));
+    return 'AK-' + String(X.anneeRentree()).slice(2) + u.pad(Math.max(0, ...nums, ...archives) + 1, 3);
+  }
+
+  const lireParent = (d, k) => ({
+    nom: u.majNom(String(d[k + '_nom'] || '').trim()),
+    prenoms: u.majPrenoms(String(d[k + '_prenoms'] || '').trim()),
+    profession: String(d[k + '_profession'] || '').trim(),
+    tel: V.telPropre(d[k + '_tel']),
+    domicile: String(d[k + '_domicile'] || '').trim()
+  });
+
+  /** Contrôle d'un formulaire d'élève (objet champ → valeur). Lève une ErreurMetier ciblée. */
+  function controler(d, existant) {
+    const ex = d.extrait === true || d.extrait === 'on';
+    const P = (k) => String(d[k + '_nom'] || '').trim() && String(d[k + '_prenoms'] || '').trim();
+    let e = V.nom(d.nom, 'Nom de l’élève', 1, 40);
+    if (e) throw E(e, 'nom');
+    if ((e = V.nom(d.prenoms, 'Prénoms de l’élève', 1, 60))) throw E(e, 'prenoms');
+    if (d.sexe !== 'Masculin' && d.sexe !== 'Féminin') throw E('Choisissez le sexe de l’élève.', 'sexe');
+    if ((e = V.classe(d.classe, X.niveaux()))) throw E(e, 'classe');
+    if ((e = V.matNat(d.matNat))) throw E(e, 'matNat');
+    if (ex) {
+      if ((e = V.naissanceEleve(d.naissance, X.anneeRentree()))) throw E(e, 'naissance');
+      if (!P('pere') || !P('mere')) throw E('Avec un extrait, les nom et prénoms du père et de la mère sont obligatoires.', P('pere') ? 'mere_nom' : 'pere_nom');
+      if ((e = V.date(d.acte_date, 'Date de l’acte', { max: u.aujourdhui(), min: d.naissance }))) throw E(e, 'acte_date');
+      if ((e = V.texte(d.acte_num, 'N° de l’acte', { max: 20 }))) throw E(e, 'acte_num');
+    } else {
+      const a = Number(d.age);
+      if (!a || a < 2 || a > 20 || !Number.isInteger(a)) throw E('Saisissez l’âge de l’enfant (de 2 à 20 ans).', 'age');
+      if (!P('pere') && !P('mere') && !((d.tuteur === true || d.tuteur === 'on') && String(d.parent || '').trim()))
+        throw E('Sans extrait, le nom et les prénoms de l’un des parents ou du tuteur sont obligatoires.', 'pere_nom');
+    }
+    if (d.classe !== 'CP1' || existant) {
+      if (d.classe !== 'CP1' && !d.entree) throw E('Saisissez la date d’entrée à l’école.', 'entree');
+    }
+    if (d.entree && (e = V.date(d.entree, 'Date d’entrée', { max: u.ajouterJours(u.aujourdhui(), 31) }))) throw E(e, 'entree');
+    for (const [k, l] of [['pere', 'du père'], ['mere', 'de la mère']]) {
+      if (String(d[k + '_nom'] || '').trim() || String(d[k + '_prenoms'] || '').trim()) {
+        if ((e = V.nom(d[k + '_nom'], 'Nom ' + l, 1, 40))) throw E(e, k + '_nom');
+        if ((e = V.nom(d[k + '_prenoms'], 'Prénoms ' + l, 1, 60))) throw E(e, k + '_prenoms');
+      }
+      if ((e = V.tel(d[k + '_tel'], 'Contact ' + l))) throw E(e, k + '_tel');
+    }
+    if ((d.tuteur === true || d.tuteur === 'on') && String(d.parent || '').trim() && (e = V.nom(d.parent, 'Nom et prénoms du tuteur'))) throw E(e, 'parent');
+    if ((e = V.tel(d.tel, 'Contact du tuteur'))) throw E(e, 'tel');
+    if ((e = V.texte(d.allergies, 'Allergies / handicap', { max: 120 }))) throw E(e, 'allergies');
+    // matricule national unique
+    const mn = u.norm(d.matNat);
+    if (mn) {
+      const autre = S().students.find((o) => o !== existant && u.norm(o.matNat) === mn);
+      if (autre) throw E(`Matricule national déjà attribué à ${X.nomComplet(autre)} (${autre.classe}).`, 'matNat');
+    }
+  }
+
+  /** Élèves déjà enregistrés qui ressemblent à celui-ci (même nom et prénoms, même naissance si connue). */
+  function doublons(d, existant) {
+    const n = u.norm(u.majNom(d.nom) + u.majPrenoms(d.prenoms));
+    return S().students.filter((o) => o !== existant && u.norm(o.nom + o.prenoms) === n && (!d.naissance || !o.naissance || o.ageEstime || o.naissance === d.naissance));
+  }
+
+  function appliquer(d, s) {
+    const ex = d.extrait === true || d.extrait === 'on';
+    const tut = d.tuteur === true || d.tuteur === 'on';
+    const age = Number(d.age) || 0;
+    const nat = AK.ref.NATIONALITES.find((x) => u.norm(x[1]) === u.norm(d.nationalite));
+    Object.assign(s, {
+      matNat: String(d.matNat || '').replace(/\s/g, '').toUpperCase(),
+      nom: u.majNom(String(d.nom).trim().replace(/\s+/g, ' ')),
+      prenoms: u.majPrenoms(String(d.prenoms).trim().replace(/\s+/g, ' ')),
+      naissance: ex ? d.naissance : `${X.anneeRentree() - age}-01-01`,
+      ageEstime: !ex,
+      lieu: String(d.lieu || '').trim(),
+      sexe: d.sexe,
+      nationalite: nat ? nat[1] : String(d.nationalite || '').trim().toUpperCase() || C.NAT_DEFAUT,
+      classe: d.classe,
+      statut: s.statut || 'Inscrit',
+      parent: tut ? u.majNomComplet(String(d.parent || '').trim()) : '',
+      tel: tut ? V.telPropre(d.tel) : '',
+      redoublant: d.redoublant === true || d.redoublant === 'on',
+      extrait: ex,
+      pere: lireParent(d, 'pere'),
+      mere: lireParent(d, 'mere'),
+      sang: C.SANG.includes(d.sang) ? d.sang : '',
+      allergies: String(d.allergies || '').trim(),
+      entree: d.classe === 'CP1' && !s.entree ? u.aujourdhui() : d.entree || s.entree || '',
+      motifDepart: s.motifDepart || '',
+      parcours: s.parcours || [],
+      acte: ex ? { num: String(d.acte_num || '').trim(), date: d.acte_date || '', centre: String(d.acte_centre || '').trim(), sp: String(d.acte_sp || '').trim() } : s.acte || { num: '', date: '', centre: '', sp: '' }
+    });
+    if (d.photo !== undefined) s.photo = d.photo && u.IMG_OK.test(d.photo) ? d.photo : '';
+    if (d.extraitPhoto !== undefined) s.extraitPhoto = d.extraitPhoto && u.IMG_OK.test(d.extraitPhoto) ? d.extraitPhoto : '';
+    return s;
+  }
+
+  const eleves = {
+    prochainMatricule,
+    controler,
+    doublons,
+    trouver: (id) => S().students.find((s) => s.id === id) || null,
+    /** Inscription. options.accepterDoublon : l'utilisateur a confirmé qu'il s'agit d'un autre enfant. */
+    inscrire(d, { accepterDoublon = false } = {}) {
+      AK.perm.exiger('eleve.inscrire', { classe: d.classe });
+      controler(d, null);
+      const dbl = doublons(d, null);
+      if (dbl.length && !accepterDoublon) {
+        const err = E(`Un élève du même nom est déjà enregistré : ${dbl.map((o) => `${X.nomComplet(o)} (${o.classe}, ${X.fmtNaissance(o)})`).join(' ; ')}.`, 'nom');
+        err.doublons = dbl;
+        throw err;
+      }
+      const s = appliquer(d, { id: u.uid(), mat: prochainMatricule(), photo: '', decision: '', statut: 'Inscrit', inscritLe: u.aujourdhui() });
+      AK.store.modifier(`Inscription : ${X.nomComplet(s)} (${s.classe})`, (st) => st.students.push(s), { categorie: 'eleves' });
+      return s;
+    },
+    modifier(id, d) {
+      const s = eleves.trouver(id);
+      if (!s) throw E('Élève introuvable.');
+      AK.perm.exiger('eleve.modifier', { classe: s.classe });
+      AK.perm.exiger('eleve.modifier', { classe: d.classe });
+      controler(d, s);
+      const avant = s.classe;
+      AK.store.modifier(`Dossier modifié : ${X.nomComplet(s)}${avant !== d.classe ? ` (classe ${avant} → ${d.classe})` : ''}`, () => appliquer(d, s), { categorie: 'eleves' });
+      return s;
+    },
+    changerStatut(id, statut, motif) {
+      const s = eleves.trouver(id);
+      if (!s) throw E('Élève introuvable.');
+      AK.perm.exiger('eleve.statut', { classe: s.classe });
+      if (!C.STATUTS.includes(statut)) throw E('Statut inconnu.');
+      AK.store.modifier(`Statut de ${X.nomComplet(s)} : ${statut}${motif ? ' (' + String(motif).slice(0, 80) + ')' : ''}`, () => {
+        s.statut = statut;
+        s.motifDepart = statut === 'Inscrit' ? '' : String(motif || '').trim().slice(0, 200);
+        if (statut !== 'Inscrit') s.departLe = s.departLe || u.aujourdhui();
+        else delete s.departLe;
+      }, { categorie: 'eleves' });
+    },
+    /** Suppression : l'élève et ses notes, absences… vont à la corbeille (restaurables). */
+    supprimer(id) {
+      const s = eleves.trouver(id);
+      if (!s) throw E('Élève introuvable.');
+      AK.perm.exiger('eleve.supprimer', { classe: s.classe });
+      const docs = (S().docs.items || []).filter((d) => d.sujet && d.sujet.id === id && d.statut === 'valide');
+      AK.store.modifier(`Élève supprimé (corbeille) : ${X.nomComplet(s)}`, (st) => {
+        const notes = {}, abs = {}, compAbs = {}, attente = {};
+        Object.keys(st.grades).forEach((k) => {
+          if (k.startsWith(id + '|')) {
+            notes[k] = st.grades[k];
+            delete st.grades[k];
+          }
+        });
+        Object.keys(st.attente).forEach((k) => {
+          if (k.startsWith(id + '|')) {
+            attente[k] = st.attente[k];
+            delete st.attente[k];
+          }
+        });
+        Object.keys(st.compAbs).forEach((k) => {
+          if (k.startsWith(id + '|')) {
+            compAbs[k] = true;
+            delete st.compAbs[k];
+          }
+        });
+        Object.entries(st.att).forEach(([d, m]) => {
+          if (m[id]) {
+            abs[d] = m[id];
+            delete m[id];
+          }
+        });
+        st.students = st.students.filter((x) => x !== s);
+        st.corbeille.unshift({ id: u.uid(), type: 'eleve', t: Date.now(), libelle: `${X.nomComplet(s)} (${s.classe})`, donnees: { s, notes, abs, compAbs, attente } });
+      }, { categorie: 'eleves' });
+      return { documentsValides: docs.length };
+    },
+    appliquer
+  };
+  AK.eleves = eleves;
+})(window.AK);

@@ -1,0 +1,179 @@
+/* =====================================================================================
+   AKWA SCHOOL 2 — jetons de design
+   Identité : structure bleu nuit, surfaces blanc cassé, gris chauds pour les zones secondaires,
+   un bleu d'action franc et un accent ambre (la toque du logo) employé avec parcimonie.
+   Contrastes vérifiés : texte courant ≥ 7:1, texte secondaire ≥ 4.5:1 (WCAG AA).
+   ===================================================================================== */
+:root {
+  /* Structure */
+  --nuit-950: #0a1422;
+  --nuit-900: #0f1c2f;
+  --nuit-850: #13233a;
+  --nuit-800: #182b45;
+  --nuit-700: #223754;
+  --nuit-600: #2f4766;
+  --nuit-txt: #e7edf6;
+  --nuit-mut: #a3b1c4;
+
+  /* Surfaces */
+  --bg: #f4f2ed;
+  --surface: #ffffff;
+  --surface-2: #fbfaf7;
+  --sunk: #efece5;
+  --sunk-2: #e7e3da;
+
+  /* Encre */
+  --ink: #152033;
+  --ink-2: #364357;
+  --mut: #5c687a;
+  --faint: #8b94a2;
+
+  /* Lignes */
+  --line: #e4e0d7;
+  --line-2: #d3cec3;
+
+  /* Action principale */
+  --pri: #1f4e8c;
+  --pri-h: #173e72;
+  --pri-soft: #e8eef7;
+  --pri-ring: rgba(31, 78, 140, 0.28);
+  --on-pri: #ffffff;
+
+  /* Accent de marque (parcimonie) */
+  --acc: #c7782f;
+  --acc-ink: #8a4c12;
+  --acc-soft: #f8ecde;
+
+  /* États (toujours accompagnés d'un texte ou d'une icône) */
+  --ok: #1d774c;
+  --ok-soft: #e4f2ea;
+  --warn: #965803;
+  --warn-soft: #fbf0dc;
+  --bad: #b2352c;
+  --bad-soft: #fbe8e6;
+  --info: #2b5d9c;
+  --info-soft: #e7eef8;
+
+  /* Graphiques garçons / filles */
+  --cg: #2f5e9e;
+  --cf: #c7782f;
+
+  /* Formes */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r: 10px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+
+  /* Ombres légères et fonctionnelles */
+  --sh-1: 0 1px 2px rgba(15, 28, 47, 0.06);
+  --sh-2: 0 4px 14px rgba(15, 28, 47, 0.08), 0 1px 3px rgba(15, 28, 47, 0.05);
+  --sh-3: 0 20px 50px rgba(10, 20, 34, 0.24), 0 4px 12px rgba(10, 20, 34, 0.08);
+
+  /* Espacements (grille de 4 px) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 40px;
+
+  /* Typographie (polices du système : aucune police téléchargée) */
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-titre: "Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "Liberation Mono", monospace;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs: 14px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+
+  /* Gabarits */
+  --ctl-h: 38px;
+  --ctl-h-sm: 30px;
+  --side-w: 258px;
+  --side-wc: 72px;
+  --top-h: 60px;
+  --contenu-max: 1440px;
+
+  /* Mouvement (rapide et discret) */
+  --t-fast: 120ms ease;
+  --t: 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: light;
+}
+
+/* Couleur d'action choisie par l'école (la structure reste bleu nuit) */
+:root[data-accent="green"] { --pri: #1c6b4a; --pri-h: #155539; --pri-soft: #e5f1ea; --pri-ring: rgba(28, 107, 74, 0.28); }
+:root[data-accent="amber"] { --pri: #9a5212; --pri-h: #7d420e; --pri-soft: #f7ece0; --pri-ring: rgba(154, 82, 18, 0.28); }
+:root[data-accent="plum"] { --pri: #5e3a8c; --pri-h: #4b2e70; --pri-soft: #efe9f6; --pri-ring: rgba(94, 58, 140, 0.28); }
+
+/* Thème sombre : automatique, ou forcé dans Paramètres */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1420;
+    --surface: #121d2c;
+    --surface-2: #15212f;
+    --sunk: #192636;
+    --sunk-2: #1f2e41;
+    --ink: #e7edf5;
+    --ink-2: #c3cedb;
+    --mut: #9aa8b9;
+    --faint: #6f7d8f;
+    --line: #233246;
+    --line-2: #2f4057;
+    --pri: #6f9fe2;
+    --pri-h: #8db4ec;
+    --pri-soft: #1a2b42;
+    --pri-ring: rgba(111, 159, 226, 0.35);
+    --on-pri: #08121f;
+    --acc: #e09a52;
+    --acc-ink: #f0b277;
+    --acc-soft: #2c2215;
+    --ok: #4fbf87; --ok-soft: #142b21;
+    --warn: #e2a54a; --warn-soft: #2d2313;
+    --bad: #ef7a70; --bad-soft: #321a19;
+    --info: #79a8e6; --info-soft: #172a42;
+    --cg: #6f9fe2;
+    --cf: #e09a52;
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --sh-2: 0 6px 18px rgba(0, 0, 0, 0.4);
+    --sh-3: 0 24px 60px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1420;
+  --surface: #121d2c;
+  --surface-2: #15212f;
+  --sunk: #192636;
+  --sunk-2: #1f2e41;
+  --ink: #e7edf5;
+  --ink-2: #c3cedb;
+  --mut: #9aa8b9;
+  --faint: #6f7d8f;
+  --line: #233246;
+  --line-2: #2f4057;
+  --pri: #6f9fe2;
+  --pri-h: #8db4ec;
+  --pri-soft: #1a2b42;
+  --pri-ring: rgba(111, 159, 226, 0.35);
+  --on-pri: #08121f;
+  --acc: #e09a52;
+  --acc-ink: #f0b277;
+  --acc-soft: #2c2215;
+  --ok: #4fbf87; --ok-soft: #142b21;
+  --warn: #e2a54a; --warn-soft: #2d2313;
+  --bad: #ef7a70; --bad-soft: #321a19;
+  --info: #79a8e6; --info-soft: #172a42;
+  --cg: #6f9fe2;
+  --cf: #e09a52;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sh-2: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --sh-3: 0 24px 60px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}

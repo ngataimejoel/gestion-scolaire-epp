@@ -1,0 +1,70 @@
+/* =====================================================================================
+   Cartes d'identification : format ID-1 (ISO/IEC 7810 : 85,60 × 53,98 mm) par défaut,
+   portrait, badge 70 × 100 mm ou dimensions personnalisées (variables --cw / --ch).
+   Zone de sécurité de 3 mm : aucun texte ni QR code dans la marge de découpe.
+   ===================================================================================== */
+.carte-id {
+  --cw: 85.6mm; --ch: 53.98mm; --c-acc: #1f4e8c; --c-acc2: #c7782f; --c-encre: #121a26; --c-gris: #5a6372;
+  position: relative; width: var(--cw); height: var(--ch); overflow: hidden; background: #fff; color: var(--c-encre);
+  font: 6.6pt/1.25 Arial, "Liberation Sans", Helvetica, sans-serif; border-radius: 3mm; box-sizing: border-box;
+  print-color-adjust: exact; -webkit-print-color-adjust: exact; color-scheme: light;
+}
+.carte-id * { box-sizing: border-box; }
+.carte-id .filigrane { z-index: 0; }
+.carte-id .bande { position: absolute; left: 0; right: 0; top: 0; height: 11.5mm; background: var(--c-acc); color: #fff; display: flex; align-items: center; gap: 2mm; padding: 0 3mm; z-index: 1; }
+.carte-id.eco .bande { background: #fff; color: var(--c-acc); border-bottom: 0.6pt solid var(--c-acc); }
+.carte-id .bande img { width: 7.5mm; height: 7.5mm; object-fit: contain; background: #fff; border-radius: 1.2mm; padding: 0.4mm; flex: none; }
+.carte-id .bande .ecole { min-width: 0; flex: 1; }
+.carte-id .bande .ecole b { display: block; font-size: 6.9pt; letter-spacing: 0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.carte-id .bande .ecole span { display: block; font-size: 4.9pt; opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; }
+.carte-id .bande .type { text-align: right; flex: none; }
+.carte-id .bande .type b { display: block; font-size: 5.6pt; letter-spacing: 0.08em; text-transform: uppercase; }
+.carte-id .bande .type span { display: block; font-size: 5.2pt; opacity: 0.9; }
+.carte-id .filet { position: absolute; left: 0; right: 0; top: 11.5mm; height: 0.8mm; background: var(--c-acc2); z-index: 1; }
+.carte-id .photo { position: absolute; left: 3mm; top: 14.6mm; width: 19.5mm; height: 25mm; border: 0.5pt solid #9aa3af; border-radius: 1mm; background: #f3f4f6; overflow: hidden; display: grid; place-items: center; color: #8b93a1; font-size: 4.8pt; text-align: center; z-index: 2; }
+.carte-id .photo img { width: 100%; height: 100%; object-fit: cover; }
+.carte-id .infos { position: absolute; left: 25.2mm; right: 21.5mm; top: 14.2mm; z-index: 2; }
+.carte-id .infos .nom { font-size: 8.4pt; font-weight: 800; text-transform: uppercase; line-height: 1.1; letter-spacing: 0.01em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.carte-id .infos .prenoms { font-size: 7pt; font-weight: 600; margin-top: 0.4mm; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.carte-id .infos dl { display: grid; grid-template-columns: auto 1fr; gap: 0.5mm 1.6mm; margin: 1.8mm 0 0; }
+.carte-id .infos dt { color: var(--c-gris); font-size: 5.4pt; text-transform: uppercase; letter-spacing: 0.04em; align-self: center; }
+.carte-id .infos dd { margin: 0; font-weight: 700; font-size: 6.6pt; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.carte-id .infos dd.mono { font-family: "Consolas", "Cascadia Mono", "Liberation Mono", monospace; letter-spacing: 0.02em; }
+.carte-id .qr { position: absolute; right: 3mm; top: 14.2mm; width: 17mm; height: 17mm; background: #fff; z-index: 2; }
+.carte-id .qr svg { display: block; width: 100%; height: 100%; }
+.carte-id .ref { position: absolute; right: 3mm; top: 31.6mm; width: 17mm; text-align: center; font: 700 3.9pt/1.15 "Consolas", "Cascadia Mono", monospace; color: #333; z-index: 2; overflow-wrap: anywhere; }
+.carte-id .pied { position: absolute; left: 3mm; right: 3mm; bottom: 2.6mm; display: flex; justify-content: space-between; align-items: flex-end; gap: 2mm; z-index: 2; }
+.carte-id .pied .valid { font-size: 5.3pt; color: var(--c-gris); line-height: 1.25; }
+.carte-id .pied .valid b { color: var(--c-encre); }
+.carte-id .pied .sig { text-align: center; font-size: 4.9pt; color: var(--c-gris); min-width: 22mm; border-top: 0.4pt solid #9aa3af; padding-top: 0.5mm; }
+.carte-id .statut-carte { position: absolute; left: 3mm; top: 41mm; z-index: 3; font-size: 5.2pt; font-weight: 800; letter-spacing: 0.06em; color: #b2352c; }
+
+/* Personnel : accent inversé */
+.carte-id.agent { --c-acc: #13233a; --c-acc2: #c7782f; }
+
+/* Portrait (54 × 85,6 mm) et badge */
+.carte-id.portrait .bande { height: 15mm; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 0.6mm; padding: 1.6mm 3mm; }
+.carte-id.portrait .bande .type { text-align: center; }
+.carte-id.portrait .bande img { position: absolute; left: 2.6mm; top: 3.6mm; width: 7mm; height: 7mm; }
+.carte-id.portrait .bande .ecole { padding: 0 8mm; text-align: center; flex: none; width: 100%; }
+.carte-id.portrait .filet { top: 15mm; }
+.carte-id.portrait .photo { left: 50%; transform: translateX(-50%); top: 18mm; width: 22mm; height: 28mm; }
+.carte-id.portrait .infos { left: 3mm; right: 3mm; top: 47.5mm; text-align: center; }
+.carte-id.portrait .infos dl { grid-template-columns: auto auto; justify-content: center; text-align: left; }
+.carte-id.portrait .qr { right: auto; left: 3mm; top: auto; bottom: 3mm; width: 15mm; height: 15mm; }
+.carte-id.portrait .ref { right: auto; left: 19.4mm; top: auto; bottom: 3.2mm; width: auto; text-align: left; }
+.carte-id.portrait .pied { left: auto; right: 3mm; bottom: 3mm; flex-direction: column; align-items: flex-end; }
+.carte-id.portrait .statut-carte { top: 18mm; left: 3mm; }
+
+/* Verso */
+.carte-id.verso { padding: 3mm; }
+.carte-id.verso .v-tete { font-size: 6.6pt; font-weight: 800; text-transform: uppercase; color: var(--c-acc); border-bottom: 0.5pt solid var(--c-acc); padding-bottom: 1mm; margin-bottom: 1.4mm; position: relative; z-index: 2; }
+.carte-id.verso .v-texte { font-size: 5.6pt; line-height: 1.38; position: relative; z-index: 2; color: #222; }
+.carte-id.verso .v-texte p { margin: 0 0 1.2mm; }
+.carte-id.verso .v-pied { position: absolute; left: 3mm; right: 3mm; bottom: 3mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 5pt; color: var(--c-gris); z-index: 2; }
+
+/* Planche A4 de cartes avec traits de coupe */
+.planche { position: relative; }
+.planche .emplacement { position: absolute; }
+.planche .trait { position: absolute; background: #000; }
+.planche .legende-planche { position: absolute; left: 0; right: 0; bottom: 3mm; text-align: center; font: 6.5pt Arial, sans-serif; color: #777; }
