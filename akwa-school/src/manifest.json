@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "ressources": {
+    "logo": "assets/logo-akwa.jpg",
+    "armoiries": "assets/armoiries.jpg",
+    "photos": { "maitre": "assets/photos/maitre.jpg" }
+  },
+  "css": [
+    "styles/00-tokens.css",
+    "styles/01-base.css",
+    "styles/02-layout.css",
+    "styles/03-components.css",
+    "styles/04-ecrans.css"
+  ],
+  "js": [
+    "js/core/ns.js",
+    "js/core/util.js",
+    "js/core/icons.js",
+    "js/core/config.js",
+    "js/core/referentiels.js",
+    "js/core/validate.js",
+    "js/core/diag.js",
+    "vendor/qrcode-generator.js",
+    "@ressources",
+    "js/data/schema.js",
+    "js/data/storage.js",
+    "js/data/host.js",
+    "js/data/store.js",
+    "js/security/crypto.js",
+    "js/security/auth.js",
+    "js/security/perm.js",
+    "js/security/keys.js",
+    "js/domain/calc.js",
+    "js/domain/eleves.js",
+    "js/domain/personnel.js",
+    "js/domain/notes.js",
+    "js/domain/absences.js",
+    "js/domain/pro.js",
+    "js/domain/import.js",
+    "js/domain/demo.js",
+    "js/data/backup.js",
+    "js/ui/actions.js",
+    "js/ui/dialogues.js",
+    "js/ui/composants.js",
+    "js/ui/tableau.js",
+    "js/ui/shell.js",
+    "js/screens/accueil.js",
+    "@verificateur",
+    "js/ui/app.js"
+  ],
+  "verificateur": {
+    "gabarit": "verifier/verifier.html",
+    "css": [],
+    "js": []
+  }
+}

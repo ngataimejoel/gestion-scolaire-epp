@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "dist/**",
+    // AKWA SCHOOL 2 (HTML autonome) : vérifié par ses propres outils (akwa-school/package.json)
+    "akwa-school/**",
   ]),
   // Le processus principal Electron est en CommonJS.
   {
