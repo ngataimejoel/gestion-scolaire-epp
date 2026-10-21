@@ -291,7 +291,7 @@ const oublierMdp = (page) => P(page, () => AK.auth.oublierConfirmation());
   f = await telecharger(page, () => page.click('form[data-type="paiements"] [type=submit]'));
   ok('CSV versements : reçu, montant, payeur avec accents et guillemets', lignesCsv(f.texte).length === 2 && /"REC-\d{4}-\d{5}"/.test(f.texte) && /"2000"/.test(f.texte) && /« Tantie » N’GUESSAN/.test(f.texte));
   await P(page, async () => {
-    AK.pro.depense({ libelle: 'Craies et cahiers « Clairefontaine » – réparation de l’armoire', montant: '15500', date: AK.u.aujourdhui(), cat: 'Fournitures scolaires', fournisseur: 'Librairie N’Zi', justif: 'Facture n° 12' });
+    AK.pro.ajouterDepense({ libelle: 'Craies et cahiers « Clairefontaine » – réparation de l’armoire', montant: '15500', date: AK.u.aujourdhui(), cat: 'Fournitures scolaires', fournisseur: 'Librairie N’Zi', justif: 'Facture n° 12' });
     const s = AK.calc.actifsDe('CE2')[0], X = AK.calc, sc = AK.store.etat.school;
     await AK.registre.emettre({ type: 'CSC', modele: 'certificat-scolarite', version: 1, sujet: { type: 'eleve', id: s.id, libelle: X.nomComplet(s) + ' (' + s.classe + ')' }, canon: { nom: s.nom, prenoms: s.prenoms, matricule: X.matOf(s), classe: s.classe, annee: sc.year, ecole: sc.name, extra: '' } });
   });

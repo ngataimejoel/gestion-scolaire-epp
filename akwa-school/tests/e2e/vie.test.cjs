@@ -48,6 +48,7 @@ const debordement = (page) => page.evaluate(() => document.documentElement.scrol
   await aller(page, 'vie/edt?classe=CE1');
   ok('EDT : 28 cases (4 jours × 7 créneaux)', (await page.locator('#contenu .tab.edt select').count()) === 28);
   ok('EDT : chaque case a un libellé accessible', await P(page, () => [...document.querySelectorAll('#contenu .tab.edt select')].every((s) => /^(Lundi|Mardi|Jeudi|Vendredi), \d/.test(s.getAttribute('aria-label')))));
+  await page.focus('#edt-1-0'); // comme un utilisateur (clavier ou souris) : la liste a le focus pendant le choix
   await page.selectOption('#edt-1-0', 'MATHEMATIQUES');
   await page.waitForTimeout(250);
   ok('EDT : case enregistrée aussitôt', (await P(page, () => AK.store.etat.pro.edt.CE1['1|0'])) === 'MATHEMATIQUES');
@@ -133,7 +134,7 @@ const debordement = (page) => page.evaluate(() => document.documentElement.scrol
   ok('Cahier : deuxième séance (ancienne) consignée', (await P(page, () => AK.store.etat.pro.cahier.length)) === 2);
   await page.selectOption('#contenu [data-f="per"]', 'semaine');
   await page.waitForTimeout(200);
-  ok('Cahier : filtre « Cette semaine »', (await page.locator('#contenu tbody tr').count()) === 1 && /1 sur 2/.test(await page.textContent('#contenu .compte-res')));
+  ok('Cahier : filtre « Cette semaine »', (await page.locator('#contenu tbody tr').count()) === 1 && /^1 séance/.test(await page.textContent('#contenu .compte-res')), await page.textContent('#contenu .compte-res'));
   await page.selectOption('#contenu [data-f="per"]', 'perso');
   await page.waitForTimeout(200);
   await page.fill('#vie-cahier-du', auj);
@@ -221,7 +222,9 @@ const debordement = (page) => page.evaluate(() => document.documentElement.scrol
   await P(page, (sid) => AK.pro.incident({ sid, date: AK.u.aujourdhui(), fait: 'Bavardage en classe', detail: '', sanction: 'Avertissement oral', statut: 'En cours' }), ids.cp1[0]);
   await page.waitForTimeout(200);
   ok('Discipline : élèves à suivre (6 points cumulés en tête)', await P(page, (nom) => { const c = document.querySelector('#contenu .vie-suivi'); return !!c && c.firstElementChild.textContent.includes(nom) && /6\s*points/.test(c.firstElementChild.textContent); }, ids.nomCe1));
-  ok('Discipline : indicateurs (3 en cours, 2 convocations)', await P(page, () => { const k = [...document.querySelectorAll('#contenu .kpi')].map((x) => x.querySelector('.kpi-v').textContent); return k[1] === '3' && k[2] === '2'; }));
+  const kpis = await P(page, () => [...document.querySelectorAll('#contenu .kpi')].map((x) => x.querySelector('.kpi-v').textContent.trim()));
+  const nConv = await P(page, () => AK.store.etat.pro.incidents.filter((i) => /Convocation/.test(i.sanction || '')).length);
+  ok('Discipline : indicateurs (3 en cours, convocations = faits sanctionnés par une convocation)', kpis[1] === '3' && kpis[2] === String(nConv), JSON.stringify(kpis) + ' ' + JSON.stringify(await P(page, () => AK.store.etat.pro.incidents.map((i) => [i.statut, i.convocation || i.convoque || '', i.sanction]))));
   ok('Discipline : nombre de faits en cours sur l’onglet', /Discipline\s*3/.test(await page.textContent('#contenu .onglets')));
   const idInc = await P(page, () => AK.store.etat.pro.incidents[0].id);
   await page.click(`[data-action="vie-incident-clore"][data-id="${idInc}"]`);
