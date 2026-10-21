@@ -24,7 +24,7 @@ Le workflow GitHub Actions **« AKWA SCHOOL 2 - Windows (.exe) et Android (.apk)
   l’exécutable est auto-testé sur Windows (`--auto-test` : démarrage, contrat `AkwaNatif`, vrai PDF) ;
 - `AKWA-SCHOOL-2-Android` : APK construit dans la coquille Android du dépôt (`epp-expert/android`),
   signé avec la clé de publication (secrets `ANDROID_KEYSTORE_*`), sous l’identifiant
-  `com.akwaschool.ecole2` et le nom « AKWA SCHOOL 2 » : il s’installe **à côté** de l’application v8
+  `com.akwaschool.ecole2` (nom affiché : « AKWA SCHOOL ») : il s’installe **à côté** de l’application v8
   sans la remplacer. Pour qu’il la remplace (et reprenne son fichier `etat_v8.json`), retirer du workflow
   les lignes qui changent l’identifiant et l’autorité de partage — l’application v8 perdrait alors sa
   synchronisation Wi-Fi, sa licence et son code PIN, que la version 2 ne reprend pas ;

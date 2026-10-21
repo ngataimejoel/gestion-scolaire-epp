@@ -122,21 +122,20 @@ jobs:
       - name: Fichier HTML
         working-directory: akwa-school
         run: node tools/build.mjs
-      - name: Coquille Android avec AKWA SCHOOL 2 (copie de travail de la CI seulement)
+      - name: Coquille Android avec la version 2 (copie de travail de la CI seulement)
         working-directory: epp-expert/android
         run: |
           set -e
           www=app/src/main/assets/www
           cp ../../akwa-school/dist/AKWA_SCHOOL.html $www/index.html
           rm -f $www/pont_android.js
-          # identifiant, nom et autorité de partage distincts : s'installe à côté de l'application v8
+          # nom affiché inchangé (« AKWA SCHOOL ») ; identifiant et autorité de partage distincts : s'installe à côté de l'application v8
           sed -i 's/applicationId "com.akwaschool.mobile"/applicationId "com.akwaschool.ecole2"/' app/build.gradle
           sed -i 's/versionCode parties\[0\] \* 10000 + parties\[1\] \* 100 + parties\[2\]/versionCode 20000/; s/versionName versionWindows/versionName "2.0.0"/' app/build.gradle
-          sed -i 's#<string name="app_name">AKWA SCHOOL</string>#<string name="app_name">AKWA SCHOOL 2</string>#' app/src/main/res/values/strings.xml
           sed -i 's/com.akwaschool.mobile.partage/com.akwaschool.ecole2.partage/' app/src/main/AndroidManifest.xml app/src/main/java/com/akwaschool/mobile/Partage.java
           grep -q 'applicationId "com.akwaschool.ecole2"' app/build.gradle
           grep -q 'versionName "2.0.0"' app/build.gradle
-          grep -q 'AKWA SCHOOL 2' app/src/main/res/values/strings.xml
+          grep -q '<string name="app_name">AKWA SCHOOL</string>' app/src/main/res/values/strings.xml
           test "$(grep -c 'com.akwaschool.ecole2.partage' app/src/main/AndroidManifest.xml app/src/main/java/com/akwaschool/mobile/Partage.java | awk -F: '{s+=$2} END {print s}')" -ge 2
           grep -q 'AK.VERSION' $www/index.html
       - name: Construire l'APK
@@ -153,14 +152,14 @@ jobs:
             export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/akwa.p12"
             trap 'rm -f "$RUNNER_TEMP/akwa.p12"' EXIT
             gradle --no-daemon --stacktrace assembleRelease
-            cp app/build/outputs/apk/release/app-release.apk AKWA-SCHOOL-2.apk
+            cp app/build/outputs/apk/release/app-release.apk AKWA-SCHOOL-2.0.0.apk
           else
             echo "::warning::Secrets de signature absents : APK de mise au point (clé de débogage), à ne pas distribuer."
             gradle --no-daemon --stacktrace assembleDebug
-            cp app/build/outputs/apk/debug/app-debug.apk AKWA-SCHOOL-2-debug.apk
+            cp app/build/outputs/apk/debug/app-debug.apk AKWA-SCHOOL-2.0.0-debug.apk
           fi
           outils=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
-          for f in AKWA-SCHOOL-2*.apk; do
+          for f in AKWA-SCHOOL-*.apk; do
             "$outils/apksigner" verify --print-certs "$f"
             "$outils/aapt2" dump badging "$f" | head -3
             unzip -l "$f" | grep "assets/www/index.html"
@@ -169,5 +168,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: AKWA-SCHOOL-2-Android
-          path: epp-expert/android/AKWA-SCHOOL-2*.apk
+          path: epp-expert/android/AKWA-SCHOOL-*.apk
           if-no-files-found: error
