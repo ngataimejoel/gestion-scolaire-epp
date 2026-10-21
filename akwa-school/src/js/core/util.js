@@ -76,12 +76,19 @@
   }
 
   /* ---------- Nombres ---------- */
-  const arrondi = (x, n = 2) => Math.round((x + Number.EPSILON) * 10 ** n) / 10 ** n;
+  /** Arrondi décimal au plus proche, demi vers le haut (10,075 → 10,08) : décalage par l'exposant, sans erreur binaire. */
+  const arrondi = (x, n = 2) => {
+    if (!Number.isFinite(x)) return x;
+    // 12 chiffres significatifs : absorbe l'erreur binaire des sommes (10,01 + 10 = 20,009999…)
+    const y = Number(x.toPrecision(12));
+    const r = Number(Math.round(Number(y + 'e' + n)) + 'e-' + n);
+    return Number.isFinite(r) ? r + 0 : Math.round(x * 10 ** n) / 10 ** n; // + 0 : jamais « -0 »
+  };
   const moyenne = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
   const fmtNote = (n) => (n == null || !Number.isFinite(n) ? '—' : n.toFixed(2).replace('.', ','));
   const fmtSaisie = (n) => (n == null ? '' : String(n).replace('.', ','));
   const pct = (a, b) => (b ? Math.round((a / b) * 100) + ' %' : '—');
-  const fcfa = (n) => Math.round(n || 0).toLocaleString('fr-FR') + ' F';
+  const fcfa = (n) => (Math.round(n || 0) + 0).toLocaleString('fr-FR') + ' F';
   const pluriel = (n, a, b) => n + ' ' + (Math.abs(n) > 1 ? b || a + 's' : a);
   const entier = (v) => (v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0));
 

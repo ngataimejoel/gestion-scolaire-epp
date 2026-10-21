@@ -5,8 +5,9 @@
    ===================================================================================== */
 
 /* Situation d'un élève (paramètre ?eleve=) */
-.fin-situation { border-color: color-mix(in srgb, var(--pri) 35%, var(--line)); }
-.fin-situation .carte-tete.fin-tete { flex-wrap: wrap; align-items: center; }
+.fin-situation { border-color: color-mix(in srgb, var(--pri) 35%, var(--line)); scroll-margin-top: calc(var(--top-h, 64px) + 16px); }
+.fin-situation .carte-tete.fin-tete { align-items: center; margin-bottom: 10px; }
+.fin-situation .fin-tete .qui { min-width: 0; }
 .fin-situation h2 { overflow-wrap: anywhere; }
 .fin-situation h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--font); font-weight: 700; }
 .fin-chiffres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
@@ -25,14 +26,24 @@
 .fin-poste .val { font-size: 12.5px; color: var(--mut); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
 .fin-poste .val b { color: var(--ink); }
 
+/* Motif d'annulation : retour à la ligne dans un tableau (cellules sans retour par défaut) */
+.fin-motif { display: block; white-space: normal; min-width: 140px; max-width: 260px; margin-top: 3px; overflow-wrap: anywhere; }
+
+/* Filtres de période : libellé visible devant le champ date */
+.fin-date { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; color: var(--mut); }
+.fin-date .inp { width: auto; }
+
 /* Grille des frais (fenêtre) et taux de recouvrement */
 .fin-grille-frais td { padding: 6px 8px; }
 .fin-montant { width: 108px; min-width: 88px; text-align: right; }
-.fin-taux { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; }
-.fin-taux .progression { flex: 1 1 60px; min-width: 60px; }
+.fin-taux { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 3px; }
+.fin-taux .progression { width: 64px; flex: none; }
 
 @media (max-width: 560px) {
-  .fin-chiffres { grid-template-columns: minmax(0, 1fr); }
+  .fin-chiffres { gap: 6px; }
+  .fin-chiffre { padding: 8px; }
+  .fin-chiffre span { font-size: 11px; }
+  .fin-chiffre b { font-size: 14.5px; }
   .fin-poste { grid-template-columns: minmax(0, 1fr) auto; }
   .fin-poste .piste { grid-column: 1 / -1; grid-row: 2; }
 }

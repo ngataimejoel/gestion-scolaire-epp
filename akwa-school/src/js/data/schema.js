@@ -149,14 +149,21 @@
     delete S.school.secours;
     delete S.session;
 
-    S.students = tableau(o.students).map(completerEleve);
-    S.teachers = tableau(o.teachers).map(completerAgent);
+    // entrées illisibles (null, texte…) d'un fichier abîmé : ignorées et signalées, jamais bloquantes
+    const fiches = (x, lib) => {
+      const L = tableau(x), ok = L.filter((e) => e && typeof e === 'object' && !Array.isArray(e));
+      if (ok.length < L.length) notes.push(`${L.length - ok.length} entrée(s) illisible(s) ignorée(s) dans : ${lib}.`);
+      return ok;
+    };
+    S.students = fiches(o.students, 'élèves').map(completerEleve);
+    S.teachers = fiches(o.teachers, 'personnel').map(completerAgent);
     S.grades = objet(o.grades);
     Object.keys(S.grades).forEach((k) => {
       if (typeof S.grades[k] !== 'number') delete S.grades[k];
     });
     ['compAbs', 'att', 'appel', 'redac', 'archives', 'attente', 'saisie', 'cpMat'].forEach((k) => (S[k] = objet(o[k])));
-    ['auth', 'conges', 'persoReps', 'log', 'messages', 'cpExtra', 'corbeille'].forEach((k) => (S[k] = tableau(o[k])));
+    [['auth', 'autorisations'], ['conges', 'calendrier'], ['persoReps', 'rapports personnalisés'], ['log', 'journal'], ['messages', 'messages'], ['corbeille', 'corbeille']].forEach(([k, lib]) => (S[k] = fiches(o[k], lib)));
+    S.cpExtra = tableau(o.cpExtra).filter((m) => typeof m === 'string');
     S.messages.forEach((m) => (m.lus = objet(m.lus)));
     S.auth.forEach((a) => {
       if (!a.id) a.id = u.uid();
@@ -171,14 +178,14 @@
     S.pro.cantine.inscrits = objet(S.pro.cantine.inscrits);
     S.pro.cantine.repas = objet(S.pro.cantine.repas);
     if (!Array.isArray(S.pro.cantine.menu) || S.pro.cantine.menu.length !== C.JOURS_EDT.length) S.pro.cantine.menu = pv.cantine.menu;
-    ['cahier', 'incidents', 'soins', 'events', 'paiements', 'depenses', 'livres', 'prets', 'sms', 'annonces', 'transmis', 'journal'].forEach((k) => (S.pro[k] = tableau(S.pro[k])));
+    ['cahier', 'incidents', 'soins', 'events', 'paiements', 'depenses', 'livres', 'prets', 'sms', 'annonces', 'transmis', 'journal'].forEach((k) => (S.pro[k] = fiches(S.pro[k], 'vie scolaire / finances / services')));
     ['edt', 'frais', 'cepe'].forEach((k) => (S.pro[k] = objet(S.pro[k])));
     S.pro.seq = { rec: 1, ...objet(S.pro.seq) };
     // numéro de reçu suivant : jamais en dessous du plus grand numéro existant
     const maxRec = S.pro.paiements.reduce((m, p) => Math.max(m, parseInt(String(p.ref || '').split('-').pop(), 10) || 0), 0);
     if (S.pro.seq.rec <= maxRec) S.pro.seq.rec = maxRec + 1;
 
-    S.docs = { seq: objet(objet(o.docs).seq), items: tableau(objet(o.docs).items) };
+    S.docs = { seq: objet(objet(o.docs).seq), items: fiches(objet(o.docs).items, 'registre des documents') };
     S.modeles = objet(o.modeles);
     S.cles = { liste: tableau(objet(o.cles).liste), active: objet(o.cles).active || null };
     if (o.infra) S.infra = objet(o.infra);

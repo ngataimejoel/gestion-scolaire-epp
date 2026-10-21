@@ -55,6 +55,8 @@
         return { etat: 'attente', v };
       }
       if (ancien === v || (ancien == null && v == null)) return { etat: 'inchange', v };
+      // corriger ou effacer une note enregistrée (validée) : réservé au directeur, quel que soit l'écran
+      if (ancien != null) AK.perm.exiger('notes.corriger', { classe: s.classe });
       if (ancien != null && !options.correctionConfirmee) {
         const err = E(`Corriger la note de ${X.nomComplet(s)} en ${m} : ${u.fmtNote(ancien)} → ${v == null ? '(vide)' : u.fmtNote(v)} sur ${max} ?`);
         err.correction = true;
@@ -75,7 +77,10 @@
       n = Number(n);
       if (AK.session.estEnseignant() && !saisieOuverte(s.classe, n)) throw E('La saisie est fermée pour cette évaluation.');
       const k = sid + '|' + n;
-      const aDesNotes = Object.keys(S().grades).some((g) => g.startsWith(k + '|')) || Object.keys(S().attente).some((g) => g.startsWith(k + '|'));
+      const notesValidees = Object.keys(S().grades).some((g) => g.startsWith(k + '|'));
+      const aDesNotes = notesValidees || Object.keys(S().attente).some((g) => g.startsWith(k + '|'));
+      // marquer absent efface les notes : si des notes sont validées, c'est une correction (directeur)
+      if (absent && notesValidees) AK.perm.exiger('notes.corriger', { classe: s.classe });
       if ((aDesNotes || !absent) && !options.confirme) {
         const err = E(absent
           ? `Marquer ${X.nomComplet(s)} absent(e) ? Ses notes de cette évaluation seront effacées et sa moyenne vaudra 0.`

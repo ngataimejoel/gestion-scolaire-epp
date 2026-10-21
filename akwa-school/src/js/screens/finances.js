@@ -95,8 +95,8 @@
   /** Champ de recherche d'un tableau de cet écran (identifiant stable : le focus est conservé). */
   const champRecherche = (cle, tab, texte) =>
     html`<div class="recherche-tab">${ic('search')}<input class="inp" type="search" id="fin-q-${cle}" value="${recherche[cle]}" placeholder="${texte}" aria-label="${texte}" data-input="fin-recherche" data-cle="${cle}" data-tab="${tab}" autocomplete="off"></div>`;
-  const filtreDate = (route, tab, f, val, lib) =>
-    html`<input class="inp inp-sm" type="date" value="${val}" max="${u.aujourdhui()}" data-change="fin-filtre" data-route="${route}" data-tab="${tab}" data-f="${f}" aria-label="${lib}" data-bulle="${lib}" style="width:auto">`;
+  const filtreDate = (route, tab, f, val, court, lib) =>
+    html`<label class="fin-date"><span>${court}</span><input class="inp inp-sm" type="date" value="${val}" max="${u.aujourdhui()}" data-change="fin-filtre" data-route="${route}" data-tab="${tab}" data-f="${f}" aria-label="${lib}"></label>`;
   const filtreChoix = (route, tab, f, liste, val, vide, lib) =>
     html`<select class="inp inp-sm" data-change="fin-filtre" data-route="${route}" data-tab="${tab}" data-f="${f}" aria-label="${lib}">${ui.options(liste, val, vide)}</select>`;
   const actionsLigne = (contenu) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap">${contenu}</div>`;
@@ -191,7 +191,10 @@
 
   /* ---------- Situation d'un élève (paramètre ?eleve=) ---------- */
   const chiffre = (lib, v, fort) => html`<div class="fin-chiffre${fort ? ' fort' : ''}"><span>${lib}</span><b>${u.fcfa(v)}</b></div>`;
-  const celStatut = (r) => (r.annule ? html`${ui.tag('Annulé', 'mauvais', 'ban')}<br><span class="mut petit">le ${u.fmtDate(String(r.annule.le || '').slice(0, 10))} · ${r.annule.motif}</span>` : ui.tag('Valide', 'ok', 'check'));
+  const celStatut = (r) => (r.annule ? html`${ui.tag('Annulé', 'mauvais', 'ban')}<span class="mut petit fin-motif">le ${u.fmtDate(String(r.annule.le || '').slice(0, 10))} · ${r.annule.motif}</span>` : ui.tag('Valide', 'ok', 'check'));
+  const celRecu = (r) => html`<span class="mono">${r.ref}</span><br><span class="mut petit">${u.fmtDate(r.date)}</span>`;
+  const celObjet = (r) => html`${r.objet}<br><span class="mut petit">${r.mode}</span>`;
+  const triRecu = (r) => `${r.date}|${r.ref}`;
   const celMontant = (r) => (r.annule ? html`<del aria-label="${u.fcfa(r.montant)}, annulé">${u.fcfa(r.montant)}</del>` : html`<b>${u.fcfa(r.montant)}</b>`);
   const celActions = (r) => actionsLigne(html`<button type="button" class="btn-ic" data-action="fin-recu-imprimer" data-id="${r.id}" aria-label="Imprimer le reçu ${r.ref}${r.annule ? ' (annulé)' : ''}" data-bulle="Imprimer le reçu">${ic('print')}</button>${r.annule ? '' : html`<button type="button" class="btn-ic" data-action="fin-recu-annuler" data-id="${r.id}" aria-label="Annuler le reçu ${r.ref}" data-bulle="Annuler le reçu (motif et mot de passe)">${ic('ban')}</button>`}`);
 
@@ -207,13 +210,13 @@
     const R = recusDe(s.id).slice().sort(parDateDesc);
     const nbAnnules = R.filter((r) => r.annule).length;
     return html`<section class="carte mb fin-situation" id="fin-situation" aria-labelledby="fin-situation-titre">
-      <div class="carte-tete fin-tete"><div class="qui">${ui.avatar(s)}<div class="tronque"><h2 id="fin-situation-titre" tabindex="-1">Situation de ${x.nomComplet(s)}</h2><div class="sous">${s.classe} · ${x.matOf(s)}${s.statut !== 'Inscrit' ? ' · ' + s.statut : ''}</div></div></div>
-        <div class="ligne"><button type="button" class="btn btn-sm btn-pri" data-action="fin-encaisser" data-id="${s.id}">${ic('coin')}Encaisser un versement</button>${reste > 0 ? html`<button type="button" class="btn btn-sm" data-action="fin-rappel" data-id="${s.id}">${ic('msg')}Rappel au parent</button>` : ''}<button type="button" class="btn btn-sm" data-action="fiche-eleve" data-id="${s.id}">${ic('user')}Fiche élève</button>${fermer}</div></div>
+      <div class="carte-tete fin-tete"><div class="qui">${ui.avatar(s)}<div><h2 id="fin-situation-titre" tabindex="-1">Situation de ${x.nomComplet(s)}</h2><div class="sous">${s.classe} · ${x.matOf(s)}${s.statut !== 'Inscrit' ? ' · ' + s.statut : ''}</div></div></div>${fermer}</div>
+      <div class="ligne mb"><button type="button" class="btn btn-sm btn-pri" data-action="fin-encaisser" data-id="${s.id}">${ic('coin')}Encaisser un versement</button>${reste > 0 ? html`<button type="button" class="btn btn-sm" data-action="fin-rappel" data-id="${s.id}">${ic('msg')}Rappel au parent</button>` : ''}<button type="button" class="btn btn-sm" data-action="fiche-eleve" data-id="${s.id}">${ic('user')}Fiche élève</button></div>
       <div class="fin-chiffres mb">${chiffre('Total dû', du)}${chiffre('Déjà versé', paye)}${chiffre('Reste à payer', reste, true)}</div>
       <div class="ligne mb">${tagEtat(pro.etatPaie(s))}${!du ? html`<span class="mut petit">Aucun frais fixé pour ${s.classe}.</span>` : ''}${pro.telParent(s) ? html`<span class="mut petit">${ic('msg', 'i-sm')} Parent : <a href="tel:${pro.telParent(s)}">${pro.telParent(s)}</a></span>` : ''}</div>
       <div class="grille g-1-2">
         <div><h3 class="petit mut mb">Par rubrique</h3>${objets.length ? html`<div class="tab-cadre"><table class="tab" aria-label="Frais et versements par rubrique"><thead><tr><th>Rubrique</th><th class="r">Dû</th><th class="r">Versé</th></tr></thead><tbody>${objets.map((o) => html`<tr><td>${o.lib}</td><td class="r num">${o.du == null ? '—' : u.fcfa(o.du)}</td><td class="r num">${u.fcfa(o.verse)}</td></tr>`)}</tbody></table></div>` : html`<p class="mut petit mb0">Aucun frais ni versement.</p>`}</div>
-        <div><h3 class="petit mut mb">Reçus (${R.length}${nbAnnules ? `, dont ${nbAnnules} annulé(s)` : ''})</h3>${R.length ? html`<div class="tab-cadre"><table class="tab" aria-label="Reçus de ${x.nomComplet(s)}"><thead><tr><th>Reçu</th><th>Date</th><th>Objet</th><th>Mode</th><th class="r">Montant</th><th>Statut</th><th class="r"><span class="sr">Actions</span></th></tr></thead><tbody>${R.map((r) => html`<tr><td class="mono">${r.ref}</td><td>${u.fmtDate(r.date)}</td><td>${r.objet}</td><td>${r.mode}</td><td class="r num">${celMontant(r)}</td><td class="texte">${celStatut(r)}</td><td class="r">${celActions(r)}</td></tr>`)}</tbody></table></div>` : ui.vide('Aucun versement', 'Aucun reçu n’a encore été établi pour cet élève.')}</div>
+        <div><h3 class="petit mut mb">Reçus (${R.length}${nbAnnules ? `, dont ${nbAnnules} annulé(s)` : ''})</h3>${R.length ? html`<div class="tab-cadre"><table class="tab" aria-label="Reçus de ${x.nomComplet(s)}"><thead><tr><th>Reçu</th><th>Objet</th><th class="r">Montant</th><th>Statut</th><th class="r"><span class="sr">Actions</span></th></tr></thead><tbody>${R.map((r) => html`<tr><td>${celRecu(r)}</td><td>${celObjet(r)}</td><td class="r num">${celMontant(r)}</td><td>${celStatut(r)}</td><td class="r">${celActions(r)}</td></tr>`)}</tbody></table></div>` : ui.vide('Aucun versement', 'Aucun reçu n’a encore été établi pour cet élève.')}</div>
       </div></section>`;
   }
   let situationVue = null;
@@ -228,7 +231,7 @@
     setTimeout(() => {
       const t = document.getElementById('fin-situation-titre');
       if (!t) return;
-      t.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      (document.getElementById('fin-situation') || t).scrollIntoView({ block: 'start', behavior: 'smooth' });
       t.focus({ preventScroll: true });
     }, 40);
   }
@@ -287,29 +290,29 @@
       ${filtreChoix(R_PAIE, T, 'objet', C.OBJETS_PAIE, p.objet, 'Tous les objets', 'Objet')}
       ${filtreChoix(R_PAIE, T, 'mode', C.MODES_PAIE, p.mode, 'Tous les modes', 'Mode de paiement')}
       ${filtreChoix(R_PAIE, T, 'statut', [['valide', 'Valides'], ['annule', 'Annulés']], p.statut, 'Valides et annulés', 'Statut du reçu')}
-      ${filtreDate(R_PAIE, T, 'du', du, 'Versements à partir du')}${filtreDate(R_PAIE, T, 'au', au, 'Versements jusqu’au')}
+      ${filtreDate(R_PAIE, T, 'du', du, 'Du', 'Versements à partir du')}${filtreDate(R_PAIE, T, 'au', au, 'Au', 'Versements jusqu’au')}
       ${filtre ? html`<button type="button" class="btn btn-sm btn-ghost" data-action="fin-effacer" data-route="${R_PAIE}" data-cle="recus" data-vue="historique">${ic('x')}Effacer les filtres</button>` : ''}`;
     return html`${V.periode(du, au) ? ui.encadre(V.periode(du, au), 'avert', 'cal') : ''}
       ${parMode.length ? html`<div class="ligne mb">${parMode.map(([m, v]) => html`<span class="puce">${m} : <b>${u.fcfa(v)}</b></span>`)}</div>` : ''}
       ${ui.tableau({
         id: T, lignes: L, filtres, unite: 'reçu', parPage: 50, exporter: 'versements', legende: 'Historique des reçus',
         colonnes: [
-          { cle: 'ref', lib: 'Reçu', tri: (r) => r.ref, rendu: (r) => html`<span class="mono">${r.ref}</span>`, csv: (r) => r.ref },
-          { cle: 'date', lib: 'Date', tri: (r) => r.date, rendu: (r) => u.fmtDate(r.date) },
+          { cle: 'ref', lib: 'Reçu', tri: triRecu, rendu: celRecu, csv: (r) => r.ref },
+          { cle: 'date', lib: 'Date', cache: true, csv: (r) => r.date },
           { cle: 'eleve', lib: 'Élève', tri: (r) => nomDe(r.sid), csv: (r) => nomDe(r.sid), rendu: (r) => {
             const s = eleveDe(r.sid);
             return s ? html`<button type="button" class="lien" data-action="fin-situation" data-id="${s.id}">${x.nomComplet(s)}</button><br><span class="mut petit">${s.classe} · ${x.matOf(s)}</span>` : html`<span class="mut">${nomDe(r.sid)}</span>`;
           } },
           { cle: 'classe', lib: 'Classe', cache: true, csv: (r) => (eleveDe(r.sid) || {}).classe || '' },
           { cle: 'mat', lib: 'Matricule', cache: true, csv: (r) => (eleveDe(r.sid) ? x.matOf(eleveDe(r.sid)) : '') },
-          { cle: 'objet', lib: 'Objet', tri: (r) => r.objet },
-          { cle: 'mode', lib: 'Mode', tri: (r) => r.mode },
+          { cle: 'objet', lib: 'Objet et mode', tri: (r) => r.objet, rendu: celObjet, csv: (r) => r.objet },
+          { cle: 'mode', lib: 'Mode', cache: true, csv: (r) => r.mode },
           { cle: 'payeur', lib: 'Versé par', tri: (r) => r.payeur || '', rendu: (r) => r.payeur || html`<span class="mut">—</span>`, csv: (r) => r.payeur || '' },
           { cle: 'montant', lib: 'Montant', cls: 'r num', tri: (r) => +r.montant, rendu: celMontant },
-          { cle: 'statut', lib: 'Statut', cls: 'texte', tri: (r) => (r.annule ? 1 : 0), rendu: celStatut, csv: (r) => (r.annule ? `Annulé le ${u.fmtDate(String(r.annule.le || '').slice(0, 10))} : ${r.annule.motif}` : 'Valide') },
+          { cle: 'statut', lib: 'Statut', tri: (r) => (r.annule ? 1 : 0), rendu: celStatut, csv: (r) => (r.annule ? `Annulé le ${u.fmtDate(String(r.annule.le || '').slice(0, 10))} : ${r.annule.motif}` : 'Valide') },
           { cle: 'act', lib: '', cls: 'r', csv: false, rendu: celActions }
         ],
-        pied: L.length ? html`<tr><td colspan="6">Total des reçus valides (${valides.length})${annules.length ? html` · <span class="mut">${u.pluriel(annules.length, 'reçu annulé', 'reçus annulés')} : ${u.fcfa(somme(annules))}, non comptés</span>` : ''}</td><td class="r num">${u.fcfa(somme(valides))}</td><td colspan="2"></td></tr>` : null,
+        pied: L.length ? html`<tr><td colspan="4">Total des reçus valides (${valides.length})${annules.length ? html` · <span class="mut">${u.pluriel(annules.length, 'reçu annulé', 'reçus annulés')} : ${u.fcfa(somme(annules))}, non comptés</span>` : ''}</td><td class="r num">${u.fcfa(somme(valides))}</td><td colspan="2"></td></tr>` : null,
         vide: P().paiements.length ? ui.vide('Aucun reçu', 'Aucun reçu ne correspond à ces filtres.') : ui.vide('Aucun versement encaissé', 'Les reçus apparaîtront ici dès le premier versement.', html`<button type="button" class="btn btn-pri" data-action="fin-encaisser">${ic('plus')}Encaisser un versement</button>`)
       })}`;
   }
@@ -323,15 +326,15 @@
       return { c, f, tot: RUBRIQUES.reduce((a, [k]) => a + f[k], 0), n: A.length, du: A.reduce((a, s) => a + pro.duDe(s), 0), recouvre: A.reduce((a, s) => a + Math.min(pro.payeDe(s), pro.duDe(s)), 0) };
     });
     const tot = (k) => L.reduce((a, o) => a + o[k], 0);
-    const taux = (a, b) => {
-      if (!b) return html`<span class="mut">—</span>`;
+    const recouvre = (a, b) => {
+      if (!b) return html`${u.fcfa(a)}`;
       const t = Math.round((a / b) * 100);
-      return html`<span class="fin-taux"><span class="progression" aria-hidden="true"><i style="width:${Math.min(100, t)}%"></i></span><b>${t} %</b></span>`;
+      return html`${u.fcfa(a)}<span class="fin-taux"><span class="progression" aria-hidden="true"><i style="width:${Math.min(100, t)}%"></i></span><span class="petit">${t} %</span></span>`;
     };
     return ui.carte('Grille des frais par niveau', html`<div class="tab-cadre"><table class="tab" aria-label="Frais par niveau et recouvrement">
-        <thead><tr><th>Niveau</th>${RUBRIQUES.map(([, lib]) => html`<th class="r">${lib}</th>`)}<th class="r">Total par élève</th><th class="r">Élèves</th><th class="r">Attendu</th><th class="r">Recouvré</th><th>Taux</th></tr></thead>
-        <tbody>${L.map((o) => html`<tr><td><b>${o.c}</b></td>${RUBRIQUES.map(([k]) => html`<td class="r num">${o.f[k] ? u.fcfa(o.f[k]) : html`<span class="mut">—</span>`}</td>`)}<td class="r num"><b>${u.fcfa(o.tot)}</b></td><td class="r num">${o.n}</td><td class="r num">${u.fcfa(o.du)}</td><td class="r num">${u.fcfa(o.recouvre)}</td><td>${taux(o.recouvre, o.du)}</td></tr>`)}</tbody>
-        <tfoot><tr><td colspan="6">Ensemble de l’école</td><td class="r num">${tot('n')}</td><td class="r num">${u.fcfa(tot('du'))}</td><td class="r num">${u.fcfa(tot('recouvre'))}</td><td>${taux(tot('recouvre'), tot('du'))}</td></tr></tfoot></table></div>
+        <thead><tr><th>Niveau</th>${RUBRIQUES.map(([, lib]) => html`<th class="r">${lib}</th>`)}<th class="r">Total par élève</th><th class="r">Élèves</th><th class="r">Attendu</th><th class="r">Recouvré (taux)</th></tr></thead>
+        <tbody>${L.map((o) => html`<tr><td><b>${o.c}</b></td>${RUBRIQUES.map(([k]) => html`<td class="r num">${o.f[k] ? u.fcfa(o.f[k]) : html`<span class="mut">—</span>`}</td>`)}<td class="r num"><b>${u.fcfa(o.tot)}</b></td><td class="r num">${o.n}</td><td class="r num">${u.fcfa(o.du)}</td><td class="r num">${recouvre(o.recouvre, o.du)}</td></tr>`)}</tbody>
+        <tfoot><tr><td colspan="6">Ensemble de l’école</td><td class="r num">${tot('n')}</td><td class="r num">${u.fcfa(tot('du'))}</td><td class="r num">${recouvre(tot('recouvre'), tot('du'))}</td></tr></tfoot></table></div>
       <p class="mut petit mt mb0">Montants annuels par élève, en francs CFA. Le total dû d’un élève est la somme des rubriques de son niveau ; le recouvrement ne compte pas ce qui dépasse le dû.</p>`,
     { sous: 'Inscription, cotisation COGES, tenue et autres contributions', actions: html`<button type="button" class="btn btn-sm btn-pri" data-action="fin-frais">${ic('edit')}Modifier les frais</button>` });
   }
@@ -515,7 +518,7 @@
     const filtres = html`${champRecherche('depenses', T, 'Libellé, fournisseur, pièce…')}
       ${filtreChoix(R_DEP, T, 'cat', [...new Set([...C.CAT_DEP, ...tout.map((d) => d.cat)])], p.cat, 'Tous les postes', 'Poste de dépense')}
       ${filtreChoix(R_DEP, T, 'justif', [['avec', 'Avec justificatif'], ['sans', 'Sans justificatif']], p.justif, 'Toutes les pièces', 'Justificatif')}
-      ${filtreDate(R_DEP, T, 'du', du, 'Dépenses à partir du')}${filtreDate(R_DEP, T, 'au', au, 'Dépenses jusqu’au')}
+      ${filtreDate(R_DEP, T, 'du', du, 'Du', 'Dépenses à partir du')}${filtreDate(R_DEP, T, 'au', au, 'Au', 'Dépenses jusqu’au')}
       ${filtre ? html`<button type="button" class="btn btn-sm btn-ghost" data-action="fin-effacer" data-route="${R_DEP}" data-cle="depenses">${ic('x')}Effacer les filtres</button>` : ''}`;
     return html`${ui.pageTete('Dépenses', 'Dépenses de l’école (fonds COGES, subventions) avec leur pièce justificative. Le journal de caisse s’imprime pour l’assemblée générale.',
       html`<button type="button" class="btn" data-action="fin-journal">${ic('print')}Journal de caisse</button><button type="button" class="btn btn-pri" data-action="fin-depense-nouvelle">${ic('plus')}Nouvelle dépense</button>`)}

@@ -27,7 +27,7 @@ Installateur Windows et application Android : [`packaging/README.md`](packaging/
 ## Tester
 
 ```
-node --test tests/unit/                     # modules purs (calculs, validation, QR, signature, migration)
+node --test tests/unit/*.test.cjs           # modules purs (calculs, validation, QR, signature, migration)
 node tests/e2e/routes.test.cjs              # tous les écrans (Playwright + Chromium)
 node tests/e2e/documents.test.cjs           # chaîne documentaire complète
 node tests/e2e/qr.test.cjs                  # lecteur de QR codes hors ligne

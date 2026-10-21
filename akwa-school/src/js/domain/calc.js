@@ -16,7 +16,10 @@
     return L.length ? L : C.TOUS_NIVEAUX.slice();
   };
   /** Niveau suivant dans le cursus (CP1 → CP2…), indépendamment des niveaux ouverts ; null après le CM2. */
-  const niveauSuivant = (c) => C.TOUS_NIVEAUX[C.TOUS_NIVEAUX.indexOf(c) + 1] || null;
+  const niveauSuivant = (c) => {
+    const i = C.TOUS_NIVEAUX.indexOf(c);
+    return i < 0 ? null : C.TOUS_NIVEAUX[i + 1] || null;
+  };
   const info = (c) => C.CLASSE_INFO[c] || C.CLASSE_INFO.CP1;
   const grille = (c) => C.GRILLES[info(c).grille];
   const cpChoix = (c, n) => (S() && S().cpMat && S().cpMat[c] ? S().cpMat[c][n] : null);

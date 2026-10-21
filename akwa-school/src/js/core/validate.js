@@ -77,7 +77,7 @@
   V.ECOLE_ERR = (prive) => (prive ? 'Saisissez le nom de l’école (3 caractères au moins).' : 'Une école publique a un nom commençant par EPP (ex. EPP OUANINOU 2).');
   /** DRENAET : « Touba » ou « DRENAET DE TOUBA » → libellé et direction régionale de l'en-tête */
   V.drenaetDe = (v) => {
-    const l = String(v || '').trim().replace(/\s+/g, ' ').toUpperCase().replace(/^DRENA(?:ET)?\s*(?:(?:DE|DU|DES)\s+|D['’]\s*)?/, '').trim();
+    const l = String(v || '').trim().replace(/\s+/g, ' ').toUpperCase().replace(/^DRENA(?:ET)?\s*(?:(?:DE|DU|DES)(?:\s+|$)|D['’]\s*)?/, '').trim();
     if (!l) return null;
     const de = /^[AEIOUYÀÂÉÈÊÎÔ]/.test(l) ? "D'" : 'DE ';
     return { drenaet: 'DRENAET ' + de + l, direction: C.ENTETE.direction + ' ' + de + l };
@@ -93,12 +93,13 @@
   };
   /** Note saisie : nombre décimal (virgule ou point) entre 0 et max ; renvoie {v} ou {err}. */
   V.note = (raw, max) => {
-    const s = String(raw || '').trim().replace(',', '.');
+    const s = String(raw ?? '').trim().replace(',', '.');
     if (s === '') return { v: null };
     if (!/^\d+(\.\d+)?$/.test(s)) return { err: `Note invalide : entrez un nombre entre 0 et ${max}.` };
+    // deux décimales au plus, contrôlées sur le texte (8,7 * 100 n'est pas exactement 870 en binaire)
+    if (/\.\d{3,}$/.test(s)) return { err: 'Note invalide : deux décimales au plus.' };
     const v = Number(s);
     if (v > max) return { err: `Note invalide : ${String(v).replace('.', ',')} dépasse le barème (${max}).` };
-    if (Math.round(v * 100) !== v * 100) return { err: 'Note invalide : deux décimales au plus.' };
     return { v };
   };
 
