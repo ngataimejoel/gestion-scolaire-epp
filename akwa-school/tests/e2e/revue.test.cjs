@@ -23,6 +23,7 @@ async function enseignant(page) {
   /* ===================== Enseignant ===================== */
   {
     const { navigateur, page, erreurs } = await ouvrir();
+    page.setDefaultTimeout(10000);
     await enseignant(page);
     const ctx = await page.evaluate(() => ({ c: AK.session.classes()[0], autre: AK.calc.niveaux().find((k) => !AK.session.classes().includes(k)) }));
     const r1 = await essai(page, (a) => AK.docs.ouvrir('classement', [{ classe: a, periode: 1 }]), ctx.autre);
@@ -85,6 +86,7 @@ async function enseignant(page) {
 
   /* ===================== Directeur ===================== */
   const { navigateur, page, erreurs } = await ouvrir();
+  page.setDefaultTimeout(10000);
   await demo(page);
 
   // Élèves : import
@@ -237,6 +239,8 @@ async function enseignant(page) {
   console.log(`${res.filter((r) => r.ok).length}/${res.length} vérifications réussies`);
   process.exitCode = res.every((r) => r.ok) ? 0 : 1;
 })().catch((e) => {
-  console.error(e);
-  process.exitCode = 1;
+  res.filter((r) => !r.ok).forEach((r) => console.log('ÉCHEC', r.nom, '→', r.detail));
+  console.log(`${res.filter((r) => r.ok).length}/${res.length} vérifications réussies avant l’arrêt`);
+  console.error('ARRÊT', e.message.split('\n')[0]);
+  process.exit(1);
 });

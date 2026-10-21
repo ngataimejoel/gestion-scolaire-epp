@@ -9,7 +9,7 @@
   "scripts": {
     "preparer": "node ../../tools/build.mjs && node -e \"require('fs').mkdirSync('app',{recursive:true});require('fs').copyFileSync('../../dist/AKWA_SCHOOL.html','app/AKWA_SCHOOL.html')\"",
     "demarrer": "npm run preparer && electron .",
-    "exe": "npm run preparer && electron-builder --win nsis --x64 --publish never"
+    "exe": "npm run preparer && electron-builder --win --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^33.2.1",
@@ -19,9 +19,31 @@
     "appId": "ci.akwaschool.app",
     "productName": "AKWA SCHOOL",
     "copyright": "N'GATTA",
-    "files": ["main.js", "preload.js", "app/AKWA_SCHOOL.html", "package.json"],
-    "directories": { "output": "sortie" },
-    "win": { "target": "nsis", "artifactName": "AKWA-SCHOOL-Setup-${version}.${ext}" },
-    "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false, "shortcutName": "AKWA SCHOOL" }
+    "files": [
+      "main.js",
+      "preload.js",
+      "app/AKWA_SCHOOL.html",
+      "package.json"
+    ],
+    "directories": {
+      "output": "sortie"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "shortcutName": "AKWA SCHOOL",
+      "artifactName": "AKWA-SCHOOL-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "AKWA-SCHOOL-Portable-${version}.${ext}"
+    }
   }
 }

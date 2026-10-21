@@ -45,8 +45,9 @@ l’auteur, qui ont reproduit dans Chromium 28 défauts (détail dans `CHANGELOG
 Personnel et Documents ont été relus ensuite par l’auteur lui-même (relecture indépendante interrompue
 pour limiter la consommation) : 6 défauts supplémentaires trouvés et corrigés (« Tout le monde présent »
 effaçant les absences justifiées, « remplacer » un document sans droit, duplicata d’un document à
-référence unique, bouton inactif de l’accueil…). `revue.test.cjs` échoue sur la version précédente et
-réussit sur la version actuelle.
+référence unique, bouton inactif de l’accueil…). Contre-épreuve : sur la version précédente, `revue.test.cjs` échoue
+à 22 des 25 premières vérifications puis s’arrête (case « Absent » sans identifiant) ; sur la version
+actuelle, 38 / 38.
 
 ## 2. Matrice de tests (A à W)
 
@@ -88,8 +89,8 @@ d’une ancienne sauvegarde, largeur de téléphone (390 × 844) sans débordeme
 
 | Élément | Raison | Ce qui le remplace |
 |---|---|---|
-| **APK Android** (construction et essai sur téléphone) | Gradle et le SDK Android absents de l’environnement | pont `AkwaNative` imité d’après `Pont.java` (`hotes`) ; liste de recette dans `packaging/android/README.md` |
-| **Installateur Windows** (Electron) | registre npm inaccessible depuis l’environnement | contrat `AkwaNatif` simulé (`hotes`) ; liste de recette dans `packaging/windows-electron/README.md` |
+| **APK Android** : essai sur un téléphone | SDK Android inaccessible depuis l’environnement de développement ; la construction est confiée à la CI GitHub (`.github/workflows/akwa-school-2.yml`) | pont `AkwaNative` imité d’après `Pont.java` (`hotes`) ; liste de recette dans `packaging/android/README.md` |
+| **Installateur Windows** : essai sur un poste | registre npm inaccessible depuis l’environnement de développement ; construction et auto-test de l’exécutable confiés à la CI GitHub (Windows) | contrat `AkwaNatif` simulé (`hotes`) ; liste de recette dans `packaging/windows-electron/README.md` |
 | Application Windows PySide6 | PySide6 indisponible | pont `QWebChannel` simulé (`hotes`) |
 | Firefox et Safari | seul Chromium est installé | aucun ; fonctions utilisées standard (IndexedDB, WebCrypto, `<dialog>`) |
 | Impression sur une **vraie imprimante** et à la **vraie caméra** | matériel absent | PDF du moteur d’impression contrôlés ; lecture de QR sur images déformées |

@@ -1,0 +1,173 @@
+name: AKWA SCHOOL 2 - Windows (.exe) et Android (.apk)
+
+# Construit, à partir du dossier akwa-school/, le fichier HTML unique puis :
+#  - l'installateur Windows et la version portable (.exe, Electron), auto-testés sur Windows ;
+#  - l'APK Android, dans la coquille Android du dépôt (epp-expert/android : Pont.java, contrat AkwaNative),
+#    sous un identifiant distinct (com.akwaschool.ecole2) pour ne pas remplacer l'application AKWA SCHOOL v8
+#    déjà installée sur les téléphones. Signé avec la clé de publication si les secrets sont présents.
+# Les fichiers produits sont dans les « Artifacts » de chaque exécution.
+
+on:
+  push:
+    paths: ["akwa-school/**", ".github/workflows/akwa-school-2.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  html:
+    name: HTML et tests unitaires
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: akwa-school
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node tools/build.mjs
+      - run: node --test tests/unit/*.test.cjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AKWA-SCHOOL-2-HTML
+          path: |
+            akwa-school/dist/AKWA_SCHOOL.html
+            akwa-school/dist/AKWA_SCHOOL_verification_modele.html
+          if-no-files-found: error
+
+  e2e:
+    name: Tests de bout en bout (Chromium)
+    needs: html
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: akwa-school
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node tools/build.mjs
+      - name: Playwright et Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.0
+          npx playwright install --with-deps chromium
+      - name: Suites de bout en bout
+        run: |
+          echec=0
+          for t in routes qr documents droits hotes donnees parametres-modeles-securite vie verificateur services-parametres finances-rapports revue; do
+            echo "::group::$t"
+            node tests/e2e/$t.test.cjs || echec=1
+            echo "::endgroup::"
+          done
+          PROFIL=ens node tests/e2e/routes.test.cjs || echec=1
+          exit $echec
+
+  windows:
+    name: Windows (.exe)
+    needs: html
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: akwa-school/packaging/windows-electron
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Dépendances (Electron, electron-builder)
+        run: npm install --no-audit --no-fund
+      - name: Construire l'installateur et la version portable
+        run: npm run exe
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Auto-test de l'exécutable construit (sans Node)
+        run: |
+          $exe = Get-ChildItem sortie\win-unpacked -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "exécutable introuvable dans sortie\win-unpacked" }
+          $res = Join-Path $env:RUNNER_TEMP "auto-test.json"
+          $p = Start-Process -FilePath $exe.FullName -ArgumentList "--auto-test=$res" -PassThru -Wait
+          Get-Content $res
+          if ($p.ExitCode -ne 0) { throw "auto-test en échec (code $($p.ExitCode))" }
+          Get-ChildItem sortie\*.exe | Format-Table Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AKWA-SCHOOL-2-Windows
+          path: akwa-school/packaging/windows-electron/sortie/*.exe
+          if-no-files-found: error
+
+  android:
+    name: Android (.apk)
+    needs: html
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+      - name: Fichier HTML
+        working-directory: akwa-school
+        run: node tools/build.mjs
+      - name: Coquille Android avec AKWA SCHOOL 2 (copie de travail de la CI seulement)
+        working-directory: epp-expert/android
+        run: |
+          set -e
+          www=app/src/main/assets/www
+          cp ../../akwa-school/dist/AKWA_SCHOOL.html $www/index.html
+          rm -f $www/pont_android.js
+          # identifiant, nom et autorité de partage distincts : s'installe à côté de l'application v8
+          sed -i 's/applicationId "com.akwaschool.mobile"/applicationId "com.akwaschool.ecole2"/' app/build.gradle
+          sed -i 's/versionCode parties\[0\] \* 10000 + parties\[1\] \* 100 + parties\[2\]/versionCode 20000/; s/versionName versionWindows/versionName "2.0.0"/' app/build.gradle
+          sed -i 's#<string name="app_name">AKWA SCHOOL</string>#<string name="app_name">AKWA SCHOOL 2</string>#' app/src/main/res/values/strings.xml
+          sed -i 's/com.akwaschool.mobile.partage/com.akwaschool.ecole2.partage/' app/src/main/AndroidManifest.xml app/src/main/java/com/akwaschool/mobile/Partage.java
+          grep -q 'applicationId "com.akwaschool.ecole2"' app/build.gradle
+          grep -q 'versionName "2.0.0"' app/build.gradle
+          grep -q 'AKWA SCHOOL 2' app/src/main/res/values/strings.xml
+          test "$(grep -c 'com.akwaschool.ecole2.partage' app/src/main/AndroidManifest.xml app/src/main/java/com/akwaschool/mobile/Partage.java | awk -F: '{s+=$2} END {print s}')" -ge 2
+          grep -q 'AK.VERSION' $www/index.html
+      - name: Construire l'APK
+        working-directory: epp-expert/android
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -e
+          if [ -n "$ANDROID_KEYSTORE_B64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "$ANDROID_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/akwa.p12"
+            export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/akwa.p12"
+            trap 'rm -f "$RUNNER_TEMP/akwa.p12"' EXIT
+            gradle --no-daemon --stacktrace assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk AKWA-SCHOOL-2.apk
+          else
+            echo "::warning::Secrets de signature absents : APK de mise au point (clé de débogage), à ne pas distribuer."
+            gradle --no-daemon --stacktrace assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk AKWA-SCHOOL-2-debug.apk
+          fi
+          outils=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          for f in AKWA-SCHOOL-2*.apk; do
+            "$outils/apksigner" verify --print-certs "$f"
+            "$outils/aapt2" dump badging "$f" | head -3
+            unzip -l "$f" | grep "assets/www/index.html"
+            ls -l "$f"
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AKWA-SCHOOL-2-Android
+          path: epp-expert/android/AKWA-SCHOOL-2*.apk
+          if-no-files-found: error

@@ -8,14 +8,16 @@
      version()                             → version de l'application
    Données : IndexedDB dans le profil de l'application (%APPDATA%\AKWA SCHOOL), conservées
    lors des mises à jour. Aucune connexion Internet n'est utilisée.
-   NON TESTÉ dans l'environnement de développement (npm indisponible) : à construire et vérifier
-   sous Windows (voir README.md).
+   Construit et auto-testé par la CI GitHub (.github/workflows/akwa-school-2.yml) : l'option
+   --auto-test=<fichier.json> ouvre la page sans l'afficher, vérifie le démarrage et le contrat
+   AkwaNatif, produit un PDF avec printToPDF, écrit le résultat puis quitte (code 0 si tout va bien).
    ===================================================================================== */
 const { app, BrowserWindow, ipcMain, dialog, shell, session } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 
 const PAGE = path.join(__dirname, 'app', 'AKWA_SCHOOL.html');
+const AUTO_TEST = (process.argv.find((a) => a.startsWith('--auto-test=')) || '').slice('--auto-test='.length);
 let fenetre = null;
 
 // une seule fenêtre : deux instances écriraient dans la même base IndexedDB
@@ -34,7 +36,8 @@ function creerFenetre() {
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, spellcheck: false }
   });
   fenetre.removeMenu();
-  fenetre.once('ready-to-show', () => fenetre.show());
+  if (AUTO_TEST) fenetre.webContents.once('did-finish-load', autoTest);
+  else fenetre.once('ready-to-show', () => fenetre.show());
   // la page ne quitte jamais l'application : les liens externes (tel:, sms:, mailto:, https:) vont au système
   fenetre.webContents.on('will-navigate', (e, url) => {
     if (url !== fenetre.webContents.getURL() && !url.startsWith('file://' + PAGE.replace(/\\/g, '/'))) {
@@ -52,6 +55,31 @@ function creerFenetre() {
     if (r === 1) e.preventDefault();
   });
   fenetre.loadFile(PAGE);
+}
+
+/** Auto-test de l'exécutable construit (CI) : démarrage de la page, hôte « natif », vrai PDF. */
+async function autoTest() {
+  const r = { ok: false };
+  try {
+    r.page = await fenetre.webContents.executeJavaScript(`new Promise((ok) => {
+      let n = 0;
+      const t = setInterval(() => {
+        const pret = !!(window.AK && document.querySelector('[data-ep]'));
+        if (pret || ++n > 150) {
+          clearInterval(t);
+          ok({ pret, hote: window.AK && AK.hote && AK.hote.type, version: window.AK && AK.VERSION, natif: typeof window.AkwaNatif, stockage: window.AK && AK.stockage && AK.stockage.actif && AK.stockage.actif.nom });
+        }
+      }, 100);
+    })`);
+    const pdf = await fenetre.webContents.printToPDF({ pageSize: 'A4', printBackground: true });
+    r.pdfOctets = pdf.length;
+    r.pdfSignature = pdf.subarray(0, 5).toString('latin1');
+    r.ok = r.page.pret && r.page.hote === 'natif' && r.pdfSignature === '%PDF-' && pdf.length > 1000;
+  } catch (e) {
+    r.erreur = String((e && e.message) || e);
+  }
+  await fs.writeFile(AUTO_TEST, JSON.stringify(r, null, 1));
+  app.exit(r.ok ? 0 : 1);
 }
 
 app.whenReady().then(() => {
