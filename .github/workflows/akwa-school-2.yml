@@ -3,8 +3,9 @@ name: AKWA SCHOOL 2 - Windows (.exe) et Android (.apk)
 # Construit, à partir du dossier akwa-school/, le fichier HTML unique puis :
 #  - l'installateur Windows et la version portable (.exe, Electron), auto-testés sur Windows ;
 #  - l'APK Android, dans la coquille Android du dépôt (epp-expert/android : Pont.java, contrat AkwaNative),
-#    sous un identifiant distinct (com.akwaschool.ecole2) pour ne pas remplacer l'application AKWA SCHOOL v8
-#    déjà installée sur les téléphones. Signé avec la clé de publication si les secrets sont présents.
+#    avec le même identifiant (com.akwaschool.mobile) et la même clé que l'application v8 : il la REMPLACE
+#    (mise à jour) et reprend ses données (etat_v8.json, lu au premier démarrage, jamais effacé).
+#    versionCode 200000 : supérieur à celui de la v8 (1.x.y → 1xxyy), une ancienne v8 ne peut pas l'écraser.
 # Les fichiers produits sont dans les « Artifacts » de chaque exécution.
 
 on:
@@ -129,14 +130,12 @@ jobs:
           www=app/src/main/assets/www
           cp ../../akwa-school/dist/AKWA_SCHOOL.html $www/index.html
           rm -f $www/pont_android.js
-          # nom affiché inchangé (« AKWA SCHOOL ») ; identifiant et autorité de partage distincts : s'installe à côté de l'application v8
-          sed -i 's/applicationId "com.akwaschool.mobile"/applicationId "com.akwaschool.ecole2"/' app/build.gradle
-          sed -i 's/versionCode parties\[0\] \* 10000 + parties\[1\] \* 100 + parties\[2\]/versionCode 20000/; s/versionName versionWindows/versionName "2.0.0"/' app/build.gradle
-          sed -i 's/com.akwaschool.mobile.partage/com.akwaschool.ecole2.partage/' app/src/main/AndroidManifest.xml app/src/main/java/com/akwaschool/mobile/Partage.java
-          grep -q 'applicationId "com.akwaschool.ecole2"' app/build.gradle
+          # même identifiant et même nom que la v8 (mise à jour) ; version 2.0.0, versionCode au-dessus de la v8
+          sed -i 's/versionCode parties\[0\] \* 10000 + parties\[1\] \* 100 + parties\[2\]/versionCode 200000/; s/versionName versionWindows/versionName "2.0.0"/' app/build.gradle
+          grep -q 'applicationId "com.akwaschool.mobile"' app/build.gradle
+          grep -q 'versionCode 200000' app/build.gradle
           grep -q 'versionName "2.0.0"' app/build.gradle
           grep -q '<string name="app_name">AKWA SCHOOL</string>' app/src/main/res/values/strings.xml
-          test "$(grep -c 'com.akwaschool.ecole2.partage' app/src/main/AndroidManifest.xml app/src/main/java/com/akwaschool/mobile/Partage.java | awk -F: '{s+=$2} END {print s}')" -ge 2
           grep -q 'AK.VERSION' $www/index.html
       - name: Construire l'APK
         working-directory: epp-expert/android

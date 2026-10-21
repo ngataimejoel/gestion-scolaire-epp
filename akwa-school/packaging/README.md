@@ -23,11 +23,13 @@ Le workflow GitHub Actions **« AKWA SCHOOL 2 - Windows (.exe) et Android (.apk)
   `AKWA-SCHOOL-Portable-2.0.0.exe` (non signés : Windows SmartScreen demandera « Exécuter quand même ») ;
   l’exécutable est auto-testé sur Windows (`--auto-test` : démarrage, contrat `AkwaNatif`, vrai PDF) ;
 - `AKWA-SCHOOL-2-Android` : APK construit dans la coquille Android du dépôt (`epp-expert/android`),
-  signé avec la clé de publication (secrets `ANDROID_KEYSTORE_*`), sous l’identifiant
-  `com.akwaschool.ecole2` (nom affiché : « AKWA SCHOOL ») : il s’installe **à côté** de l’application v8
-  sans la remplacer. Pour qu’il la remplace (et reprenne son fichier `etat_v8.json`), retirer du workflow
-  les lignes qui changent l’identifiant et l’autorité de partage — l’application v8 perdrait alors sa
-  synchronisation Wi-Fi, sa licence et son code PIN, que la version 2 ne reprend pas ;
+  signé avec la clé de publication (secrets `ANDROID_KEYSTORE_*`), avec **le même identifiant**
+  (`com.akwaschool.mobile`) et le même nom (« AKWA SCHOOL ») que l’application v8 : installé sur un
+  téléphone qui a la v8, il la **remplace** (mise à jour, versionCode 200000) et reprend ses données
+  (`etat_v8.json`, lu au premier démarrage et conservé). Ce que la v8 gérait dans la partie Android et que
+  la version 2 ne reprend pas : synchronisation Wi-Fi avec l’ordinateur, licence et période d’essai, code PIN,
+  mot de passe administrateur et comptes enregistrés côté téléphone (si le mot de passe n’est pas dans
+  `etat_v8.json`, le directeur en choisit un nouveau au premier démarrage). Une ancienne v8 ne peut plus être réinstallée par-dessus (versionCode inférieur) ;
 - `AKWA-SCHOOL-2-HTML` : la page seule et l’outil de vérification autonome.
 
 Les tests unitaires et de bout en bout (Chromium) tournent dans la même exécution.
