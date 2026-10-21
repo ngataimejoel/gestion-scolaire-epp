@@ -78,6 +78,8 @@ body.a-ecran-plein .toasts { z-index: 140; }
 .note-in { width: 72px; text-align: center; padding: 5px 6px; min-height: 34px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); font-weight: 600; font-variant-numeric: tabular-nums; }
 .note-in:focus { border-color: var(--pri); box-shadow: 0 0 0 3px var(--pri-ring); outline: none; }
 .note-in.attente { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.tab-notes td.attente { background: var(--warn-soft); }
+.tab-notes td.attente input { accent-color: var(--warn); }
 .note-in.mauvaise { border-color: var(--bad); background: var(--bad-soft); }
 .note-in.ok { animation: note-ok 0.7s ease; }
 @keyframes note-ok { 0% { background: var(--ok-soft); border-color: var(--ok); } }

@@ -175,7 +175,7 @@ test.describe('Saisie des notes (enseignant)', () => {
     assert.equal(etat.attente['e1|1|DICTEE'], 13);
     assert.ok(!('e1|1|DICTEE' in etat.grades));
     assert.equal(AK.calc.moyEval(etat.students[0], 1), null, 'une note en attente ne compte pas dans la moyenne');
-    assert.match(journal[0], /en attente/);
+    assert.equal(journal.length, 0, 'saisie en attente : ni nom ni note au journal (revue : données personnelles et journal saturé)');
     assert.equal(AK.notes.saisir('e1', 1, 'DICTEE', '13').etat, 'inchange');
     assert.deepEqual(j(AK.notes.saisir('e1', 1, 'DICTEE', '')), { etat: 'attente', v: null });
     assert.ok(!('e1|1|DICTEE' in etat.attente), 'vider la case retire la note en attente');
@@ -244,10 +244,33 @@ test.describe('Absence à une évaluation', () => {
   });
 
   test('enseignant : absence possible dans sa classe seulement', () => {
-    const { AK, etat } = preparer(null, { role: 'ens' });
+    const { AK, etat } = preparer((S) => (S.school.validation = false), { role: 'ens' });
     AK.notes.marquerAbsent('e2', 1, true);
     assert.equal(etat.compAbs['e2|1'], true);
     assert.throws(() => AK.notes.marquerAbsent('e3', 1, true), droits(AK));
+  });
+
+  /* Revue : avec la validation active, l'absence d'un enseignant (moyenne 0) comptait sans validation,
+     et il pouvait lever une absence posée par le directeur. */
+  test('validation active : l’absence posée par l’enseignant attend le directeur ; lever une absence enregistrée lui est refusé', () => {
+    const { AK, etat } = preparer((S) => (S.compAbs['e1|2'] = true), { role: 'ens' });
+    AK.notes.marquerAbsent('e2', 1, true);
+    assert.ok(!etat.compAbs['e2|1'], 'pas encore comptée');
+    assert.equal(etat.attente['e2|1|' + AK.notes.ABS], true);
+    assert.equal(AK.calc.moyEval(etat.students[1], 1), null);
+    assert.throws(() => AK.notes.saisir('e2', 1, 'DICTEE', '12'), /absent/, 'pas de note pendant une absence en attente');
+    assert.throws(() => AK.notes.marquerAbsent('e1', 2, false, { confirme: true }), droits(AK));
+    assert.equal(etat.compAbs['e1|2'], true);
+    AK.notes.marquerAbsent('e2', 1, false, { confirme: true });
+    assert.ok(!(('e2|1|' + AK.notes.ABS) in etat.attente), 'l’enseignant retire sa propre absence en attente');
+  });
+
+  test('directeur : valider applique l’absence en attente (notes de l’évaluation effacées, moyenne 0)', () => {
+    const { AK, etat } = preparer((S) => Object.assign(S.attente, { 'e1|1|DICTEE': 14, ['e1|1|§ABSENT']: true }));
+    assert.equal(AK.notes.valider('CE2', 1), 2);
+    assert.equal(etat.compAbs['e1|1'], true);
+    assert.ok(!('e1|1|DICTEE' in etat.grades));
+    assert.equal(AK.calc.moyEval(etat.students[0], 1), 0);
   });
 
   /* Défaut constaté sur le commit 70ae4ac (marquerAbsent() n'exigeait que « notes.saisir ») ;
@@ -364,7 +387,7 @@ test.describe('Passage à l’année suivante', () => {
 
   test('bilanPassage : 2 montent, 3 restent (dont 1 sans décision), 1 sortant (CM2), 2 archivés', () => {
     const { AK } = preparer(ecole);
-    assert.deepEqual(j(AK.notes.bilanPassage()), { montent: 2, restent: 3, sortants: 1, archives: 2, sansDecision: 1, niveauNonOuvert: [] });
+    assert.deepEqual(j(AK.notes.bilanPassage()), { montent: 2, restent: 3, sortants: 1, archives: 2, sansDecision: 1, niveauNonOuvert: [], attente: 1, incompletes: 5 });
     assert.equal(AK.notes.anneeSuivante(), '2027–2028');
   });
 

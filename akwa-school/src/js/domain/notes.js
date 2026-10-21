@@ -7,8 +7,9 @@
   const S = () => AK.store.etat;
   const E = (m, champ) => new AK.ErreurMetier(m, champ);
   const EVALS = [1, 2, 3, 4];
+  /** Absence en attente de validation : clé « id|n|§ABSENT » dans attente (aucune matière ne peut porter ce nom). */
+  const ABS = '§ABSENT';
 
-  const cleSaisie = (c, n) => S().saisie[c + '|' + n] || (S().saisie[c + '|' + n] = { fermee: false, fin: '' });
   const saisieOuverte = (c, n) => {
     const x = S().saisie[c + '|' + n] || {};
     return !x.fermee && !(x.fin && x.fin < u.aujourdhui());
@@ -22,6 +23,8 @@
 
   const notes = {
     EVALS,
+    ABS,
+    absenceEnAttente: (sid, n) => S().attente[`${sid}|${n}|${ABS}`] != null,
     saisieOuverte,
     enAttenteDe,
     /**
@@ -37,7 +40,7 @@
       n = Number(n);
       const mat = X.matieres(s.classe, n).find(([x]) => x === m);
       if (!mat) throw E('Matière inconnue pour cette évaluation.');
-      if (X.estAbsent(sid, n)) throw E('Élève marqué absent à cette évaluation : retirez d’abord l’absence.');
+      if (X.estAbsent(sid, n) || notes.absenceEnAttente(sid, n)) throw E('Élève marqué absent à cette évaluation : retirez d’abord l’absence.');
       const max = X.noteMax(s.classe, mat[1]);
       const r = V.note(brut, max);
       if (r.err) throw E(r.err);
@@ -48,11 +51,16 @@
       // enseignant avec validation : la note attend la validation du directeur (sauf correction d'une note validée)
       if (enseignant && S().school.validation && ancien == null) {
         if ((S().attente[k] ?? null) === v) return { etat: 'inchange', v };
-        AK.store.modifier(v == null ? null : `Note saisie (en attente) : ${X.nomComplet(s)}, ${m} = ${u.fmtNote(v)}`, (st) => {
+        AK.store.modifier(null, (st) => {
           if (v == null) delete st.attente[k];
           else st.attente[k] = v;
         }, { rendu: false, categorie: 'notes' });
         return { etat: 'attente', v };
+      }
+      // directeur qui vide une note en attente : elle est retirée (sinon elle serait validée plus tard)
+      if (ancien == null && v == null && S().attente[k] != null) {
+        AK.store.modifier(null, (st) => delete st.attente[k], { rendu: false, categorie: 'notes' });
+        return { etat: 'ok', v: null };
       }
       if (ancien === v || (ancien == null && v == null)) return { etat: 'inchange', v };
       // corriger ou effacer une note enregistrée (validée) : réservé au directeur, quel que soit l'écran
@@ -76,33 +84,56 @@
       AK.perm.exiger('notes.saisir', { classe: s.classe });
       n = Number(n);
       if (AK.session.estEnseignant() && !saisieOuverte(s.classe, n)) throw E('La saisie est fermée pour cette évaluation.');
-      const k = sid + '|' + n;
+      if (!EVALS.includes(n)) throw E('Évaluation inconnue.');
+      const k = sid + '|' + n, ka = k + '|' + ABS;
+      const enseignant = AK.session.estEnseignant(), validation = !!S().school.validation;
       const notesValidees = Object.keys(S().grades).some((g) => g.startsWith(k + '|'));
-      const aDesNotes = notesValidees || Object.keys(S().attente).some((g) => g.startsWith(k + '|'));
-      // marquer absent efface les notes : si des notes sont validées, c'est une correction (directeur)
+      const aDesNotes = notesValidees || Object.keys(S().attente).some((g) => g.startsWith(k + '|') && g !== ka);
+      if (!!absent === (X.estAbsent(sid, n) || S().attente[ka] != null)) return;
+      // marquer absent efface les notes : si des notes sont validées, c'est une correction (directeur) ;
+      // avec la validation active, retirer une absence enregistrée l'est aussi
       if (absent && notesValidees) AK.perm.exiger('notes.corriger', { classe: s.classe });
+      if (!absent && S().compAbs[k] && validation) AK.perm.exiger('notes.corriger', { classe: s.classe });
       if ((aDesNotes || !absent) && !options.confirme) {
         const err = E(absent
           ? `Marquer ${X.nomComplet(s)} absent(e) ? Ses notes de cette évaluation seront effacées et sa moyenne vaudra 0.`
           : `Annuler l’absence de ${X.nomComplet(s)} à cette évaluation ?`);
         err.correction = true;
+        err.validees = notesValidees || (!absent && !!S().compAbs[k]);
         throw err;
+      }
+      // enseignant avec validation : l'absence (moyenne 0) attend la validation du directeur, comme une note
+      if (enseignant && validation && (absent || S().attente[ka] != null)) {
+        AK.store.modifier(null, (st) => {
+          Object.keys(st.attente).forEach((g) => g.startsWith(k + '|') && delete st.attente[g]);
+          if (absent) st.attente[ka] = true;
+        }, { rendu: false, categorie: 'notes' });
+        return;
       }
       AK.store.modifier(`Notes : ${X.nomComplet(s)} ${absent ? 'marqué(e) absent(e)' : 'n’est plus absent(e)'} (${X.evalLabel(s.classe, n)})`, (st) => {
         if (absent) {
           Object.keys(st.grades).forEach((g) => g.startsWith(k + '|') && delete st.grades[g]);
           Object.keys(st.attente).forEach((g) => g.startsWith(k + '|') && delete st.attente[g]);
           st.compAbs[k] = true;
-        } else delete st.compAbs[k];
+        } else {
+          delete st.compAbs[k];
+          delete st.attente[ka];
+        }
       }, { rendu: false, categorie: 'notes' });
     },
     valider(classe, n) {
       AK.perm.exiger('notes.valider');
       const L = enAttenteDe(classe, n);
       if (!L.length) return 0;
-      AK.store.modifier(`${u.pluriel(L.length, 'note')} validée(s) : ${classe}`, (st) =>
-        L.forEach((k) => {
-          st.grades[k] = st.attente[k];
+      // les absences en dernier : elles effacent les notes de l'évaluation
+      const abs = (k) => k.endsWith('|' + ABS);
+      AK.store.modifier(`${u.pluriel(L.length, L.some(abs) ? 'saisie' : 'note')} validée(s) : ${classe}`, (st) =>
+        [...L.filter((k) => !abs(k)), ...L.filter(abs)].forEach((k) => {
+          if (abs(k)) {
+            const p = k.slice(0, -ABS.length);
+            Object.keys(st.grades).forEach((g) => g.startsWith(p) && delete st.grades[g]);
+            st.compAbs[p.slice(0, -1)] = true;
+          } else st.grades[k] = st.attente[k];
           delete st.attente[k];
         }), { categorie: 'notes' });
       return L.length;
@@ -111,20 +142,32 @@
       AK.perm.exiger('notes.valider');
       const L = enAttenteDe(classe, n);
       if (!L.length) return 0;
-      AK.store.modifier(`${u.pluriel(L.length, 'note')} en attente rejetée(s) : ${classe}`, (st) => L.forEach((k) => delete st.attente[k]), { categorie: 'notes' });
+      AK.store.modifier(`${u.pluriel(L.length, L.some((k) => k.endsWith('|' + ABS)) ? 'saisie' : 'note')} en attente rejetée(s) : ${classe}`, (st) => L.forEach((k) => delete st.attente[k]), { categorie: 'notes' });
       return L.length;
     },
+    /** Ferme une saisie ouverte ; rouvre une saisie fermée (à la main ou par une date limite dépassée, qui est alors retirée). */
     basculerSaisie(classe, n) {
       AK.perm.exiger('notes.periode');
-      const x = cleSaisie(classe, n);
-      AK.store.modifier(`Saisie ${x.fermee ? 'rouverte' : 'fermée'} : ${classe} (${C.evCourt(n)})`, () => (x.fermee = !x.fermee), { categorie: 'notes' });
+      if (!X.niveaux().includes(classe) || !EVALS.includes(Number(n))) throw E('Classe ou évaluation inconnue.');
+      const ouverte = saisieOuverte(classe, n), auj = u.aujourdhui();
+      AK.store.modifier(`Saisie ${ouverte ? 'fermée' : 'rouverte'} : ${classe} (${C.evCourt(n)})`, (st) => {
+        const x = st.saisie[classe + '|' + n] || (st.saisie[classe + '|' + n] = { fermee: false, fin: '' });
+        if (ouverte) x.fermee = true;
+        else {
+          x.fermee = false;
+          if (x.fin && x.fin < auj) x.fin = '';
+        }
+      }, { categorie: 'notes' });
     },
     dateLimite(classe, n, date) {
       AK.perm.exiger('notes.periode');
       const e = V.date(date, 'Date limite');
       if (e) throw E(e);
-      const x = cleSaisie(classe, n);
-      AK.store.modifier(`Date limite de saisie ${classe} : ${date ? u.fmtDate(date) : 'aucune'}`, () => (x.fin = date || ''), { categorie: 'notes' });
+      if (!X.niveaux().includes(classe) || !EVALS.includes(Number(n))) throw E('Classe ou évaluation inconnue.');
+      AK.store.modifier(`Date limite de saisie ${classe} : ${date ? u.fmtDate(date) : 'aucune'}`, (st) => {
+        const x = st.saisie[classe + '|' + n] || (st.saisie[classe + '|' + n] = { fermee: false, fin: '' });
+        x.fin = date || '';
+      }, { categorie: 'notes' });
     },
     basculerValidation(oui) {
       AK.perm.exiger('notes.periode');
@@ -163,10 +206,11 @@
     },
     /** Bilan prévisionnel du passage (affiché avant confirmation). */
     bilanPassage() {
-      const R = { montent: 0, restent: 0, sortants: 0, archives: 0, sansDecision: 0, niveauNonOuvert: [] };
+      const R = { montent: 0, restent: 0, sortants: 0, archives: 0, sansDecision: 0, niveauNonOuvert: [], attente: Object.keys(S().attente).length, incompletes: 0 };
       S().students.forEach((s) => {
         const d = X.decision(s);
         if (s.statut !== 'Inscrit' || ['Abandon', 'Exclu', 'Transféré'].includes(d)) return R.archives++;
+        if (X.incompletAnnee(s)) R.incompletes++;
         if (d === 'Admis') {
           const sv = X.niveauSuivant(s.classe);
           if (!sv) return R.sortants++;
@@ -183,13 +227,15 @@
     },
     /**
      * Passage à l'année suivante (correction de 1.7.0 : un admis du plus haut niveau ouvert, autre que le CM2,
-     * restait sans classe et bloquait le tableau de bord). Copie de sécurité préalable.
+     * restait sans classe et bloquait le tableau de bord). Copie de sécurité préalable : si le stockage
+     * en permet une et qu'elle échoue, le passage n'a pas lieu.
      */
     async passerAnnee() {
       AK.perm.exiger('annee.passer');
       const annee = S().school.year, suivante = notes.anneeSuivante();
       if (!suivante) throw E('Renseignez d’abord l’année scolaire en cours (Paramètres).');
-      await AK.store.copieAvant('avant-passage-' + annee);
+      const copie = await AK.store.copieAvant('avant-passage-' + annee);
+      if (!copie && AK.stockage.copiesDisponibles()) throw E('La copie de sécurité préalable a échoué (espace de stockage plein ?) : le passage n’a pas été fait. Exportez une sauvegarde (Données › Sauvegarde), libérez de l’espace puis recommencez.');
       const effs = Object.fromEntries(X.niveaux().map((c) => [c, X.actifsDe(c).length]));
       const R = { montent: 0, restent: 0, archives: 0 };
       AK.store.modifier(`Passage à ${suivante}`, (st) => {
@@ -227,7 +273,10 @@
           s.decision = '';
           garder.push(s);
         });
-        st.archives[annee || 'sans-annee'] = { students: arch, grades: st.grades, compAbs: st.compAbs, att: st.att, appel: st.appel, cloture: new Date().toISOString() };
+        // une année déjà archivée (année remise en arrière dans les paramètres) n'est jamais écrasée
+        let cleA = annee || 'sans-annee';
+        for (let i = 2; st.archives[cleA]; i++) cleA = `${annee || 'sans-annee'} (${i})`;
+        st.archives[cleA] = { students: arch, grades: st.grades, compAbs: st.compAbs, attente: st.attente, att: st.att, appel: st.appel, cloture: new Date().toISOString() };
         Object.assign(st, { students: garder, grades: {}, compAbs: {}, att: {}, appel: {}, attente: {}, saisie: {} });
         Object.assign(st.school, { year: suivante, evalCourante: 1 });
       }, { categorie: 'annee' });

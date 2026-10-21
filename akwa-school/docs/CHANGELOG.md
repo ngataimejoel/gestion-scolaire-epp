@@ -54,6 +54,38 @@ Défauts trouvés par les tests automatisés pendant la refonte, puis corrigés 
 - fiche d’un élève d’une classe fermée inaccessible au directeur ; suggestions de sous-préfectures
   affichées « code,nom ».
 
+Défauts trouvés par la relecture contradictoire des écrans Élèves, Notes, Absences, Personnel et Documents
+(relecteurs distincts de l’auteur, défauts reproduits dans Chromium), puis corrigés et couverts par
+`tests/e2e/revue.test.cjs` :
+
+- **droits** : un enseignant obtenait par appel direct le classement, les décisions, les bulletins ou la
+  liste d’une autre classe, et le registre de toute l’école (le contrôle ne portait que sur les documents
+  inscrits au registre) : le droit est désormais vérifié pour tout modèle, dans le générateur ;
+- **droits** : l’import faisait confiance à l’analyse (classe hors périmètre, élève invalide) : chaque ligne
+  est contrôlée de nouveau au moment d’importer ; « remplacer » un document au registre et marquer lus
+  les messages d’un collègue n’exigeaient aucun droit ;
+- **validation des notes** : l’absence posée par un enseignant comptait (moyenne 0) sans validation et il
+  pouvait lever une absence enregistrée : l’absence attend maintenant la validation comme une note ;
+  le directeur effaçait des notes validées en cochant « Absent » sans mot de passe ; une note en attente
+  vidée par le directeur restait en attente et était validée ensuite ;
+- **perte de données** : le passage d’année effaçait les notes en attente (désormais archivées et signalées)
+  et se poursuivait si la copie de sécurité échouait (il est maintenant refusé) ; un double clic sur
+  « Importer » inscrivait deux fois les mêmes élèves ; « Tout le monde présent » effaçait aussi les
+  absences justifiées par une autorisation accordée ; une année déjà archivée pouvait être écrasée ;
+- **cohérence** : changer un élève de classe en cours d’année gardait ses notes au barème de l’ancienne
+  classe (confirmation, notes mises de côté dans son dossier) ; matricule d’un élève à la corbeille
+  réattribué (doublon après restauration) ; « Rouvrir la saisie » sans effet après une date limite dépassée ;
+  évaluations incomplètes (matières sans note) non signalées en fin d’année ;
+- **import Excel** : dates au format date d’Excel perdues ; matricule école de l’export « format national »
+  refusé à la réimportation ; doublons (élève sans date de naissance, ligne répétée) non détectés ; colonne
+  « date acte » ignorée ; naissance future acceptée ; message de copie de sécurité affiché même sans copie ;
+- **journal** : motif libre d’un départ d’élève et chaque note en attente (nom et valeur) inscrits au journal ;
+- **interface** : choix de fichier (import, photo, photo du QR) inaccessible au clavier ; focus perdu après
+  une décision ou une absence ; case refusée gardant la valeur refusée ; compteur de notes ignorant les notes
+  en attente ; bouton « Inscrire un élève » de l’accueil sans effet ; bouton « Excel (CSV) » proposé à
+  l’enseignant puis refusé ; actions de sélection silencieuses après suppression d’un élève ; n° et date
+  d’acte marqués obligatoires mais non exigés.
+
 ### Amélioré
 
 - Interface entièrement redessinée : structure bleu nuit, surfaces blanc cassé, accent cuivré, thème

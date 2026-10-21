@@ -37,9 +37,27 @@
    *             émission : référence et QR réservés), copie, reutiliser, duplicataDe, statutForce }
    * Renvoie { feuilles, cartes, docs, avertissements }.
    */
+  /**
+   * Droit de produire ce document pour ce sujet, vérifié pour tout modèle (avec ou sans inscription au
+   * registre) : un enseignant n'obtient que les documents de ses classes, ses propres documents de
+   * personnel, et aucun document de toute l'école (sauf espace enseignant seul).
+   */
+  function autoriser(d, contextes) {
+    if (AK.session.estDirecteur()) return;
+    const moi = AK.session.agent();
+    const ok = contextes.every((c) => {
+      const classe = c.eleve ? c.eleve.classe : c.classe;
+      if (d.sujet === 'agent') return !!(moi && c.agent && c.agent.id === moi.id);
+      if (d.sujet === 'ecole' && !classe) return AK.perm.peut('document.ecole');
+      return !!classe && AK.perm.peut('document.imprimerClasse', { classe });
+    });
+    if (!ok) throw new AK.ErreurDroits('Ce document ne concerne pas votre classe : il est réservé au directeur.');
+  }
+
   async function generer(idModele, contextes, options = {}) {
     const d = AK.modeles.get(idModele);
     if (!d) throw new AK.ErreurMetier('Modèle de document inconnu.');
+    autoriser(d, contextes);
     const r = options.reglages ? AK.modeles.valider(idModele, options.reglages) : AK.modeles.reglages(idModele);
     const feuilles = [], cartes = [], docs = [], avertissements = [];
     for (const [i, ctx0] of contextes.entries()) {

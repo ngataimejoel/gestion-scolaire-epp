@@ -58,7 +58,7 @@
     const dateLongue = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const actions = [
-      AK.perm.peut('eleve.inscrire') ? html`<button type="button" class="btn clair" data-action="inscrire-eleve">${ic('userPlus')}Inscrire un élève</button>` : '',
+      AK.perm.peut('eleve.inscrire') ? html`<button type="button" class="btn clair" data-action="eleve-nouveau">${ic('userPlus')}Inscrire un élève</button>` : '',
       html`<a class="btn" href="#absences/appel">${ic('clip')}Faire l’appel</a>`,
       html`<a class="btn" href="#notes/saisie">${ic('edit')}Saisir les notes</a>`,
       AK.perm.peut('document.emettre') ? html`<a class="btn" href="#documents/emettre">${ic('filePlus')}Émettre un document</a>` : ''

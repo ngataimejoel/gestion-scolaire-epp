@@ -86,8 +86,8 @@
       if (!TYPES[o.type]) throw E('Type de document inconnu.');
       const qrActif = o.qr ? o.qr.actif !== false : true;
 
-      // politique « unique » : même référence pour le même élève et la même période
-      if (o.politique === 'unique') {
+      // politique « unique » : même référence pour le même élève et la même période (sauf duplicata : nouvelle référence)
+      if (o.politique === 'unique' && !o.duplicataDe) {
         const exist = (S().docs.items || []).find((d) => d.cleUnique === o.cleUnique && d.statut === 'valide');
         if (exist) {
           const H = await AK.qr.empreinteTitulaire({ ...o.canon, type: o.type, ref: exist.ref });
@@ -155,8 +155,11 @@
     },
     /** Duplicata (perte) : l'original est marqué « remplacé » si demandé. */
     remplacer(ref, nouveauRef) {
-      const d = trouver(ref);
-      if (!d) return;
+      AK.perm.exiger('document.emettre');
+      const d = trouver(ref), n = trouver(nouveauRef);
+      if (!d) throw E('Document introuvable au registre.');
+      if (!n || n === d || n.type !== d.type) throw E('Le duplicata doit être un document du même type, déjà inscrit au registre.');
+      if (d.statut !== 'valide') throw E('Seul un document valide peut être remplacé.');
       AK.store.modifier(`${TYPES[d.type]} ${d.ref} remplacé par ${nouveauRef}`, () => {
         d.statut = 'remplace';
         d.remplacePar = nouveauRef;
@@ -165,6 +168,7 @@
     },
     /** Liste minimale pour l'outil de vérification hors ligne (aucune donnée personnelle sensible). */
     exportVerification({ avecNoms = false } = {}) {
+      AK.perm.exiger(avecNoms ? 'document.registre' : 'verification.utiliser');
       return (S().docs.items || []).filter((d) => !d.demo).map((d) => ({
         r: d.ref, t: d.type, e: d.emisLe.slice(0, 10), x: d.expire || null, h: d.H, s: statutEffectif(d) === 'expire' ? 'valide' : d.statut,
         a: d.annulation ? d.annulation.le.slice(0, 10) : null, v: (d.versions || []).map((v) => v.H), n: avecNoms && d.sujet ? AK.qr.propre(d.sujet.libelle) : undefined

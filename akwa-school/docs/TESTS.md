@@ -9,7 +9,7 @@ Node.js 22), le 21 octobre 2026. Rien n’est déclaré testé sur la seule lect
 | Suite | Ce qui est vérifié | Résultat |
 |---|---|---|
 | `tests/unit/calc.test.cjs` | moyennes de chaque grille, MGA (deux règles), rangs ex aequo, mentions, décisions, âges, jours de classe | **42 / 42** |
-| `tests/unit/notes-metier.test.cjs` | saisie, correction, absences, validation, passage d’année | **42 / 42** |
+| `tests/unit/notes-metier.test.cjs` | saisie, correction, absences (dont absence en attente de validation), validation, passage d’année | **44 / 44** |
 | `tests/unit/schema.test.cjs` | migration 1.x sans perte, secrets retirés, assainissement, idempotence, contrôle d’intégrité | **21 / 21** |
 | `tests/unit/validation.test.cjs` | références et clé de contrôle (toutes les substitutions), notes, noms, téléphones, dates, arrondis | **64 / 64** |
 | `tests/unit/qr.test.cjs` | format AKS1, lecture tolérante, empreintes, SVG, capacité maximale, relecture | **33 / 33** |
@@ -26,8 +26,9 @@ Node.js 22), le 21 octobre 2026. Rien n’est déclaré testé sur la seule lect
 | `tests/e2e/verificateur.test.cjs` | outil de vérification autonome produit par l’application et ouvert seul | **63 / 63** |
 | `tests/e2e/services-parametres.test.cjs` | bibliothèque, CEPE, parents, paramètres de l’école, calendrier, apparence, diagnostic | **28 / 28** |
 | `tests/e2e/finances-rapports.test.cjs` | versements et reçus, annulation, dépenses, cantine, rapports, générateur, transmission IEPP | **20 / 20** |
+| `tests/e2e/revue.test.cjs` | non-régression des défauts trouvés par la relecture contradictoire (droits sur les documents, import, validation, passage d’année, appel, clavier) | **38 / 38** |
 
-**Total : 225 tests unitaires et 653 vérifications de bout en bout réussis, 0 échec.**
+**Total : 227 tests unitaires et 691 vérifications de bout en bout réussis, 0 échec.**
 
 Défauts trouvés **par les tests** puis corrigés (voir `CHANGELOG.md`) : note 8,7 / 10 refusée (contrôle
 binaire des décimales), arrondi au centième inexact, « -0 F », niveau suivant d’un niveau inconnu,
@@ -38,6 +39,14 @@ zone d’impression vidée trop tôt.
 
 Les tests unitaires des calculs, de la migration, de la validation et des QR ont été écrits par des
 agents distincts de l’auteur du code, avec des valeurs attendues calculées à la main.
+
+**Relecture contradictoire.** Les écrans Élèves et Notes ont été relus par des relecteurs distincts de
+l’auteur, qui ont reproduit dans Chromium 28 défauts (détail dans `CHANGELOG.md`). Les écrans Absences,
+Personnel et Documents ont été relus ensuite par l’auteur lui-même (relecture indépendante interrompue
+pour limiter la consommation) : 6 défauts supplémentaires trouvés et corrigés (« Tout le monde présent »
+effaçant les absences justifiées, « remplacer » un document sans droit, duplicata d’un document à
+référence unique, bouton inactif de l’accueil…). `revue.test.cjs` échoue sur la version précédente et
+réussit sur la version actuelle.
 
 ## 2. Matrice de tests (A à W)
 
@@ -92,7 +101,7 @@ d’une ancienne sauvegarde, largeur de téléphone (390 × 844) sans débordeme
 ```
 node tools/build.mjs
 node --test tests/unit/*.test.cjs
-for t in routes qr documents droits hotes donnees parametres-modeles-securite vie verificateur services-parametres finances-rapports; do node tests/e2e/$t.test.cjs; done
+for t in routes qr documents droits hotes donnees parametres-modeles-securite vie verificateur services-parametres finances-rapports revue; do node tests/e2e/$t.test.cjs; done
 PROFIL=ens node tests/e2e/routes.test.cjs
 ```
 

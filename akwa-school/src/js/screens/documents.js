@@ -332,7 +332,7 @@
           ${ui.carte('Référence ou contenu du QR', html`<form data-submit="verif-texte" class="pile" autocomplete="off">${F.texte({ lib: 'Référence (AK-XXX-AAAA-NNNNNN-C) ou texte lu par une douchette', nom: 'texte', id: 'verif-texte', val: p.ref || '', attrs: { autofocus: true, spellcheck: 'false', placeholder: 'AK-CSC-2026-000012-7' } })}<div class="ligne"><button type="submit" class="btn btn-pri">${ic('shieldCheck')}Vérifier</button></div></form>`)}
           ${ui.carte('Caméra ou photo', html`<div class="pile">
             <div class="camera" id="camera" hidden><video playsinline muted></video><div class="viseur"></div></div>
-            <div class="ligne"><button type="button" class="btn" data-action="verif-camera" id="btn-camera">${ic('cam')}Scanner avec la caméra</button><label class="btn">${ic('image')}Importer une photo du QR<input type="file" accept="image/*" hidden data-change="verif-photo"></label></div>
+            <div class="ligne"><button type="button" class="btn" data-action="verif-camera" id="btn-camera">${ic('cam')}Scanner avec la caméra</button><button type="button" class="btn" data-action="fichier-choisir">${ic('image')}Importer une photo du QR</button><input type="file" accept="image/*" hidden data-change="verif-photo"></div>
             <p class="mut petit mb0">Le QR code est lu sur cet appareil, hors ligne. La caméra nécessite l’autorisation du navigateur (ou de l’application).</p></div>`)}
         </div>
         <div id="verif-resultat">${dernierResultat ? resultatHtml(dernierResultat) : ui.carte('', ui.vide('En attente d’un document', 'Le résultat détaille séparément : l’intégrité (signature), l’émetteur (clé), l’inscription au registre et le statut (annulé, remplacé, expiré).'))}</div>

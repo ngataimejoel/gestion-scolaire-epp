@@ -139,6 +139,8 @@
         s.messages.unshift({ id: u.uid(), t: Date.now(), dest: d.dest || '', titre: String(d.titre).trim(), texte: String(d.texte).trim(), lus: {} }), { categorie: 'messages' });
     },
     marquerLus(tid) {
+      const moi = AK.session.agent();
+      if (!AK.session.estDirecteur() && (!moi || moi.id !== tid)) throw new AK.ErreurDroits('Vous ne pouvez marquer comme lus que vos propres messages.');
       const L = S().messages.filter((m) => (!m.dest || m.dest === tid) && !m.lus[tid]);
       if (L.length) AK.store.modifier('Messages lus', () => L.forEach((m) => (m.lus[tid] = Date.now())));
     },
@@ -151,8 +153,14 @@
       if (c.type === 'eleve') {
         AK.perm.exiger('eleve.supprimer', { classe: c.donnees.s.classe });
         if (S().students.some((x) => x.id === c.donnees.s.id)) throw E('Cet élève est déjà présent.');
-        AK.store.modifier(`Élève restauré : ${c.libelle}`, (s) => {
-          s.students.push(c.donnees.s);
+        const el = c.donnees.s, mn = u.norm(el.matNat);
+        const homonyme = mn && S().students.find((x) => u.norm(x.matNat) === mn);
+        if (homonyme) throw E(`Le matricule national ${el.matNat} est maintenant porté par ${X.nomComplet(homonyme)} : corrigez d’abord ce dossier.`);
+        // matricule école repris entre-temps (données antérieures à la réservation des matricules de la corbeille)
+        const nouveauMat = el.mat && S().students.some((x) => x.mat === el.mat) ? AK.eleves.prochainMatricule() : null;
+        AK.store.modifier(`Élève restauré : ${c.libelle}${nouveauMat ? ` (matricule ${el.mat} déjà attribué : nouveau matricule ${nouveauMat})` : ''}`, (s) => {
+          if (nouveauMat) el.mat = nouveauMat;
+          s.students.push(el);
           Object.assign(s.grades, c.donnees.notes || {});
           Object.assign(s.compAbs, c.donnees.compAbs || {});
           Object.assign(s.attente, c.donnees.attente || {});

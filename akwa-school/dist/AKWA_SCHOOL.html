@@ -857,6 +857,8 @@ body.a-ecran-plein .toasts { z-index: 140; }
 .note-in { width: 72px; text-align: center; padding: 5px 6px; min-height: 34px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--surface); font-weight: 600; font-variant-numeric: tabular-nums; }
 .note-in:focus { border-color: var(--pri); box-shadow: 0 0 0 3px var(--pri-ring); outline: none; }
 .note-in.attente { background: var(--warn-soft); border-color: var(--warn); color: var(--warn); }
+.tab-notes td.attente { background: var(--warn-soft); }
+.tab-notes td.attente input { accent-color: var(--warn); }
 .note-in.mauvaise { border-color: var(--bad); background: var(--bad-soft); }
 .note-in.ok { animation: note-ok 0.7s ease; }
 @keyframes note-ok { 0% { background: var(--ok-soft); border-color: var(--ok); } }
@@ -4943,6 +4945,7 @@ return {matrix:matrix,
     'rapports.generateur': NON,
     'stats.voir': NON,
     'document.imprimerClasse': ENS, // listes, bulletins et fiches de sa classe
+    'document.ecole': SOLO,         // listes et rapports de toute l'école
     'document.emettre': NON,        // certificats, attestations, cartes : directeur
     'document.annuler': NON,
     'document.registre': NON,
@@ -5260,6 +5263,13 @@ return {matrix:matrix,
     actifs()
       .filter((s) => (!cls || s.classe === cls) && !estAbsent(s.id, n))
       .reduce((k, s) => k + matieres(s.classe, n).filter(([m]) => note(s.id, n, m) == null).length, 0);
+  /** Évaluation commencée mais incomplète (au moins une note et au moins une matière sans note, élève non absent). */
+  const incomplet = (s, n) => {
+    if (estAbsent(s.id, n)) return false;
+    const v = matieres(s.classe, n).map(([m]) => note(s.id, n, m));
+    return v.some((x) => x != null) && v.some((x) => x == null);
+  };
+  const incompletAnnee = (s) => [1, 2, 3, 4].some((n) => incomplet(s, n));
   function decisionProposee(s) {
     if (s.statut !== 'Inscrit') return s.statut;
     const a = mga(s);
@@ -5314,7 +5324,7 @@ return {matrix:matrix,
   AK.calc = {
     niveaux, niveauSuivant, info, grille, matieres, noteMax, echelle, anneeRentree, evalLabel, evalDate, perLabel,
     actifs, actifsDe, parNom, parClasse, nomComplet, matOf, ageDe, ageAnormal, fmtNaissance, estIvoirien, compteSexe, initiales,
-    cle, note, estAbsent, resultat, moyEval, moy3, mga, score, mention, classement, rangTxt, moyClasse, reussite, notesManquantes,
+    cle, note, estAbsent, resultat, moyEval, moy3, mga, score, mention, classement, rangTxt, moyClasse, reussite, notesManquantes, incomplet, incompletAnnee,
     decisionProposee, decision,
     clsDe, clsTxt, enseignantDe, emploiGrade, estFemme, fonctTxt, fonctErr,
     estFerie, estJourClasse, joursClasse, derniersJoursClasse, absencesDe, moisCourant, moisInfo
@@ -5336,9 +5346,14 @@ return {matrix:matrix,
 
   /** Prochain matricule école : AK-<2 chiffres de l'année><numéro sur 3 chiffres> */
   function prochainMatricule() {
-    const nums = S().students.map((s) => parseInt((s.mat || '').replace(/\D/g, '').slice(2), 10) || 0);
-    const archives = Object.values(S().archives || {}).flatMap((a) => (a.students || []).map((s) => parseInt((s.mat || '').replace(/\D/g, '').slice(2), 10) || 0));
-    return 'AK-' + String(X.anneeRentree()).slice(2) + u.pad(Math.max(0, ...nums, ...archives) + 1, 3);
+    const num = (s) => parseInt(((s && s.mat) || '').replace(/\D/g, '').slice(2), 10) || 0;
+    // élèves présents, archivés et à la corbeille : un matricule n'est jamais réattribué
+    const nums = [
+      ...S().students.map(num),
+      ...Object.values(S().archives || {}).flatMap((a) => (a.students || []).map(num)),
+      ...(S().corbeille || []).filter((c) => c.type === 'eleve' && c.donnees).map((c) => num(c.donnees.s))
+    ];
+    return 'AK-' + String(X.anneeRentree()).slice(2) + u.pad(Math.max(0, ...nums) + 1, 3);
   }
 
   const lireParent = (d, k) => ({
@@ -5362,8 +5377,8 @@ return {matrix:matrix,
     if (ex) {
       if ((e = V.naissanceEleve(d.naissance, X.anneeRentree()))) throw E(e, 'naissance');
       if (!P('pere') || !P('mere')) throw E('Avec un extrait, les nom et prénoms du père et de la mère sont obligatoires.', P('pere') ? 'mere_nom' : 'pere_nom');
-      if ((e = V.date(d.acte_date, 'Date de l’acte', { max: u.aujourdhui(), min: d.naissance }))) throw E(e, 'acte_date');
-      if ((e = V.texte(d.acte_num, 'N° de l’acte', { max: 20 }))) throw E(e, 'acte_num');
+      if ((e = V.texte(d.acte_num, 'N° de l’acte', { requis: true, max: 20 }))) throw E(e, 'acte_num');
+      if ((e = V.date(d.acte_date, 'Date de l’acte', { requise: true, max: u.aujourdhui(), min: d.naissance }))) throw E(e, 'acte_date');
     } else {
       const a = Number(d.age);
       if (!a || a < 2 || a > 20 || !Number.isInteger(a)) throw E('Saisissez l’âge de l’enfant (de 2 à 20 ans).', 'age');
@@ -5384,6 +5399,9 @@ return {matrix:matrix,
     if ((d.tuteur === true || d.tuteur === 'on') && String(d.parent || '').trim() && (e = V.nom(d.parent, 'Nom et prénoms du tuteur'))) throw E(e, 'parent');
     if ((e = V.tel(d.tel, 'Contact du tuteur'))) throw E(e, 'tel');
     if ((e = V.texte(d.allergies, 'Allergies / handicap', { max: 120 }))) throw E(e, 'allergies');
+    for (const [k, l, max] of [['lieu', 'Lieu de naissance', 60], ['nationalite', 'Nationalité', 40], ['acte_centre', 'Centre d’état civil', 80], ['acte_sp', 'Sous-préfecture', 60],
+      ['pere_profession', 'Profession du père', 60], ['mere_profession', 'Profession de la mère', 60], ['pere_domicile', 'Domicile du père', 80], ['mere_domicile', 'Domicile de la mère', 80]])
+      if ((e = V.texte(d[k], l, { max }))) throw E(e, k);
     // matricule national unique
     const mn = u.norm(d.matNat);
     if (mn) {
@@ -5451,14 +5469,39 @@ return {matrix:matrix,
       AK.store.modifier(`Inscription : ${X.nomComplet(s)} (${s.classe})`, (st) => st.students.push(s), { categorie: 'eleves' });
       return s;
     },
-    modifier(id, d) {
+    /**
+     * Modification du dossier. Un changement de classe en cours d'année retire du calcul les notes et
+     * absences aux évaluations de l'ancienne classe (barèmes différents) : elles sont conservées dans
+     * s.notesAnciennes. Exige options.changementConfirme quand il y en a (ErreurMetier .changementClasse).
+     */
+    modifier(id, d, options = {}) {
       const s = eleves.trouver(id);
       if (!s) throw E('Élève introuvable.');
       AK.perm.exiger('eleve.modifier', { classe: s.classe });
       AK.perm.exiger('eleve.modifier', { classe: d.classe });
       controler(d, s);
-      const avant = s.classe;
-      AK.store.modifier(`Dossier modifié : ${X.nomComplet(s)}${avant !== d.classe ? ` (classe ${avant} → ${d.classe})` : ''}`, () => appliquer(d, s), { categorie: 'eleves' });
+      const avant = s.classe, p = s.id + '|';
+      const cles = avant !== d.classe ? ['grades', 'attente', 'compAbs'].map((t) => [t, Object.keys(S()[t]).filter((k) => k.startsWith(p))]) : [];
+      const nb = cles.reduce((a, [, L]) => a + L.length, 0);
+      if (nb && !options.changementConfirme) {
+        const err = E(`${X.nomComplet(s)} a ${u.pluriel(nb, 'note ou absence', 'notes ou absences')} cette année en ${avant}. En ${d.classe}, les barèmes et les matières diffèrent : elles ne compteront plus dans ses moyennes et seront conservées dans son dossier (notes de l’ancienne classe).`);
+        err.changementClasse = true;
+        throw err;
+      }
+      AK.store.modifier(`Dossier modifié : ${X.nomComplet(s)}${avant !== d.classe ? ` (classe ${avant} → ${d.classe})` : ''}`, (st) => {
+        if (nb) {
+          const garde = { classe: avant, annee: st.school.year || '', le: u.aujourdhui() };
+          cles.forEach(([t, L]) => {
+            garde[t] = {};
+            L.forEach((k) => {
+              garde[t][k] = st[t][k];
+              delete st[t][k];
+            });
+          });
+          s.notesAnciennes = [...(Array.isArray(s.notesAnciennes) ? s.notesAnciennes : []), garde];
+        }
+        appliquer(d, s);
+      }, { categorie: 'eleves' });
       return s;
     },
     changerStatut(id, statut, motif) {
@@ -5466,7 +5509,8 @@ return {matrix:matrix,
       if (!s) throw E('Élève introuvable.');
       AK.perm.exiger('eleve.statut', { classe: s.classe });
       if (!C.STATUTS.includes(statut)) throw E('Statut inconnu.');
-      AK.store.modifier(`Statut de ${X.nomComplet(s)} : ${statut}${motif ? ' (' + String(motif).slice(0, 80) + ')' : ''}`, () => {
+      // le motif (parfois personnel ou sensible) reste dans le dossier, pas dans le journal
+      AK.store.modifier(`Statut de ${X.nomComplet(s)} : ${statut}`, () => {
         s.statut = statut;
         s.motifDepart = statut === 'Inscrit' ? '' : String(motif || '').trim().slice(0, 200);
         if (statut !== 'Inscrit') s.departLe = s.departLe || u.aujourdhui();
@@ -5659,6 +5703,8 @@ return {matrix:matrix,
         s.messages.unshift({ id: u.uid(), t: Date.now(), dest: d.dest || '', titre: String(d.titre).trim(), texte: String(d.texte).trim(), lus: {} }), { categorie: 'messages' });
     },
     marquerLus(tid) {
+      const moi = AK.session.agent();
+      if (!AK.session.estDirecteur() && (!moi || moi.id !== tid)) throw new AK.ErreurDroits('Vous ne pouvez marquer comme lus que vos propres messages.');
       const L = S().messages.filter((m) => (!m.dest || m.dest === tid) && !m.lus[tid]);
       if (L.length) AK.store.modifier('Messages lus', () => L.forEach((m) => (m.lus[tid] = Date.now())));
     },
@@ -5671,8 +5717,14 @@ return {matrix:matrix,
       if (c.type === 'eleve') {
         AK.perm.exiger('eleve.supprimer', { classe: c.donnees.s.classe });
         if (S().students.some((x) => x.id === c.donnees.s.id)) throw E('Cet élève est déjà présent.');
-        AK.store.modifier(`Élève restauré : ${c.libelle}`, (s) => {
-          s.students.push(c.donnees.s);
+        const el = c.donnees.s, mn = u.norm(el.matNat);
+        const homonyme = mn && S().students.find((x) => u.norm(x.matNat) === mn);
+        if (homonyme) throw E(`Le matricule national ${el.matNat} est maintenant porté par ${X.nomComplet(homonyme)} : corrigez d’abord ce dossier.`);
+        // matricule école repris entre-temps (données antérieures à la réservation des matricules de la corbeille)
+        const nouveauMat = el.mat && S().students.some((x) => x.mat === el.mat) ? AK.eleves.prochainMatricule() : null;
+        AK.store.modifier(`Élève restauré : ${c.libelle}${nouveauMat ? ` (matricule ${el.mat} déjà attribué : nouveau matricule ${nouveauMat})` : ''}`, (s) => {
+          if (nouveauMat) el.mat = nouveauMat;
+          s.students.push(el);
           Object.assign(s.grades, c.donnees.notes || {});
           Object.assign(s.compAbs, c.donnees.compAbs || {});
           Object.assign(s.attente, c.donnees.attente || {});
@@ -5713,8 +5765,9 @@ return {matrix:matrix,
   const S = () => AK.store.etat;
   const E = (m, champ) => new AK.ErreurMetier(m, champ);
   const EVALS = [1, 2, 3, 4];
+  /** Absence en attente de validation : clé « id|n|§ABSENT » dans attente (aucune matière ne peut porter ce nom). */
+  const ABS = '§ABSENT';
 
-  const cleSaisie = (c, n) => S().saisie[c + '|' + n] || (S().saisie[c + '|' + n] = { fermee: false, fin: '' });
   const saisieOuverte = (c, n) => {
     const x = S().saisie[c + '|' + n] || {};
     return !x.fermee && !(x.fin && x.fin < u.aujourdhui());
@@ -5728,6 +5781,8 @@ return {matrix:matrix,
 
   const notes = {
     EVALS,
+    ABS,
+    absenceEnAttente: (sid, n) => S().attente[`${sid}|${n}|${ABS}`] != null,
     saisieOuverte,
     enAttenteDe,
     /**
@@ -5743,7 +5798,7 @@ return {matrix:matrix,
       n = Number(n);
       const mat = X.matieres(s.classe, n).find(([x]) => x === m);
       if (!mat) throw E('Matière inconnue pour cette évaluation.');
-      if (X.estAbsent(sid, n)) throw E('Élève marqué absent à cette évaluation : retirez d’abord l’absence.');
+      if (X.estAbsent(sid, n) || notes.absenceEnAttente(sid, n)) throw E('Élève marqué absent à cette évaluation : retirez d’abord l’absence.');
       const max = X.noteMax(s.classe, mat[1]);
       const r = V.note(brut, max);
       if (r.err) throw E(r.err);
@@ -5754,11 +5809,16 @@ return {matrix:matrix,
       // enseignant avec validation : la note attend la validation du directeur (sauf correction d'une note validée)
       if (enseignant && S().school.validation && ancien == null) {
         if ((S().attente[k] ?? null) === v) return { etat: 'inchange', v };
-        AK.store.modifier(v == null ? null : `Note saisie (en attente) : ${X.nomComplet(s)}, ${m} = ${u.fmtNote(v)}`, (st) => {
+        AK.store.modifier(null, (st) => {
           if (v == null) delete st.attente[k];
           else st.attente[k] = v;
         }, { rendu: false, categorie: 'notes' });
         return { etat: 'attente', v };
+      }
+      // directeur qui vide une note en attente : elle est retirée (sinon elle serait validée plus tard)
+      if (ancien == null && v == null && S().attente[k] != null) {
+        AK.store.modifier(null, (st) => delete st.attente[k], { rendu: false, categorie: 'notes' });
+        return { etat: 'ok', v: null };
       }
       if (ancien === v || (ancien == null && v == null)) return { etat: 'inchange', v };
       // corriger ou effacer une note enregistrée (validée) : réservé au directeur, quel que soit l'écran
@@ -5782,33 +5842,56 @@ return {matrix:matrix,
       AK.perm.exiger('notes.saisir', { classe: s.classe });
       n = Number(n);
       if (AK.session.estEnseignant() && !saisieOuverte(s.classe, n)) throw E('La saisie est fermée pour cette évaluation.');
-      const k = sid + '|' + n;
+      if (!EVALS.includes(n)) throw E('Évaluation inconnue.');
+      const k = sid + '|' + n, ka = k + '|' + ABS;
+      const enseignant = AK.session.estEnseignant(), validation = !!S().school.validation;
       const notesValidees = Object.keys(S().grades).some((g) => g.startsWith(k + '|'));
-      const aDesNotes = notesValidees || Object.keys(S().attente).some((g) => g.startsWith(k + '|'));
-      // marquer absent efface les notes : si des notes sont validées, c'est une correction (directeur)
+      const aDesNotes = notesValidees || Object.keys(S().attente).some((g) => g.startsWith(k + '|') && g !== ka);
+      if (!!absent === (X.estAbsent(sid, n) || S().attente[ka] != null)) return;
+      // marquer absent efface les notes : si des notes sont validées, c'est une correction (directeur) ;
+      // avec la validation active, retirer une absence enregistrée l'est aussi
       if (absent && notesValidees) AK.perm.exiger('notes.corriger', { classe: s.classe });
+      if (!absent && S().compAbs[k] && validation) AK.perm.exiger('notes.corriger', { classe: s.classe });
       if ((aDesNotes || !absent) && !options.confirme) {
         const err = E(absent
           ? `Marquer ${X.nomComplet(s)} absent(e) ? Ses notes de cette évaluation seront effacées et sa moyenne vaudra 0.`
           : `Annuler l’absence de ${X.nomComplet(s)} à cette évaluation ?`);
         err.correction = true;
+        err.validees = notesValidees || (!absent && !!S().compAbs[k]);
         throw err;
+      }
+      // enseignant avec validation : l'absence (moyenne 0) attend la validation du directeur, comme une note
+      if (enseignant && validation && (absent || S().attente[ka] != null)) {
+        AK.store.modifier(null, (st) => {
+          Object.keys(st.attente).forEach((g) => g.startsWith(k + '|') && delete st.attente[g]);
+          if (absent) st.attente[ka] = true;
+        }, { rendu: false, categorie: 'notes' });
+        return;
       }
       AK.store.modifier(`Notes : ${X.nomComplet(s)} ${absent ? 'marqué(e) absent(e)' : 'n’est plus absent(e)'} (${X.evalLabel(s.classe, n)})`, (st) => {
         if (absent) {
           Object.keys(st.grades).forEach((g) => g.startsWith(k + '|') && delete st.grades[g]);
           Object.keys(st.attente).forEach((g) => g.startsWith(k + '|') && delete st.attente[g]);
           st.compAbs[k] = true;
-        } else delete st.compAbs[k];
+        } else {
+          delete st.compAbs[k];
+          delete st.attente[ka];
+        }
       }, { rendu: false, categorie: 'notes' });
     },
     valider(classe, n) {
       AK.perm.exiger('notes.valider');
       const L = enAttenteDe(classe, n);
       if (!L.length) return 0;
-      AK.store.modifier(`${u.pluriel(L.length, 'note')} validée(s) : ${classe}`, (st) =>
-        L.forEach((k) => {
-          st.grades[k] = st.attente[k];
+      // les absences en dernier : elles effacent les notes de l'évaluation
+      const abs = (k) => k.endsWith('|' + ABS);
+      AK.store.modifier(`${u.pluriel(L.length, L.some(abs) ? 'saisie' : 'note')} validée(s) : ${classe}`, (st) =>
+        [...L.filter((k) => !abs(k)), ...L.filter(abs)].forEach((k) => {
+          if (abs(k)) {
+            const p = k.slice(0, -ABS.length);
+            Object.keys(st.grades).forEach((g) => g.startsWith(p) && delete st.grades[g]);
+            st.compAbs[p.slice(0, -1)] = true;
+          } else st.grades[k] = st.attente[k];
           delete st.attente[k];
         }), { categorie: 'notes' });
       return L.length;
@@ -5817,20 +5900,32 @@ return {matrix:matrix,
       AK.perm.exiger('notes.valider');
       const L = enAttenteDe(classe, n);
       if (!L.length) return 0;
-      AK.store.modifier(`${u.pluriel(L.length, 'note')} en attente rejetée(s) : ${classe}`, (st) => L.forEach((k) => delete st.attente[k]), { categorie: 'notes' });
+      AK.store.modifier(`${u.pluriel(L.length, L.some((k) => k.endsWith('|' + ABS)) ? 'saisie' : 'note')} en attente rejetée(s) : ${classe}`, (st) => L.forEach((k) => delete st.attente[k]), { categorie: 'notes' });
       return L.length;
     },
+    /** Ferme une saisie ouverte ; rouvre une saisie fermée (à la main ou par une date limite dépassée, qui est alors retirée). */
     basculerSaisie(classe, n) {
       AK.perm.exiger('notes.periode');
-      const x = cleSaisie(classe, n);
-      AK.store.modifier(`Saisie ${x.fermee ? 'rouverte' : 'fermée'} : ${classe} (${C.evCourt(n)})`, () => (x.fermee = !x.fermee), { categorie: 'notes' });
+      if (!X.niveaux().includes(classe) || !EVALS.includes(Number(n))) throw E('Classe ou évaluation inconnue.');
+      const ouverte = saisieOuverte(classe, n), auj = u.aujourdhui();
+      AK.store.modifier(`Saisie ${ouverte ? 'fermée' : 'rouverte'} : ${classe} (${C.evCourt(n)})`, (st) => {
+        const x = st.saisie[classe + '|' + n] || (st.saisie[classe + '|' + n] = { fermee: false, fin: '' });
+        if (ouverte) x.fermee = true;
+        else {
+          x.fermee = false;
+          if (x.fin && x.fin < auj) x.fin = '';
+        }
+      }, { categorie: 'notes' });
     },
     dateLimite(classe, n, date) {
       AK.perm.exiger('notes.periode');
       const e = V.date(date, 'Date limite');
       if (e) throw E(e);
-      const x = cleSaisie(classe, n);
-      AK.store.modifier(`Date limite de saisie ${classe} : ${date ? u.fmtDate(date) : 'aucune'}`, () => (x.fin = date || ''), { categorie: 'notes' });
+      if (!X.niveaux().includes(classe) || !EVALS.includes(Number(n))) throw E('Classe ou évaluation inconnue.');
+      AK.store.modifier(`Date limite de saisie ${classe} : ${date ? u.fmtDate(date) : 'aucune'}`, (st) => {
+        const x = st.saisie[classe + '|' + n] || (st.saisie[classe + '|' + n] = { fermee: false, fin: '' });
+        x.fin = date || '';
+      }, { categorie: 'notes' });
     },
     basculerValidation(oui) {
       AK.perm.exiger('notes.periode');
@@ -5869,10 +5964,11 @@ return {matrix:matrix,
     },
     /** Bilan prévisionnel du passage (affiché avant confirmation). */
     bilanPassage() {
-      const R = { montent: 0, restent: 0, sortants: 0, archives: 0, sansDecision: 0, niveauNonOuvert: [] };
+      const R = { montent: 0, restent: 0, sortants: 0, archives: 0, sansDecision: 0, niveauNonOuvert: [], attente: Object.keys(S().attente).length, incompletes: 0 };
       S().students.forEach((s) => {
         const d = X.decision(s);
         if (s.statut !== 'Inscrit' || ['Abandon', 'Exclu', 'Transféré'].includes(d)) return R.archives++;
+        if (X.incompletAnnee(s)) R.incompletes++;
         if (d === 'Admis') {
           const sv = X.niveauSuivant(s.classe);
           if (!sv) return R.sortants++;
@@ -5889,13 +5985,15 @@ return {matrix:matrix,
     },
     /**
      * Passage à l'année suivante (correction de 1.7.0 : un admis du plus haut niveau ouvert, autre que le CM2,
-     * restait sans classe et bloquait le tableau de bord). Copie de sécurité préalable.
+     * restait sans classe et bloquait le tableau de bord). Copie de sécurité préalable : si le stockage
+     * en permet une et qu'elle échoue, le passage n'a pas lieu.
      */
     async passerAnnee() {
       AK.perm.exiger('annee.passer');
       const annee = S().school.year, suivante = notes.anneeSuivante();
       if (!suivante) throw E('Renseignez d’abord l’année scolaire en cours (Paramètres).');
-      await AK.store.copieAvant('avant-passage-' + annee);
+      const copie = await AK.store.copieAvant('avant-passage-' + annee);
+      if (!copie && AK.stockage.copiesDisponibles()) throw E('La copie de sécurité préalable a échoué (espace de stockage plein ?) : le passage n’a pas été fait. Exportez une sauvegarde (Données › Sauvegarde), libérez de l’espace puis recommencez.');
       const effs = Object.fromEntries(X.niveaux().map((c) => [c, X.actifsDe(c).length]));
       const R = { montent: 0, restent: 0, archives: 0 };
       AK.store.modifier(`Passage à ${suivante}`, (st) => {
@@ -5933,7 +6031,10 @@ return {matrix:matrix,
           s.decision = '';
           garder.push(s);
         });
-        st.archives[annee || 'sans-annee'] = { students: arch, grades: st.grades, compAbs: st.compAbs, att: st.att, appel: st.appel, cloture: new Date().toISOString() };
+        // une année déjà archivée (année remise en arrière dans les paramètres) n'est jamais écrasée
+        let cleA = annee || 'sans-annee';
+        for (let i = 2; st.archives[cleA]; i++) cleA = `${annee || 'sans-annee'} (${i})`;
+        st.archives[cleA] = { students: arch, grades: st.grades, compAbs: st.compAbs, attente: st.attente, att: st.att, appel: st.appel, cloture: new Date().toISOString() };
         Object.assign(st, { students: garder, grades: {}, compAbs: {}, att: {}, appel: {}, attente: {}, saisie: {} });
         Object.assign(st.school, { year: suivante, evalCourante: 1 });
       }, { categorie: 'annee' });
@@ -5956,14 +6057,21 @@ return {matrix:matrix,
   const S = () => AK.store.etat;
   const E = (m, champ) => new AK.ErreurMetier(m, champ);
 
+  const dateAppel = (date) => {
+    if (V.date(date, 'Date') || !date) throw E('Date invalide.');
+    if (date > u.aujourdhui()) throw E('Impossible de faire l’appel d’un jour à venir.');
+  };
+  const classeOuverte = (classe) => {
+    if (!X.niveaux().includes(classe)) throw E('Classe inconnue.');
+  };
+
   const absences = {
     /** État suivant d'une case de l'appel : Présent → Absent → Absent justifié → Présent. */
     basculer(date, classe, sid) {
       const s = AK.eleves.trouver(sid);
-      if (!s || s.classe !== classe) throw E('Élève introuvable dans cette classe.');
+      if (!s || s.classe !== classe || s.statut !== 'Inscrit') throw E('Élève introuvable dans cette classe.');
       AK.perm.exiger('appel.faire', { classe });
-      if (V.date(date, 'Date')) throw E('Date invalide.');
-      if (date > u.aujourdhui()) throw E('Impossible de faire l’appel d’un jour à venir.');
+      dateAppel(date);
       const d = S().att[date] || {};
       const v = d[sid] || '';
       // un enseignant ne lève pas une absence déjà enregistrée
@@ -5977,17 +6085,30 @@ return {matrix:matrix,
       }, { rendu: false });
       return nv;
     },
+    /**
+     * « Tout le monde présent » : le directeur lève les absences non justifiées du jour ; les absences
+     * justifiées (autorisation accordée) restent. Renvoie le nombre d'absences justifiées conservées.
+     */
     tousPresents(date, classe) {
+      classeOuverte(classe);
       AK.perm.exiger('appel.faire', { classe });
+      dateAppel(date);
       const directeur = AK.perm.peut('appel.lever');
-      AK.store.modifier(`Appel ${classe} du ${u.fmtDate(date)} : ${directeur ? 'tout le monde présent' : 'les autres élèves présents'}`, (st) => {
+      let gardees = 0;
+      AK.store.modifier(`Appel ${classe} du ${u.fmtDate(date)} : ${directeur ? 'absences non justifiées levées' : 'les autres élèves présents'}`, (st) => {
         const j = st.att[date] || (st.att[date] = {});
-        if (directeur) X.actifsDe(classe).forEach((s) => delete j[s.id]);
+        X.actifsDe(classe).forEach((s) => {
+          if (j[s.id] === 'J') gardees++;
+          else if (directeur) delete j[s.id];
+        });
         (st.appel[date] || (st.appel[date] = {}))[classe] = true;
       }, { categorie: 'appel' });
+      return gardees;
     },
     valider(date, classe) {
+      classeOuverte(classe);
       AK.perm.exiger('appel.faire', { classe });
+      dateAppel(date);
       AK.store.modifier(`Appel validé : ${classe}, ${u.fmtDate(date)}`, (st) => ((st.appel[date] || (st.appel[date] = {}))[classe] = true), { categorie: 'appel' });
     },
     joursDemande: (a) => X.joursClasse(a.du, a.au).length,
@@ -6643,6 +6764,45 @@ return {matrix:matrix,
     return { nom: p[0] || '', prenoms: p.slice(1).join(' ') };
   };
 
+  /**
+   * Date d'une cellule : texte (jj/mm/aaaa, aaaa-mm-jj) ou numéro de série d'une cellule date Excel
+   * (jours depuis le 30/12/1899, ce que renvoient les lecteurs .xlsx/.xls pour une cellule au format date).
+   */
+  const dateCellule = (v) => {
+    const t = String(v ?? '').trim();
+    if (/^\d{4,5}(\.\d+)?$/.test(t) && Number(t) > 3000 && Number(t) < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(t)) * 86400000);
+      return d.toISOString().slice(0, 10);
+    }
+    return u.versISO(t);
+  };
+
+  /** État de référence d'un contrôle d'import : matricules et élèves déjà enregistrés. */
+  const base = () => ({ mats: new Set(S().students.flatMap((o) => [u.norm(o.mat), u.norm(o.matNat)]).filter(Boolean)), niveaux: X.niveaux() });
+  /**
+   * Contrôle d'un élève à importer (mêmes règles à l'analyse et au moment d'importer : l'analyse peut
+   * avoir été modifiée ou être périmée). vus : clés déjà rencontrées dans le fichier. Renvoie [etat, motif].
+   */
+  function controle(s, b, vus) {
+    const km = u.norm(s.matNat) || u.norm(s.mat), kn = 'n:' + u.norm(s.nom + s.prenoms) + '|' + (s.naissance || '');
+    let r = ['ok', ''];
+    if (!s.nom || !s.prenoms) r = ['erreur', 'nom ou prénoms manquant'];
+    else if (V.nom(s.nom, 'Nom', 1, 40) || V.nom(s.prenoms, 'Prénoms', 1, 60)) r = ['erreur', 'nom ou prénoms illisible'];
+    else if (!b.niveaux.includes(s.classe)) r = ['erreur', s.classe ? `classe ${s.classe} non ouverte` : 'classe manquante'];
+    else if (s.sexe !== 'Masculin' && s.sexe !== 'Féminin') r = ['erreur', 'sexe illisible'];
+    else if (s.matNat && V.matNat(s.matNat)) r = ['erreur', 'matricule national invalide'];
+    else if (s.mat && !/^AK-\d+$/.test(s.mat)) r = ['erreur', 'matricule école invalide'];
+    else if (s.naissance && V.naissanceEleve(s.naissance, X.anneeRentree())) r = ['erreur', 'date de naissance improbable'];
+    else if (!AK.perm.peut('eleve.importer', { classe: s.classe })) r = ['erreur', 'classe hors de votre espace'];
+    else if (km && b.mats.has(km)) r = ['doublon', 'matricule déjà présent'];
+    else if (km && vus.has(km)) r = ['doublon', 'matricule en double dans le fichier'];
+    else if (AK.eleves.doublons(s).length) r = ['doublon', 'déjà inscrit'];
+    else if (vus.has(kn)) r = ['doublon', 'ligne en double dans le fichier'];
+    if (km) vus.add(km);
+    vus.add(kn);
+    return r;
+  }
+
   /** Analyse des lignes : chaque ligne devient { s, etat: 'ok'|'doublon'|'erreur', motif, ligne }. */
   function analyser(rows) {
     if (typeof rows === 'string') rows = parseCSV(rows);
@@ -6653,43 +6813,33 @@ return {matrix:matrix,
     const c = {
       nom: ix('nom'), pre: ix('prenoms', 'prenom'), cl: ix('niveau', 'classe'), sx: ix('sexe', 'genre'), na: ix('naissance', 'datedenaissance'),
       j: ix('jour'), m: ix('mois'), y: ix('annee'), mat: ix('matricule'), pa: ix('parent', 'tuteur', 'nomduparent'), tel: ix('telephone', 'tel'),
-      ex: ix('extrait', 'dossier'), an: ix('nacte', 'actenum', 'numeroacte', 'ndelacte'), ad: ix('actedate', 'datedelacte'), ac: ix('lieuacte', 'centreetatcivil', 'centre'),
+      ex: ix('extrait', 'dossier'), an: ix('nacte', 'actenum', 'numeroacte', 'ndelacte'), ad: ix('actedate', 'datedelacte', 'dateacte', 'datacte'), ac: ix('lieuacte', 'centreetatcivil', 'centre'),
       nat: ix('nationalite'), lo: ix('localite', 'lieu', 'lieudenaissance'), sp: ix('sp', 'sousprefecture'), pe: ix('pere'), me: ix('mere'), re: ix('residence', 'domicile')
     };
     if (c.nom < 0 || c.pre < 0 || c.cl < 0 || c.sx < 0) return { erreur: 'Colonnes obligatoires manquantes : nom, prenoms, niveau (ou classe), sexe.' };
     const g = (r, k) => (c[k] >= 0 ? String(r[c[k]] ?? '') : '').trim();
-    const mats = new Set(S().students.flatMap((o) => [u.norm(o.mat), u.norm(o.matNat)]).filter(Boolean)), vus = new Set();
-    const niveaux = X.niveaux();
+    const b = base(), vus = new Set();
     return {
       items: rows.slice(1).map((r, i) => {
         const cl = g(r, 'cl').toUpperCase().replace(/\s/g, ''), sx = u.norm(g(r, 'sx'));
         const sexe = ['m', 'masculin', 'garcon', 'g', 'h', 'homme'].includes(sx) ? 'Masculin' : ['f', 'feminin', 'fille'].includes(sx) ? 'Féminin' : '';
-        const na = c.y >= 0 && g(r, 'y') ? u.versISO(`${g(r, 'j')}/${g(r, 'm')}/${g(r, 'y')}`) : u.versISO(g(r, 'na'));
+        const na = c.y >= 0 && g(r, 'y') ? u.versISO(`${g(r, 'j')}/${g(r, 'm')}/${g(r, 'y')}`) : dateCellule(g(r, 'na'));
+        // l'export « format national » d'AKWA met le matricule école (AK-…) dans cette colonne quand il n'y a pas de matricule national
+        const mv = g(r, 'mat').replace(/\s/g, '').toUpperCase(), matEcole = /^AK-\d+$/.test(mv);
         const num = vide0(g(r, 'an')), exv = u.norm(g(r, 'ex')), ex = c.ex >= 0 && exv ? ['oui', '1', 'true', 'complet', 'x'].includes(exv) : !!num;
         const pe = coupeNom(g(r, 'pe')), me = coupeNom(g(r, 'me')), dom = vide0(g(r, 're'));
         const natRef = AK.ref.NATIONALITES.find((x) => u.norm(x[1]) === u.norm(g(r, 'nat')));
         const s = AK.schema.completerEleve({
           id: u.uid(), nom: u.majNom(g(r, 'nom')), prenoms: u.majPrenoms(g(r, 'pre')), classe: cl, sexe, naissance: na, ageEstime: false,
-          matNat: g(r, 'mat').replace(/\s/g, '').toUpperCase(), lieu: vide0(g(r, 'lo')), nationalite: natRef ? natRef[1] : g(r, 'nat').toUpperCase() || C.NAT_DEFAUT,
-          redoublant: false, mat: '', parent: g(r, 'pa'), tel: V.telPropre(g(r, 'tel')), extrait: ex,
-          acte: { num, date: u.versISO(g(r, 'ad')), centre: vide0(g(r, 'ac')), sp: vide0(g(r, 'sp')) },
+          matNat: matEcole ? '' : mv, lieu: vide0(g(r, 'lo')), nationalite: natRef ? natRef[1] : g(r, 'nat').toUpperCase() || C.NAT_DEFAUT,
+          redoublant: false, mat: matEcole ? mv : '', parent: g(r, 'pa'), tel: V.telPropre(g(r, 'tel')), extrait: ex,
+          acte: { num, date: dateCellule(g(r, 'ad')), centre: vide0(g(r, 'ac')), sp: vide0(g(r, 'sp')) },
           pere: { nom: u.majNom(pe.nom), prenoms: u.majPrenoms(pe.prenoms), profession: '', tel: '', domicile: dom },
           mere: { nom: u.majNom(me.nom), prenoms: u.majPrenoms(me.prenoms), profession: '', tel: '', domicile: dom },
           statut: 'Inscrit', photo: '', decision: '', entree: '', inscritLe: u.aujourdhui()
         });
-        let etat = 'ok', motif = '';
-        const km = u.norm(s.matNat);
-        if (!s.nom || !s.prenoms) [etat, motif] = ['erreur', 'nom ou prénoms manquant'];
-        else if (V.nom(s.nom, 'Nom', 1) || V.nom(s.prenoms, 'Prénoms', 1)) [etat, motif] = ['erreur', 'nom ou prénoms illisible'];
-        else if (!niveaux.includes(cl)) [etat, motif] = ['erreur', cl ? `classe ${cl} non ouverte` : 'classe manquante'];
-        else if (!sexe) [etat, motif] = ['erreur', 'sexe illisible'];
-        else if (s.matNat && V.matNat(s.matNat)) [etat, motif] = ['erreur', 'matricule national invalide'];
-        else if (!AK.perm.peut('eleve.importer', { classe: cl })) [etat, motif] = ['erreur', 'classe hors de votre espace'];
-        else if (km && mats.has(km)) [etat, motif] = ['doublon', 'matricule déjà présent'];
-        else if (km && vus.has(km)) [etat, motif] = ['doublon', 'matricule en double dans le fichier'];
-        else if (S().students.some((o) => u.norm(o.nom + o.prenoms) === u.norm(s.nom + s.prenoms) && (!s.naissance || o.naissance === s.naissance))) [etat, motif] = ['doublon', 'déjà inscrit'];
+        let [etat, motif] = controle(s, b, vus);
         if (!na && etat === 'ok') motif = 'date de naissance absente';
-        if (km) vus.add(km);
         return { s, etat, motif, ligne: i + 2 };
       })
     };
@@ -6697,20 +6847,36 @@ return {matrix:matrix,
 
   const imports = {
     parseCSV, lireXLS, lireXLSX, lireTableur, analyser,
+    /**
+     * Enregistre les lignes « ok » d'une analyse, après les avoir contrôlées de nouveau contre l'état
+     * courant (droits par classe, validité, doublons) : une analyse modifiée, périmée ou déjà importée
+     * n'ajoute rien de faux. Renvoie { n, ignores, copie }.
+     */
     async importer(analyse) {
       AK.perm.exiger('eleve.importer');
-      const ok = analyse.items.filter((i) => i.etat === 'ok');
-      if (!ok.length) throw E('Aucune ligne à importer.');
-      await AK.store.copieAvant('avant-import');
+      if (!analyse || !Array.isArray(analyse.items)) throw E('Analyse d’import invalide.');
+      if (analyse.importee) throw E('Cette liste a déjà été importée.');
+      const candidats = analyse.items.filter((i) => i && i.etat === 'ok' && i.s && typeof i.s === 'object');
+      if (!candidats.length) throw E('Aucune ligne à importer.');
+      analyse.importee = true; // un second clic pendant la copie de sécurité n'importe rien
+      let copie = null;
+      try {
+        copie = await AK.store.copieAvant('avant-import');
+      } catch (e) {
+        analyse.importee = false;
+        throw e;
+      }
+      const b = base(), vus = new Set(), ids = new Set(S().students.map((o) => o.id));
+      const ok = candidats.map((i) => AK.schema.completerEleve({ ...i.s, statut: 'Inscrit', id: i.s.id && !ids.has(i.s.id) ? i.s.id : u.uid() }))
+        .filter((s) => controle(s, b, vus)[0] === 'ok');
+      if (!ok.length) throw E('Aucune ligne à importer : les élèves sont déjà inscrits ou les lignes ne sont plus valides.');
       AK.store.modifier(`Import Excel : ${u.pluriel(ok.length, 'élève')}`, (st) => {
-        ok.forEach((i) => {
-          if (!i.s.mat) {
-            i.s.mat = AK.eleves.prochainMatricule();
-          }
-          st.students.push(i.s);
+        ok.forEach((s) => {
+          if (!s.mat) s.mat = AK.eleves.prochainMatricule();
+          st.students.push(s);
         });
       }, { categorie: 'eleves' });
-      return ok.length;
+      return { n: ok.length, ignores: candidats.length - ok.length, copie: !!copie };
     },
     /** Le directeur rattache à l'école la sauvegarde d'un espace enseignant seul. */
     async rattacher(o) {
@@ -7593,7 +7759,7 @@ return {matrix:matrix,
     image(o) {
       const i = o.id || id();
       return html`<div class="champ${o.plein ? ' plein' : ''}"><span class="lib">${o.lib}</span><div class="ligne"><span class="apercu-img" id="${i}-ap">${o.val ? html`<img src="${o.val}" alt="" style="height:${o.h || 64}px;border-radius:8px;border:1px solid var(--line)">` : html`<span class="av lg" aria-hidden="true">${ic('image')}</span>`}</span>
-        <label class="btn btn-sm">${ic('cam')}${o.bouton || 'Choisir une image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-change="image-choisie" data-cible="${i}" data-max="${o.max || 360}" data-type="${o.typeImg || 'image/jpeg'}"></label>
+        <button type="button" class="btn btn-sm" data-action="fichier-choisir">${ic('cam')}${o.bouton || 'Choisir une image'}</button><input type="file" accept="image/png,image/jpeg,image/webp" hidden data-change="image-choisie" data-cible="${i}" data-max="${o.max || 360}" data-type="${o.typeImg || 'image/jpeg'}">
         ${o.val ? html`<button type="button" class="btn btn-sm btn-ghost" data-action="image-retirer" data-cible="${i}">Retirer</button>` : ''}
         <input type="hidden" name="${o.nom}" id="${i}" value="${o.val || ''}" data-image></div>${o.aide ? html`<div class="aide">${o.aide}</div>` : ''}</div>`;
     }
@@ -7621,6 +7787,8 @@ return {matrix:matrix,
     }
   });
   AK.actions.def({
+    /** Bouton qui ouvre le choix de fichier placé juste après lui (un bouton reste atteignable au clavier). */
+    'fichier-choisir': (el) => el.nextElementSibling && el.nextElementSibling.click(),
     'image-retirer'(el) {
       const cible = document.getElementById(el.dataset.cible);
       cible.value = '';
@@ -8654,8 +8822,8 @@ return {matrix:matrix,
       if (!TYPES[o.type]) throw E('Type de document inconnu.');
       const qrActif = o.qr ? o.qr.actif !== false : true;
 
-      // politique « unique » : même référence pour le même élève et la même période
-      if (o.politique === 'unique') {
+      // politique « unique » : même référence pour le même élève et la même période (sauf duplicata : nouvelle référence)
+      if (o.politique === 'unique' && !o.duplicataDe) {
         const exist = (S().docs.items || []).find((d) => d.cleUnique === o.cleUnique && d.statut === 'valide');
         if (exist) {
           const H = await AK.qr.empreinteTitulaire({ ...o.canon, type: o.type, ref: exist.ref });
@@ -8723,8 +8891,11 @@ return {matrix:matrix,
     },
     /** Duplicata (perte) : l'original est marqué « remplacé » si demandé. */
     remplacer(ref, nouveauRef) {
-      const d = trouver(ref);
-      if (!d) return;
+      AK.perm.exiger('document.emettre');
+      const d = trouver(ref), n = trouver(nouveauRef);
+      if (!d) throw E('Document introuvable au registre.');
+      if (!n || n === d || n.type !== d.type) throw E('Le duplicata doit être un document du même type, déjà inscrit au registre.');
+      if (d.statut !== 'valide') throw E('Seul un document valide peut être remplacé.');
       AK.store.modifier(`${TYPES[d.type]} ${d.ref} remplacé par ${nouveauRef}`, () => {
         d.statut = 'remplace';
         d.remplacePar = nouveauRef;
@@ -8733,6 +8904,7 @@ return {matrix:matrix,
     },
     /** Liste minimale pour l'outil de vérification hors ligne (aucune donnée personnelle sensible). */
     exportVerification({ avecNoms = false } = {}) {
+      AK.perm.exiger(avecNoms ? 'document.registre' : 'verification.utiliser');
       return (S().docs.items || []).filter((d) => !d.demo).map((d) => ({
         r: d.ref, t: d.type, e: d.emisLe.slice(0, 10), x: d.expire || null, h: d.H, s: statutEffectif(d) === 'expire' ? 'valide' : d.statut,
         a: d.annulation ? d.annulation.le.slice(0, 10) : null, v: (d.versions || []).map((v) => v.H), n: avecNoms && d.sujet ? AK.qr.propre(d.sujet.libelle) : undefined
@@ -9675,9 +9847,27 @@ return {matrix:matrix,
    *             émission : référence et QR réservés), copie, reutiliser, duplicataDe, statutForce }
    * Renvoie { feuilles, cartes, docs, avertissements }.
    */
+  /**
+   * Droit de produire ce document pour ce sujet, vérifié pour tout modèle (avec ou sans inscription au
+   * registre) : un enseignant n'obtient que les documents de ses classes, ses propres documents de
+   * personnel, et aucun document de toute l'école (sauf espace enseignant seul).
+   */
+  function autoriser(d, contextes) {
+    if (AK.session.estDirecteur()) return;
+    const moi = AK.session.agent();
+    const ok = contextes.every((c) => {
+      const classe = c.eleve ? c.eleve.classe : c.classe;
+      if (d.sujet === 'agent') return !!(moi && c.agent && c.agent.id === moi.id);
+      if (d.sujet === 'ecole' && !classe) return AK.perm.peut('document.ecole');
+      return !!classe && AK.perm.peut('document.imprimerClasse', { classe });
+    });
+    if (!ok) throw new AK.ErreurDroits('Ce document ne concerne pas votre classe : il est réservé au directeur.');
+  }
+
   async function generer(idModele, contextes, options = {}) {
     const d = AK.modeles.get(idModele);
     if (!d) throw new AK.ErreurMetier('Modèle de document inconnu.');
+    autoriser(d, contextes);
     const r = options.reglages ? AK.modeles.valider(idModele, options.reglages) : AK.modeles.reglages(idModele);
     const feuilles = [], cartes = [], docs = [], avertissements = [];
     for (const [i, ctx0] of contextes.entries()) {
@@ -11343,7 +11533,7 @@ return {matrix:matrix,
     const dateLongue = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
     const actions = [
-      AK.perm.peut('eleve.inscrire') ? html`<button type="button" class="btn clair" data-action="inscrire-eleve">${ic('userPlus')}Inscrire un élève</button>` : '',
+      AK.perm.peut('eleve.inscrire') ? html`<button type="button" class="btn clair" data-action="eleve-nouveau">${ic('userPlus')}Inscrire un élève</button>` : '',
       html`<a class="btn" href="#absences/appel">${ic('clip')}Faire l’appel</a>`,
       html`<a class="btn" href="#notes/saisie">${ic('edit')}Saisir les notes</a>`,
       AK.perm.peut('document.emettre') ? html`<a class="btn" href="#documents/emettre">${ic('filePlus')}Émettre un document</a>` : ''
@@ -11455,7 +11645,8 @@ return {matrix:matrix,
   /* ---------- Registre des élèves ---------- */
   function rendreListe(p) {
     const x = X(), L = elevesFiltres(p);
-    const dir = AK.session.estDirecteur();
+    // une classe hors du périmètre (adresse saisie à la main) n'est ni affichée ni proposée à l'impression
+    const classe = p.classe && AK.session.classes().includes(p.classe) ? p.classe : null;
     const filtres = html`<select class="inp inp-sm" data-change="eleves-filtre" data-f="classe" aria-label="Classe">${ui.options(AK.session.classes(), p.classe, 'Toutes les classes')}</select>
       <select class="inp inp-sm" data-change="eleves-filtre" data-f="statut" aria-label="Statut">${ui.options([['', 'Tous les statuts'], ...C.STATUTS.map((s) => [s, s])], p.statut == null ? 'Inscrit' : p.statut)}</select>
       <select class="inp inp-sm" data-change="eleves-filtre" data-f="dossier" aria-label="Dossier">${ui.options(DOSSIERS, p.dossier, 'Tous les dossiers')}</select>
@@ -11471,14 +11662,14 @@ return {matrix:matrix,
       { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (s) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap"><button type="button" class="btn-ic" data-action="eleve-documents" data-id="${s.id}" aria-label="Documents de ${x.nomComplet(s)}" data-bulle="Documents">${ic('file')}</button>${peut('eleve.modifier', { classe: s.classe }) ? html`<button type="button" class="btn-ic" data-action="eleve-modifier" data-id="${s.id}" aria-label="Modifier ${x.nomComplet(s)}" data-bulle="Modifier">${ic('edit')}</button>` : ''}<button type="button" class="btn-ic" data-action="eleve-plus" data-id="${s.id}" aria-label="Autres actions pour ${x.nomComplet(s)}" aria-haspopup="menu">${ic('more')}</button></div>` }
     ];
     const actionsSel = (ids) => html`<button type="button" class="btn btn-sm" data-action="eleves-sel-doc" data-modele="fiche-scolaire">${ic('file')}Fiches scolaires</button>${peut('document.emettre') ? html`<button type="button" class="btn btn-sm" data-action="eleves-sel-doc" data-modele="certificat-scolarite">${ic('fileCheck')}Certificats</button><button type="button" class="btn btn-sm" data-action="eleves-sel-cartes">${ic('idCard')}Cartes (${ids.length})</button>` : ''}`;
-    const titre = p.classe ? `Classe de ${p.classe}` : 'Registre des élèves';
-    const g = L.filter((s) => s.sexe === 'Masculin').length;
-    return html`${ui.pageTete(titre, `${u.pluriel(L.length, 'élève')} · ${g} garçons · ${L.length - g} filles. Cliquez sur un nom pour ouvrir la fiche (notes, absences, documents).`,
-      html`${p.classe ? html`<button type="button" class="btn" data-action="doc-classe" data-modele="liste-classe" data-classe="${p.classe}">${ic('print')}Liste de la classe</button>` : dir ? html`<button type="button" class="btn" data-action="doc-ecole" data-modele="registre-eleves">${ic('print')}Registre général</button>` : ''}
+    const titre = classe ? `Classe de ${classe}` : 'Registre des élèves';
+    const g = L.filter((s) => s.sexe === 'Masculin').length, f = L.filter((s) => s.sexe === 'Féminin').length;
+    return html`${ui.pageTete(titre, `${u.pluriel(L.length, 'élève')} · ${g} garçons · ${f} filles. Cliquez sur un nom pour ouvrir la fiche (notes, absences, documents).`,
+      html`${classe ? html`<button type="button" class="btn" data-action="doc-classe" data-modele="liste-classe" data-classe="${classe}">${ic('print')}Liste de la classe</button>` : peut('document.ecole') ? html`<button type="button" class="btn" data-action="doc-ecole" data-modele="registre-eleves">${ic('print')}Registre général</button>` : ''}
       ${peut('eleve.inscrire', { classe: p.classe || AK.session.classes()[0] }) ? html`<button type="button" class="btn btn-pri" data-action="eleve-nouveau" data-classe="${p.classe || ''}">${ic('userPlus')}Inscrire un élève</button>` : ''}`)}
       ${ui.tableau({
         id: 'eleves', lignes: L, colonnes, filtres, recherche: (s) => x.nomComplet(s) + ' ' + s.prenoms + ' ' + s.nom + ' ' + s.mat + ' ' + (s.matNat || ''),
-        placeholder: 'Nom, prénom ou matricule…', unite: 'élève', parPage: 50, selection: true, actionsSelection: actionsSel, exporter: 'eleves', triDefaut: { cle: 'classe', sens: 'asc' },
+        placeholder: 'Nom, prénom ou matricule…', unite: 'élève', parPage: 50, selection: true, actionsSelection: actionsSel, exporter: peut('donnees.exporter') ? 'eleves' : null, triDefaut: { cle: 'classe', sens: 'asc' },
         legende: 'Registre des élèves',
         vide: S().students.length ? ui.vide('Aucun élève', 'Aucun élève ne correspond à ces filtres.') : ui.vide('Aucun élève inscrit', 'Inscrivez vos élèves un par un ou importez une liste Excel.', peut('eleve.inscrire', { classe: AK.session.classes()[0] }) ? html`<div class="ligne" style="justify-content:center"><button type="button" class="btn btn-pri" data-action="eleve-nouveau">${ic('userPlus')}Inscrire un élève</button><a class="btn" href="#eleves/import">${ic('down')}Importer un fichier Excel</a></div>` : '')
       })}`;
@@ -11563,7 +11754,14 @@ return {matrix:matrix,
           }
           ui.toast(`${X().nomComplet(e)} inscrit(e) en ${e.classe} · matricule ${e.mat}`, { action: { lib: 'Ouvrir la fiche', f: () => ui.ouvrirTiroir('eleve', e.id) } });
         } else {
-          AK.eleves.modifier(s.id, d);
+          try {
+            AK.eleves.modifier(s.id, d);
+          } catch (err) {
+            if (!err.changementClasse) throw err;
+            const ok = await ui.confirmer({ titre: 'Changement de classe', icone: 'warn', message: err.message, ok: `Passer en ${d.classe}` });
+            if (!ok) return false;
+            AK.eleves.modifier(s.id, d, { changementConfirme: true });
+          }
           ui.toast('Dossier mis à jour.');
         }
       }
@@ -11671,10 +11869,10 @@ return {matrix:matrix,
   function rendreImport() {
     const A = analyseImport;
     const n = A && A.items ? { ok: A.items.filter((i) => i.etat === 'ok').length, dbl: A.items.filter((i) => i.etat === 'doublon').length, err: A.items.filter((i) => i.etat === 'erreur').length } : null;
-    return html`${ui.pageTete('Import d’une liste d’élèves', 'Fichier Excel (.xlsx, .xls) ou CSV. Rien n’est enregistré avant votre confirmation ; une copie de sécurité est faite juste avant.')}
+    return html`${ui.pageTete('Import d’une liste d’élèves', `Fichier Excel (.xlsx, .xls) ou CSV. Rien n’est enregistré avant votre confirmation${AK.stockage.copiesDisponibles() ? ' ; une copie de sécurité est faite juste avant' : ''}.`)}
       <div class="grille g-2-1">
         ${ui.carte('1. Choisir le fichier', html`<div class="pile">
-          <label class="btn btn-pri" style="justify-self:start">${ic('folder')}Choisir un fichier Excel ou CSV<input type="file" hidden accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-change="import-fichier"></label>
+          <button type="button" class="btn btn-pri" style="justify-self:start" data-action="fichier-choisir">${ic('folder')}Choisir un fichier Excel ou CSV</button><input type="file" hidden accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-change="import-fichier">
           ${A && A.nom ? html`<p class="mb0">${ic('file')} <b>${A.nom}</b> · ${u.pluriel((A.items || []).length, 'ligne')} lue(s)</p>` : ''}
           ${A && A.erreur ? ui.encadre(A.erreur, 'erreur') : ''}</div>`)}
         ${ui.carte('Colonnes reconnues', html`<p class="petit mb0"><b>Obligatoires :</b> nom, prénoms, niveau (ou classe), sexe.<br><b>Facultatives :</b> naissance (ou jour, mois, année), matricule, parent, téléphone, extrait, n° acte, date acte, centre, nationalité, lieu, sous-préfecture, père, mère, domicile.</p><p class="petit mut mb0">Les doublons (même matricule, ou même nom et même naissance qu’un élève existant) ne sont jamais importés.</p>`)}
@@ -11737,7 +11935,7 @@ return {matrix:matrix,
     'eleves-sel-doc'(el) {
       const ids = ui.tableauChoix('eleves');
       const L = ids.map((id) => AK.eleves.trouver(id)).filter(Boolean).sort(X().parClasse);
-      if (!L.length) return;
+      if (!L.length) throw new AK.ErreurMetier('Les élèves sélectionnés ne sont plus au registre : sélectionnez-les de nouveau.');
       AK.docs.ouvrir(el.dataset.modele, L.map((s) => ({ eleve: s })));
     },
     'eleves-sel-cartes'() {
@@ -11749,12 +11947,18 @@ return {matrix:matrix,
       analyseImport = null;
       AK.shell.redessiner();
     },
-    async 'import-confirmer'() {
-      if (!analyseImport || !analyseImport.items) return;
-      const n = await AK.imports.importer(analyseImport);
-      analyseImport = null;
-      ui.toast(`${u.pluriel(n, 'élève importé', 'élèves importés')}. Copie de sécurité faite avant l’import.`);
-      AK.shell.aller('eleves/liste');
+    async 'import-confirmer'(el) {
+      const A = analyseImport;
+      if (!A || !A.items) return;
+      el.disabled = true;
+      try {
+        const r = await AK.imports.importer(A);
+        analyseImport = null;
+        ui.toast(`${u.pluriel(r.n, 'élève importé', 'élèves importés')}${r.ignores ? ` (${r.ignores} ligne(s) ignorée(s) : déjà inscrits ou plus valides)` : ''}. ${r.copie ? 'Copie de sécurité faite avant l’import.' : 'Aucune copie de sécurité locale avec ce stockage : exportez une sauvegarde.'}`, { type: r.copie ? 'ok' : 'avert', duree: 8000 });
+        AK.shell.aller('eleves/liste');
+      } finally {
+        el.disabled = false;
+      }
     }
   });
   AK.actions.defChange({
@@ -11855,9 +12059,9 @@ return {matrix:matrix,
     const ens = AK.session.estEnseignant(), dir = AK.session.estDirecteur();
     const lecture = ens && !ouverte;
     const ligne = (s) => {
-      const ab = x.estAbsent(s.id, n);
+      const abA = AK.notes.absenceEnAttente(s.id, n), ab = x.estAbsent(s.id, n) || abA;
       return html`<tr data-eleve="${s.id}"><td><div class="qui">${ui.avatar(s)}<span class="tronque">${ui.nomEleve(s)}</span></div></td>
-        <td class="centre"><input type="checkbox" data-change="note-absent" data-id="${s.id}" aria-label="Absent(e) à l’évaluation : ${x.nomComplet(s)}"${ab ? raw(' checked') : ''}${lecture ? raw(' disabled') : ''}></td>
+        <td class="centre${abA ? ' attente' : ''}"><input type="checkbox" id="abs-${s.id}" data-change="note-absent" data-id="${s.id}" aria-label="Absent(e) à l’évaluation : ${x.nomComplet(s)}${abA ? ' (en attente de validation)' : ''}"${ab ? raw(' checked') : ''}${lecture ? raw(' disabled') : ''}${abA ? raw(' data-bulle="Absence en attente de validation par le directeur"') : ''}></td>
         ${M.map(([m, w], j) => {
           const k = x.cle(s.id, n, m), v = S().grades[k], att = S().attente[k];
           const aff = v != null ? v : att;
@@ -11902,7 +12106,8 @@ return {matrix:matrix,
     if (mc) mc.textContent = u.fmtNote(x.moyClasse(c, n));
     const tot = L.filter((s) => !x.estAbsent(s.id, n)).length * x.matieres(c, n).length;
     const cpt = $('#notes-compte');
-    if (cpt) cpt.textContent = `${tot - x.notesManquantes(c, n)} / ${tot} notes saisies`;
+    const att = AK.notes.enAttenteDe(c, n).filter((k) => !k.endsWith('|' + AK.notes.ABS)).length;
+    if (cpt) cpt.textContent = `${tot - x.notesManquantes(c, n) + att} / ${tot} notes saisies${att ? `, dont ${att} en attente de validation` : ''}`;
   }
 
   async function enregistrerNote(el) {
@@ -11921,6 +12126,11 @@ return {matrix:matrix,
           return;
         }
         r = tenter({ correctionConfirmee: true });
+      } else if (err instanceof AK.ErreurDroits) {
+        // refus de droits : la case reprend la valeur enregistrée
+        el.value = el.dataset.avant;
+        ui.toast(err.message, { type: 'avert' });
+        return;
       } else {
         el.classList.add('mauvaise');
         el.setAttribute('aria-invalid', 'true');
@@ -11988,8 +12198,9 @@ return {matrix:matrix,
       <div class="grille g-2-1">
         <div class="pile">${groupes.length ? groupes.map((g) => ui.carte(`${g.c} · ${x.evalLabel(g.c, g.n)}`, html`<div class="tab-cadre" style="max-height:280px"><table class="tab"><thead><tr><th>Élève</th><th>Matière</th><th class="droite">Note</th></tr></thead><tbody>${g.L.slice().sort().map((k) => {
           const [id, , m] = k.split('|'), s = AK.eleves.trouver(id), mat = x.matieres(g.c, g.n).find(([z]) => z === m);
+          if (m === AK.notes.ABS) return html`<tr><td>${s ? x.nomComplet(s) : '?'}</td><td colspan="2"><b>Absent(e) à l’évaluation</b> <span class="mut">(moyenne 0, notes effacées)</span></td></tr>`;
           return html`<tr><td>${s ? x.nomComplet(s) : '?'}</td><td>${m}</td><td class="droite num"><b>${u.fmtNote(S().attente[k])}</b> / ${mat ? x.noteMax(g.c, mat[1]) : '?'}</td></tr>`;
-        })}</tbody></table></div>`, { sous: u.pluriel(g.L.length, 'note') + ' en attente', actions: html`<div class="ligne"><button type="button" class="btn btn-sm btn-dng" data-action="notes-rejeter" data-classe="${g.c}" data-ev="${g.n}">${ic('x')}Rejeter</button><button type="button" class="btn btn-sm btn-pri" data-action="notes-valider" data-classe="${g.c}" data-ev="${g.n}">${ic('check')}Valider</button></div>` })) : ui.carte('', ui.vide('Aucune note en attente', 'Toutes les saisies des enseignants sont validées.'))}</div>
+        })}</tbody></table></div>`, { sous: u.pluriel(g.L.length, 'saisie') + ' en attente', actions: html`<div class="ligne"><button type="button" class="btn btn-sm btn-dng" data-action="notes-rejeter" data-classe="${g.c}" data-ev="${g.n}">${ic('x')}Rejeter</button><button type="button" class="btn btn-sm btn-pri" data-action="notes-valider" data-classe="${g.c}" data-ev="${g.n}">${ic('check')}Valider</button></div>` })) : ui.carte('', ui.vide('Aucune note en attente', 'Toutes les saisies des enseignants sont validées.'))}</div>
         <div class="pile">
           ${ui.carte('Réglages', html`<div class="pile">${F.case({ lib: 'Les notes saisies par les enseignants doivent être validées par le directeur', nom: 'validation', coche: !!sc.validation, attrs: { 'data-change': 'notes-validation-option' } })}
             ${F.choix({ lib: 'Évaluation en cours (tableau de bord, rappels)', nom: 'evalCourante', val: sc.evalCourante || 1, options: [1, 2, 3, 4].map((n) => [n, C.EV_GEN[n - 1]]), attrs: { 'data-change': 'notes-eval-courante' } })}</div>`)}
@@ -12006,11 +12217,11 @@ return {matrix:matrix,
     const cnt = (d) => x.actifs().filter((s) => x.decision(s) === d).length;
     const modif = peut('decision.modifier');
     return html`${ui.pageTete('Fin d’année', `Décisions d’après la MGA (seuil ${x.info(c).seuil}/${e} en ${c}), puis passage à l’année ${suiv || 'suivante'}.`, html`<button type="button" class="btn" data-action="doc-classe" data-modele="decisions" data-classe="${c}">${ic('print')}Imprimer les décisions</button>${peut('annee.passer') ? html`<button type="button" class="btn btn-pri" data-action="annee-passer">${ic('flag')}Passer à ${suiv || 'l’année suivante'}</button>` : ''}`)}
-      <div class="grille g4 mb">${ui.kpi({ icone: 'checkCircle', lib: 'Admis', val: cnt('Admis'), sous: 'toute l’école', ton: 'ok' })}${ui.kpi({ icone: 'rotate', lib: 'Redoublants', val: cnt('Redoublant'), sous: 'toute l’école' })}${ui.kpi({ icone: 'warn', lib: 'MGA incomplète', val: x.actifs().filter((s) => !x.decision(s)).length, sous: 'évaluations manquantes', ton: 'avert' })}${ui.kpi({ icone: 'flag', lib: 'Départs', val: S().students.filter((s) => s.statut !== 'Inscrit').length, sous: 'abandons, exclusions, transferts' })}</div>
+      <div class="grille g4 mb">${ui.kpi({ icone: 'checkCircle', lib: 'Admis', val: cnt('Admis'), sous: 'toute l’école', ton: 'ok' })}${ui.kpi({ icone: 'rotate', lib: 'Redoublants', val: cnt('Redoublant'), sous: 'toute l’école' })}${ui.kpi({ icone: 'warn', lib: 'Sans décision', val: x.actifs().filter((s) => !x.decision(s)).length, sous: 'MGA incomplète (évaluations manquantes)', ton: 'avert' })}${ui.kpi({ icone: 'flag', lib: 'Départs', val: S().students.filter((s) => s.statut !== 'Inscrit').length, sous: 'abandons, exclusions, transferts' })}</div>
       <div class="barre-outils">${pilulesClasses(c, 'notes/fin')}</div>
       <div class="tab-cadre"><table class="tab"><thead><tr><th>Élève</th>${[1, 2, 3, 4].map((n) => html`<th class="droite">${C.evCourt(n)}</th>`)}<th class="droite">MGA / ${e}</th><th>Proposition</th><th>Décision</th></tr></thead><tbody>
-        ${L.length ? L.map(({ s, m }) => html`<tr><td>${ui.quiEleve(s)}</td>${[1, 2, 3, 4].map((n) => html`<td class="droite num">${x.estAbsent(s.id, n) ? 'Abs.' : u.fmtNote(x.moyEval(s, n))}</td>`)}<td class="droite num"><b>${u.fmtNote(m)}</b></td><td>${ui.tagDecision(x.decisionProposee(s))}</td>
-          <td>${modif ? html`<select class="inp inp-sm" data-change="decision" data-id="${s.id}" aria-label="Décision pour ${x.nomComplet(s)}">${ui.options(C.DECISIONS, x.decision(s), '—')}</select>${s.decision && s.decision !== x.decisionProposee(s) ? html` ${ui.tag('modifiée', 'acc')}` : ''}` : ui.tagDecision(x.decision(s))}</td></tr>`) : html`<tr><td colspan="8">${ui.vide('Aucun élève inscrit', '')}</td></tr>`}
+        ${L.length ? L.map(({ s, m }) => html`<tr><td>${ui.quiEleve(s)}</td>${[1, 2, 3, 4].map((n) => html`<td class="droite num">${x.estAbsent(s.id, n) ? 'Abs.' : x.incomplet(s, n) ? html`<span class="tag avert" data-bulle="Évaluation incomplète : des matières n’ont pas de note">${u.fmtNote(x.moyEval(s, n))} *</span>` : u.fmtNote(x.moyEval(s, n))}</td>`)}<td class="droite num"><b>${u.fmtNote(m)}</b></td><td>${ui.tagDecision(x.decisionProposee(s))}${x.incompletAnnee(s) ? html` ${ui.tag('notes incomplètes', 'avert')}` : ''}</td>
+          <td>${modif ? html`<select class="inp inp-sm" id="dec-${s.id}" data-change="decision" data-id="${s.id}" aria-label="Décision pour ${x.nomComplet(s)}">${ui.options(C.DECISIONS, x.decision(s), '—')}</select>${s.decision && s.decision !== x.decisionProposee(s) ? html` ${ui.tag('modifiée', 'acc')}` : ''}` : ui.tagDecision(x.decision(s))}</td></tr>`) : html`<tr><td colspan="8">${ui.vide('Aucun élève inscrit', '')}</td></tr>`}
       </tbody></table></div>`;
   }
 
@@ -12040,18 +12251,18 @@ return {matrix:matrix,
     'doc-classement': (el) => AK.docs.ouvrir('classement', [{ classe: el.dataset.classe, periode: perDe(el.dataset.per) }]),
     'notes-valider'(el) {
       const k = AK.notes.valider(el.dataset.classe, Number(el.dataset.ev));
-      ui.toast(`${u.pluriel(k, 'note validée', 'notes validées')} en ${el.dataset.classe}.`);
+      ui.toast(`${u.pluriel(k, 'saisie validée', 'saisies validées')} en ${el.dataset.classe}.`);
     },
     async 'notes-rejeter'(el) {
       const ok = await ui.confirmer({ titre: 'Rejeter des notes', danger: true, ok: 'Rejeter', message: `Les notes en attente de ${el.dataset.classe} (${C.evCourt(el.dataset.ev)}) seront effacées ; l’enseignant devra les saisir de nouveau.` });
       if (!ok) return;
       const k = AK.notes.rejeter(el.dataset.classe, Number(el.dataset.ev));
-      ui.toast(`${u.pluriel(k, 'note rejetée', 'notes rejetées')}.`, { type: 'avert' });
+      ui.toast(`${u.pluriel(k, 'saisie rejetée', 'saisies rejetées')}.`, { type: 'avert' });
     },
     'notes-periode'(el) {
       const c = el.dataset.classe, n = Number(el.dataset.ev), o = AK.notes.saisieOuverte(c, n), sa = S().saisie[c + '|' + n] || {};
       ui.menu(el, [
-        { icone: o ? 'lock' : 'unlock', lib: o ? 'Fermer la saisie' : (sa.fermee ? 'Rouvrir la saisie' : 'Rouvrir (retirer la date limite)'), f: () => (sa.fermee || o ? AK.notes.basculerSaisie(c, n) : AK.notes.dateLimite(c, n, '')) },
+        { icone: o ? 'lock' : 'unlock', lib: o ? 'Fermer la saisie' : 'Rouvrir la saisie', sous: !o && sa.fin && sa.fin < u.aujourdhui() ? 'La date limite dépassée sera retirée' : '', f: () => AK.notes.basculerSaisie(c, n) },
         { icone: 'clock', lib: 'Fixer une date limite…', sous: sa.fin ? 'Actuelle : ' + u.fmtDate(sa.fin) : 'Aucune', f: () => ui.fenetre({
           titre: `Date limite de saisie · ${c} · ${C.evCourt(n)}`, icone: 'clock', taille: 'sm', proteger: false,
           corps: html`<div class="pile">${F.date({ lib: 'Dernier jour de saisie pour les enseignants', nom: 'fin', val: sa.fin })}<p class="mut petit mb0">Laissez vide pour ne fixer aucune date. Le directeur peut toujours saisir.</p></div>`,
@@ -12083,7 +12294,9 @@ return {matrix:matrix,
         message: html`<div class="pile-sm"><p class="mb0">Bilan du passage :</p><ul class="mb0"><li><b>${R.montent}</b> élève(s) admis passent au niveau supérieur ;</li><li><b>${R.restent}</b> restent dans leur classe (redoublants${R.sansDecision ? html`, dont <b>${R.sansDecision}</b> sans décision faute de MGA` : ''}) ;</li><li><b>${R.sortants + R.archives}</b> sont archivés (CM2 admis, départs${R.niveauNonOuvert.length ? ', admis vers un niveau non ouvert' : ''}).</li></ul>
           ${R.niveauNonOuvert.length ? ui.encadre(html`Niveau suivant non ouvert dans l’école : ${R.niveauNonOuvert.slice(0, 5).join(' ; ')}${R.niveauNonOuvert.length > 5 ? '…' : ''}. Ces élèves seront archivés avec la mention « à transférer ».`, 'avert') : ''}
           ${R.sansDecision ? ui.encadre(`${R.sansDecision} élève(s) sans MGA complète resteront dans leur classe. Fixez leur décision avant de continuer si nécessaire.`, 'avert') : ''}
-          <p class="mb0">Les notes, absences et appels de l’année sont archivés puis remis à zéro. <b>Une copie de sécurité est faite juste avant</b> (Données › Sauvegarde › Copies locales). Exportez aussi une sauvegarde sur clé USB.</p></div>`
+          ${R.incompletes ? ui.encadre(`${R.incompletes} élève(s) ont au moins une évaluation incomplète (matières sans note) : leur moyenne et la décision proposée ne portent que sur les matières notées. Vérifiez-les dans Fin d’année (mention « notes incomplètes »).`, 'avert') : ''}
+          ${R.attente ? ui.encadre(html`<b>${u.pluriel(R.attente, 'saisie')} d’enseignant en attente de validation</b> : elles seront archivées sans compter dans les moyennes. Validez-les d’abord (Notes › Validation).`, 'avert') : ''}
+          <p class="mb0">Les notes, absences et appels de l’année sont archivés puis remis à zéro. ${AK.stockage.copiesDisponibles() ? html`<b>Une copie de sécurité est faite juste avant</b> (Données › Sauvegarde › Copies locales) ; si elle échoue, le passage n’a pas lieu. Exportez aussi une sauvegarde sur clé USB.` : html`<b>Ce stockage ne permet pas de copie de sécurité locale : exportez d’abord une sauvegarde sur clé USB</b> (Données › Sauvegarde).`}</p></div>`
       });
       if (!ok) return;
       if (!(await AK.auth.confirmer('Passage à l’année suivante.', { forcer: true }))) return;
@@ -12099,15 +12312,23 @@ return {matrix:matrix,
       const n = Number($('#grille-notes').dataset.ev);
       const voulu = el.checked;
       try {
-        AK.notes.marquerAbsent(el.dataset.id, n, voulu);
-      } catch (err) {
-        if (!err.correction) throw err;
-        const ok = await ui.confirmer({ titre: voulu ? 'Absent(e) à l’évaluation' : 'Retirer l’absence', message: err.message, ok: 'Confirmer', danger: voulu });
-        if (!ok) {
-          el.checked = !voulu;
-          return;
+        try {
+          AK.notes.marquerAbsent(el.dataset.id, n, voulu);
+        } catch (err) {
+          if (!err.correction) throw err;
+          // effacer des notes validées ou retirer une absence enregistrée : mot de passe, comme toute correction
+          const ok = err.validees && AK.session.estDirecteur()
+            ? await AK.auth.confirmer(err.message)
+            : await ui.confirmer({ titre: voulu ? 'Absent(e) à l’évaluation' : 'Retirer l’absence', message: err.message, ok: 'Confirmer', danger: voulu });
+          if (!ok) {
+            el.checked = !voulu;
+            return;
+          }
+          AK.notes.marquerAbsent(el.dataset.id, n, voulu, { confirme: true });
         }
-        AK.notes.marquerAbsent(el.dataset.id, n, voulu, { confirme: true });
+      } catch (err) {
+        el.checked = !voulu;
+        throw err;
       }
       AK.shell.redessiner();
     },
@@ -12259,9 +12480,12 @@ return {matrix:matrix,
       u.poser(el, html`${v ? ic(v === 'J' ? 'info' : 'x', 'i-sm') : ic('check', 'i-sm')}${LIB[v]}`);
       AK.shell.redessiner();
     },
-    'appel-tous'(el) {
-      AK.absences.tousPresents(el.dataset.date, el.dataset.classe);
-      ui.toast(`Appel ${el.dataset.classe} enregistré.`);
+    async 'appel-tous'(el) {
+      const c = el.dataset.classe, date = el.dataset.date, d = S().att[date] || {};
+      const nA = X().actifsDe(c).filter((s) => d[s.id] === 'A').length;
+      if (peut('appel.lever') && nA && !(await ui.confirmer({ titre: 'Tout le monde présent', ok: 'Lever les absences', message: `${u.pluriel(nA, 'absence non justifiée')} du ${u.fmtDate(date)} en ${c} ${nA > 1 ? 'seront levées' : 'sera levée'}. Les absences justifiées sont conservées.` }))) return;
+      const j = AK.absences.tousPresents(date, c);
+      ui.toast(`Appel ${c} enregistré${j ? ` (${u.pluriel(j, 'absence justifiée')} conservée(s))` : ''}.`);
     },
     'appel-valider'(el) {
       AK.absences.valider(el.dataset.date, el.dataset.classe);
@@ -12855,7 +13079,7 @@ return {matrix:matrix,
           ${ui.carte('Référence ou contenu du QR', html`<form data-submit="verif-texte" class="pile" autocomplete="off">${F.texte({ lib: 'Référence (AK-XXX-AAAA-NNNNNN-C) ou texte lu par une douchette', nom: 'texte', id: 'verif-texte', val: p.ref || '', attrs: { autofocus: true, spellcheck: 'false', placeholder: 'AK-CSC-2026-000012-7' } })}<div class="ligne"><button type="submit" class="btn btn-pri">${ic('shieldCheck')}Vérifier</button></div></form>`)}
           ${ui.carte('Caméra ou photo', html`<div class="pile">
             <div class="camera" id="camera" hidden><video playsinline muted></video><div class="viseur"></div></div>
-            <div class="ligne"><button type="button" class="btn" data-action="verif-camera" id="btn-camera">${ic('cam')}Scanner avec la caméra</button><label class="btn">${ic('image')}Importer une photo du QR<input type="file" accept="image/*" hidden data-change="verif-photo"></label></div>
+            <div class="ligne"><button type="button" class="btn" data-action="verif-camera" id="btn-camera">${ic('cam')}Scanner avec la caméra</button><button type="button" class="btn" data-action="fichier-choisir">${ic('image')}Importer une photo du QR</button><input type="file" accept="image/*" hidden data-change="verif-photo"></div>
             <p class="mut petit mb0">Le QR code est lu sur cet appareil, hors ligne. La caméra nécessite l’autorisation du navigateur (ou de l’application).</p></div>`)}
         </div>
         <div id="verif-resultat">${dernierResultat ? resultatHtml(dernierResultat) : ui.carte('', ui.vide('En attente d’un document', 'Le résultat détaille séparément : l’intégrité (signature), l’émetteur (clé), l’inscription au registre et le statut (annulé, remplacé, expiré).'))}</div>

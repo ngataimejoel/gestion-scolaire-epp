@@ -10,9 +10,14 @@
 
   /** Prochain matricule école : AK-<2 chiffres de l'année><numéro sur 3 chiffres> */
   function prochainMatricule() {
-    const nums = S().students.map((s) => parseInt((s.mat || '').replace(/\D/g, '').slice(2), 10) || 0);
-    const archives = Object.values(S().archives || {}).flatMap((a) => (a.students || []).map((s) => parseInt((s.mat || '').replace(/\D/g, '').slice(2), 10) || 0));
-    return 'AK-' + String(X.anneeRentree()).slice(2) + u.pad(Math.max(0, ...nums, ...archives) + 1, 3);
+    const num = (s) => parseInt(((s && s.mat) || '').replace(/\D/g, '').slice(2), 10) || 0;
+    // élèves présents, archivés et à la corbeille : un matricule n'est jamais réattribué
+    const nums = [
+      ...S().students.map(num),
+      ...Object.values(S().archives || {}).flatMap((a) => (a.students || []).map(num)),
+      ...(S().corbeille || []).filter((c) => c.type === 'eleve' && c.donnees).map((c) => num(c.donnees.s))
+    ];
+    return 'AK-' + String(X.anneeRentree()).slice(2) + u.pad(Math.max(0, ...nums) + 1, 3);
   }
 
   const lireParent = (d, k) => ({
@@ -36,8 +41,8 @@
     if (ex) {
       if ((e = V.naissanceEleve(d.naissance, X.anneeRentree()))) throw E(e, 'naissance');
       if (!P('pere') || !P('mere')) throw E('Avec un extrait, les nom et prénoms du père et de la mère sont obligatoires.', P('pere') ? 'mere_nom' : 'pere_nom');
-      if ((e = V.date(d.acte_date, 'Date de l’acte', { max: u.aujourdhui(), min: d.naissance }))) throw E(e, 'acte_date');
-      if ((e = V.texte(d.acte_num, 'N° de l’acte', { max: 20 }))) throw E(e, 'acte_num');
+      if ((e = V.texte(d.acte_num, 'N° de l’acte', { requis: true, max: 20 }))) throw E(e, 'acte_num');
+      if ((e = V.date(d.acte_date, 'Date de l’acte', { requise: true, max: u.aujourdhui(), min: d.naissance }))) throw E(e, 'acte_date');
     } else {
       const a = Number(d.age);
       if (!a || a < 2 || a > 20 || !Number.isInteger(a)) throw E('Saisissez l’âge de l’enfant (de 2 à 20 ans).', 'age');
@@ -58,6 +63,9 @@
     if ((d.tuteur === true || d.tuteur === 'on') && String(d.parent || '').trim() && (e = V.nom(d.parent, 'Nom et prénoms du tuteur'))) throw E(e, 'parent');
     if ((e = V.tel(d.tel, 'Contact du tuteur'))) throw E(e, 'tel');
     if ((e = V.texte(d.allergies, 'Allergies / handicap', { max: 120 }))) throw E(e, 'allergies');
+    for (const [k, l, max] of [['lieu', 'Lieu de naissance', 60], ['nationalite', 'Nationalité', 40], ['acte_centre', 'Centre d’état civil', 80], ['acte_sp', 'Sous-préfecture', 60],
+      ['pere_profession', 'Profession du père', 60], ['mere_profession', 'Profession de la mère', 60], ['pere_domicile', 'Domicile du père', 80], ['mere_domicile', 'Domicile de la mère', 80]])
+      if ((e = V.texte(d[k], l, { max }))) throw E(e, k);
     // matricule national unique
     const mn = u.norm(d.matNat);
     if (mn) {
@@ -125,14 +133,39 @@
       AK.store.modifier(`Inscription : ${X.nomComplet(s)} (${s.classe})`, (st) => st.students.push(s), { categorie: 'eleves' });
       return s;
     },
-    modifier(id, d) {
+    /**
+     * Modification du dossier. Un changement de classe en cours d'année retire du calcul les notes et
+     * absences aux évaluations de l'ancienne classe (barèmes différents) : elles sont conservées dans
+     * s.notesAnciennes. Exige options.changementConfirme quand il y en a (ErreurMetier .changementClasse).
+     */
+    modifier(id, d, options = {}) {
       const s = eleves.trouver(id);
       if (!s) throw E('Élève introuvable.');
       AK.perm.exiger('eleve.modifier', { classe: s.classe });
       AK.perm.exiger('eleve.modifier', { classe: d.classe });
       controler(d, s);
-      const avant = s.classe;
-      AK.store.modifier(`Dossier modifié : ${X.nomComplet(s)}${avant !== d.classe ? ` (classe ${avant} → ${d.classe})` : ''}`, () => appliquer(d, s), { categorie: 'eleves' });
+      const avant = s.classe, p = s.id + '|';
+      const cles = avant !== d.classe ? ['grades', 'attente', 'compAbs'].map((t) => [t, Object.keys(S()[t]).filter((k) => k.startsWith(p))]) : [];
+      const nb = cles.reduce((a, [, L]) => a + L.length, 0);
+      if (nb && !options.changementConfirme) {
+        const err = E(`${X.nomComplet(s)} a ${u.pluriel(nb, 'note ou absence', 'notes ou absences')} cette année en ${avant}. En ${d.classe}, les barèmes et les matières diffèrent : elles ne compteront plus dans ses moyennes et seront conservées dans son dossier (notes de l’ancienne classe).`);
+        err.changementClasse = true;
+        throw err;
+      }
+      AK.store.modifier(`Dossier modifié : ${X.nomComplet(s)}${avant !== d.classe ? ` (classe ${avant} → ${d.classe})` : ''}`, (st) => {
+        if (nb) {
+          const garde = { classe: avant, annee: st.school.year || '', le: u.aujourdhui() };
+          cles.forEach(([t, L]) => {
+            garde[t] = {};
+            L.forEach((k) => {
+              garde[t][k] = st[t][k];
+              delete st[t][k];
+            });
+          });
+          s.notesAnciennes = [...(Array.isArray(s.notesAnciennes) ? s.notesAnciennes : []), garde];
+        }
+        appliquer(d, s);
+      }, { categorie: 'eleves' });
       return s;
     },
     changerStatut(id, statut, motif) {
@@ -140,7 +173,8 @@
       if (!s) throw E('Élève introuvable.');
       AK.perm.exiger('eleve.statut', { classe: s.classe });
       if (!C.STATUTS.includes(statut)) throw E('Statut inconnu.');
-      AK.store.modifier(`Statut de ${X.nomComplet(s)} : ${statut}${motif ? ' (' + String(motif).slice(0, 80) + ')' : ''}`, () => {
+      // le motif (parfois personnel ou sensible) reste dans le dossier, pas dans le journal
+      AK.store.modifier(`Statut de ${X.nomComplet(s)} : ${statut}`, () => {
         s.statut = statut;
         s.motifDepart = statut === 'Inscrit' ? '' : String(motif || '').trim().slice(0, 200);
         if (statut !== 'Inscrit') s.departLe = s.departLe || u.aujourdhui();

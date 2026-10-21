@@ -259,6 +259,45 @@
     return { nom: p[0] || '', prenoms: p.slice(1).join(' ') };
   };
 
+  /**
+   * Date d'une cellule : texte (jj/mm/aaaa, aaaa-mm-jj) ou numéro de série d'une cellule date Excel
+   * (jours depuis le 30/12/1899, ce que renvoient les lecteurs .xlsx/.xls pour une cellule au format date).
+   */
+  const dateCellule = (v) => {
+    const t = String(v ?? '').trim();
+    if (/^\d{4,5}(\.\d+)?$/.test(t) && Number(t) > 3000 && Number(t) < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(Number(t)) * 86400000);
+      return d.toISOString().slice(0, 10);
+    }
+    return u.versISO(t);
+  };
+
+  /** État de référence d'un contrôle d'import : matricules et élèves déjà enregistrés. */
+  const base = () => ({ mats: new Set(S().students.flatMap((o) => [u.norm(o.mat), u.norm(o.matNat)]).filter(Boolean)), niveaux: X.niveaux() });
+  /**
+   * Contrôle d'un élève à importer (mêmes règles à l'analyse et au moment d'importer : l'analyse peut
+   * avoir été modifiée ou être périmée). vus : clés déjà rencontrées dans le fichier. Renvoie [etat, motif].
+   */
+  function controle(s, b, vus) {
+    const km = u.norm(s.matNat) || u.norm(s.mat), kn = 'n:' + u.norm(s.nom + s.prenoms) + '|' + (s.naissance || '');
+    let r = ['ok', ''];
+    if (!s.nom || !s.prenoms) r = ['erreur', 'nom ou prénoms manquant'];
+    else if (V.nom(s.nom, 'Nom', 1, 40) || V.nom(s.prenoms, 'Prénoms', 1, 60)) r = ['erreur', 'nom ou prénoms illisible'];
+    else if (!b.niveaux.includes(s.classe)) r = ['erreur', s.classe ? `classe ${s.classe} non ouverte` : 'classe manquante'];
+    else if (s.sexe !== 'Masculin' && s.sexe !== 'Féminin') r = ['erreur', 'sexe illisible'];
+    else if (s.matNat && V.matNat(s.matNat)) r = ['erreur', 'matricule national invalide'];
+    else if (s.mat && !/^AK-\d+$/.test(s.mat)) r = ['erreur', 'matricule école invalide'];
+    else if (s.naissance && V.naissanceEleve(s.naissance, X.anneeRentree())) r = ['erreur', 'date de naissance improbable'];
+    else if (!AK.perm.peut('eleve.importer', { classe: s.classe })) r = ['erreur', 'classe hors de votre espace'];
+    else if (km && b.mats.has(km)) r = ['doublon', 'matricule déjà présent'];
+    else if (km && vus.has(km)) r = ['doublon', 'matricule en double dans le fichier'];
+    else if (AK.eleves.doublons(s).length) r = ['doublon', 'déjà inscrit'];
+    else if (vus.has(kn)) r = ['doublon', 'ligne en double dans le fichier'];
+    if (km) vus.add(km);
+    vus.add(kn);
+    return r;
+  }
+
   /** Analyse des lignes : chaque ligne devient { s, etat: 'ok'|'doublon'|'erreur', motif, ligne }. */
   function analyser(rows) {
     if (typeof rows === 'string') rows = parseCSV(rows);
@@ -269,43 +308,33 @@
     const c = {
       nom: ix('nom'), pre: ix('prenoms', 'prenom'), cl: ix('niveau', 'classe'), sx: ix('sexe', 'genre'), na: ix('naissance', 'datedenaissance'),
       j: ix('jour'), m: ix('mois'), y: ix('annee'), mat: ix('matricule'), pa: ix('parent', 'tuteur', 'nomduparent'), tel: ix('telephone', 'tel'),
-      ex: ix('extrait', 'dossier'), an: ix('nacte', 'actenum', 'numeroacte', 'ndelacte'), ad: ix('actedate', 'datedelacte'), ac: ix('lieuacte', 'centreetatcivil', 'centre'),
+      ex: ix('extrait', 'dossier'), an: ix('nacte', 'actenum', 'numeroacte', 'ndelacte'), ad: ix('actedate', 'datedelacte', 'dateacte', 'datacte'), ac: ix('lieuacte', 'centreetatcivil', 'centre'),
       nat: ix('nationalite'), lo: ix('localite', 'lieu', 'lieudenaissance'), sp: ix('sp', 'sousprefecture'), pe: ix('pere'), me: ix('mere'), re: ix('residence', 'domicile')
     };
     if (c.nom < 0 || c.pre < 0 || c.cl < 0 || c.sx < 0) return { erreur: 'Colonnes obligatoires manquantes : nom, prenoms, niveau (ou classe), sexe.' };
     const g = (r, k) => (c[k] >= 0 ? String(r[c[k]] ?? '') : '').trim();
-    const mats = new Set(S().students.flatMap((o) => [u.norm(o.mat), u.norm(o.matNat)]).filter(Boolean)), vus = new Set();
-    const niveaux = X.niveaux();
+    const b = base(), vus = new Set();
     return {
       items: rows.slice(1).map((r, i) => {
         const cl = g(r, 'cl').toUpperCase().replace(/\s/g, ''), sx = u.norm(g(r, 'sx'));
         const sexe = ['m', 'masculin', 'garcon', 'g', 'h', 'homme'].includes(sx) ? 'Masculin' : ['f', 'feminin', 'fille'].includes(sx) ? 'Féminin' : '';
-        const na = c.y >= 0 && g(r, 'y') ? u.versISO(`${g(r, 'j')}/${g(r, 'm')}/${g(r, 'y')}`) : u.versISO(g(r, 'na'));
+        const na = c.y >= 0 && g(r, 'y') ? u.versISO(`${g(r, 'j')}/${g(r, 'm')}/${g(r, 'y')}`) : dateCellule(g(r, 'na'));
+        // l'export « format national » d'AKWA met le matricule école (AK-…) dans cette colonne quand il n'y a pas de matricule national
+        const mv = g(r, 'mat').replace(/\s/g, '').toUpperCase(), matEcole = /^AK-\d+$/.test(mv);
         const num = vide0(g(r, 'an')), exv = u.norm(g(r, 'ex')), ex = c.ex >= 0 && exv ? ['oui', '1', 'true', 'complet', 'x'].includes(exv) : !!num;
         const pe = coupeNom(g(r, 'pe')), me = coupeNom(g(r, 'me')), dom = vide0(g(r, 're'));
         const natRef = AK.ref.NATIONALITES.find((x) => u.norm(x[1]) === u.norm(g(r, 'nat')));
         const s = AK.schema.completerEleve({
           id: u.uid(), nom: u.majNom(g(r, 'nom')), prenoms: u.majPrenoms(g(r, 'pre')), classe: cl, sexe, naissance: na, ageEstime: false,
-          matNat: g(r, 'mat').replace(/\s/g, '').toUpperCase(), lieu: vide0(g(r, 'lo')), nationalite: natRef ? natRef[1] : g(r, 'nat').toUpperCase() || C.NAT_DEFAUT,
-          redoublant: false, mat: '', parent: g(r, 'pa'), tel: V.telPropre(g(r, 'tel')), extrait: ex,
-          acte: { num, date: u.versISO(g(r, 'ad')), centre: vide0(g(r, 'ac')), sp: vide0(g(r, 'sp')) },
+          matNat: matEcole ? '' : mv, lieu: vide0(g(r, 'lo')), nationalite: natRef ? natRef[1] : g(r, 'nat').toUpperCase() || C.NAT_DEFAUT,
+          redoublant: false, mat: matEcole ? mv : '', parent: g(r, 'pa'), tel: V.telPropre(g(r, 'tel')), extrait: ex,
+          acte: { num, date: dateCellule(g(r, 'ad')), centre: vide0(g(r, 'ac')), sp: vide0(g(r, 'sp')) },
           pere: { nom: u.majNom(pe.nom), prenoms: u.majPrenoms(pe.prenoms), profession: '', tel: '', domicile: dom },
           mere: { nom: u.majNom(me.nom), prenoms: u.majPrenoms(me.prenoms), profession: '', tel: '', domicile: dom },
           statut: 'Inscrit', photo: '', decision: '', entree: '', inscritLe: u.aujourdhui()
         });
-        let etat = 'ok', motif = '';
-        const km = u.norm(s.matNat);
-        if (!s.nom || !s.prenoms) [etat, motif] = ['erreur', 'nom ou prénoms manquant'];
-        else if (V.nom(s.nom, 'Nom', 1) || V.nom(s.prenoms, 'Prénoms', 1)) [etat, motif] = ['erreur', 'nom ou prénoms illisible'];
-        else if (!niveaux.includes(cl)) [etat, motif] = ['erreur', cl ? `classe ${cl} non ouverte` : 'classe manquante'];
-        else if (!sexe) [etat, motif] = ['erreur', 'sexe illisible'];
-        else if (s.matNat && V.matNat(s.matNat)) [etat, motif] = ['erreur', 'matricule national invalide'];
-        else if (!AK.perm.peut('eleve.importer', { classe: cl })) [etat, motif] = ['erreur', 'classe hors de votre espace'];
-        else if (km && mats.has(km)) [etat, motif] = ['doublon', 'matricule déjà présent'];
-        else if (km && vus.has(km)) [etat, motif] = ['doublon', 'matricule en double dans le fichier'];
-        else if (S().students.some((o) => u.norm(o.nom + o.prenoms) === u.norm(s.nom + s.prenoms) && (!s.naissance || o.naissance === s.naissance))) [etat, motif] = ['doublon', 'déjà inscrit'];
+        let [etat, motif] = controle(s, b, vus);
         if (!na && etat === 'ok') motif = 'date de naissance absente';
-        if (km) vus.add(km);
         return { s, etat, motif, ligne: i + 2 };
       })
     };
@@ -313,20 +342,36 @@
 
   const imports = {
     parseCSV, lireXLS, lireXLSX, lireTableur, analyser,
+    /**
+     * Enregistre les lignes « ok » d'une analyse, après les avoir contrôlées de nouveau contre l'état
+     * courant (droits par classe, validité, doublons) : une analyse modifiée, périmée ou déjà importée
+     * n'ajoute rien de faux. Renvoie { n, ignores, copie }.
+     */
     async importer(analyse) {
       AK.perm.exiger('eleve.importer');
-      const ok = analyse.items.filter((i) => i.etat === 'ok');
-      if (!ok.length) throw E('Aucune ligne à importer.');
-      await AK.store.copieAvant('avant-import');
+      if (!analyse || !Array.isArray(analyse.items)) throw E('Analyse d’import invalide.');
+      if (analyse.importee) throw E('Cette liste a déjà été importée.');
+      const candidats = analyse.items.filter((i) => i && i.etat === 'ok' && i.s && typeof i.s === 'object');
+      if (!candidats.length) throw E('Aucune ligne à importer.');
+      analyse.importee = true; // un second clic pendant la copie de sécurité n'importe rien
+      let copie = null;
+      try {
+        copie = await AK.store.copieAvant('avant-import');
+      } catch (e) {
+        analyse.importee = false;
+        throw e;
+      }
+      const b = base(), vus = new Set(), ids = new Set(S().students.map((o) => o.id));
+      const ok = candidats.map((i) => AK.schema.completerEleve({ ...i.s, statut: 'Inscrit', id: i.s.id && !ids.has(i.s.id) ? i.s.id : u.uid() }))
+        .filter((s) => controle(s, b, vus)[0] === 'ok');
+      if (!ok.length) throw E('Aucune ligne à importer : les élèves sont déjà inscrits ou les lignes ne sont plus valides.');
       AK.store.modifier(`Import Excel : ${u.pluriel(ok.length, 'élève')}`, (st) => {
-        ok.forEach((i) => {
-          if (!i.s.mat) {
-            i.s.mat = AK.eleves.prochainMatricule();
-          }
-          st.students.push(i.s);
+        ok.forEach((s) => {
+          if (!s.mat) s.mat = AK.eleves.prochainMatricule();
+          st.students.push(s);
         });
       }, { categorie: 'eleves' });
-      return ok.length;
+      return { n: ok.length, ignores: candidats.length - ok.length, copie: !!copie };
     },
     /** Le directeur rattache à l'école la sauvegarde d'un espace enseignant seul. */
     async rattacher(o) {

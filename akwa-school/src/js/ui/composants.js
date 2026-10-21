@@ -93,7 +93,7 @@
     image(o) {
       const i = o.id || id();
       return html`<div class="champ${o.plein ? ' plein' : ''}"><span class="lib">${o.lib}</span><div class="ligne"><span class="apercu-img" id="${i}-ap">${o.val ? html`<img src="${o.val}" alt="" style="height:${o.h || 64}px;border-radius:8px;border:1px solid var(--line)">` : html`<span class="av lg" aria-hidden="true">${ic('image')}</span>`}</span>
-        <label class="btn btn-sm">${ic('cam')}${o.bouton || 'Choisir une image'}<input type="file" accept="image/png,image/jpeg,image/webp" hidden data-change="image-choisie" data-cible="${i}" data-max="${o.max || 360}" data-type="${o.typeImg || 'image/jpeg'}"></label>
+        <button type="button" class="btn btn-sm" data-action="fichier-choisir">${ic('cam')}${o.bouton || 'Choisir une image'}</button><input type="file" accept="image/png,image/jpeg,image/webp" hidden data-change="image-choisie" data-cible="${i}" data-max="${o.max || 360}" data-type="${o.typeImg || 'image/jpeg'}">
         ${o.val ? html`<button type="button" class="btn btn-sm btn-ghost" data-action="image-retirer" data-cible="${i}">Retirer</button>` : ''}
         <input type="hidden" name="${o.nom}" id="${i}" value="${o.val || ''}" data-image></div>${o.aide ? html`<div class="aide">${o.aide}</div>` : ''}</div>`;
     }
@@ -121,6 +121,8 @@
     }
   });
   AK.actions.def({
+    /** Bouton qui ouvre le choix de fichier placé juste après lui (un bouton reste atteignable au clavier). */
+    'fichier-choisir': (el) => el.nextElementSibling && el.nextElementSibling.click(),
     'image-retirer'(el) {
       const cible = document.getElementById(el.dataset.cible);
       cible.value = '';

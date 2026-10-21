@@ -28,9 +28,9 @@
     const ens = AK.session.estEnseignant(), dir = AK.session.estDirecteur();
     const lecture = ens && !ouverte;
     const ligne = (s) => {
-      const ab = x.estAbsent(s.id, n);
+      const abA = AK.notes.absenceEnAttente(s.id, n), ab = x.estAbsent(s.id, n) || abA;
       return html`<tr data-eleve="${s.id}"><td><div class="qui">${ui.avatar(s)}<span class="tronque">${ui.nomEleve(s)}</span></div></td>
-        <td class="centre"><input type="checkbox" data-change="note-absent" data-id="${s.id}" aria-label="Absent(e) à l’évaluation : ${x.nomComplet(s)}"${ab ? raw(' checked') : ''}${lecture ? raw(' disabled') : ''}></td>
+        <td class="centre${abA ? ' attente' : ''}"><input type="checkbox" id="abs-${s.id}" data-change="note-absent" data-id="${s.id}" aria-label="Absent(e) à l’évaluation : ${x.nomComplet(s)}${abA ? ' (en attente de validation)' : ''}"${ab ? raw(' checked') : ''}${lecture ? raw(' disabled') : ''}${abA ? raw(' data-bulle="Absence en attente de validation par le directeur"') : ''}></td>
         ${M.map(([m, w], j) => {
           const k = x.cle(s.id, n, m), v = S().grades[k], att = S().attente[k];
           const aff = v != null ? v : att;
@@ -75,7 +75,8 @@
     if (mc) mc.textContent = u.fmtNote(x.moyClasse(c, n));
     const tot = L.filter((s) => !x.estAbsent(s.id, n)).length * x.matieres(c, n).length;
     const cpt = $('#notes-compte');
-    if (cpt) cpt.textContent = `${tot - x.notesManquantes(c, n)} / ${tot} notes saisies`;
+    const att = AK.notes.enAttenteDe(c, n).filter((k) => !k.endsWith('|' + AK.notes.ABS)).length;
+    if (cpt) cpt.textContent = `${tot - x.notesManquantes(c, n) + att} / ${tot} notes saisies${att ? `, dont ${att} en attente de validation` : ''}`;
   }
 
   async function enregistrerNote(el) {
@@ -94,6 +95,11 @@
           return;
         }
         r = tenter({ correctionConfirmee: true });
+      } else if (err instanceof AK.ErreurDroits) {
+        // refus de droits : la case reprend la valeur enregistrée
+        el.value = el.dataset.avant;
+        ui.toast(err.message, { type: 'avert' });
+        return;
       } else {
         el.classList.add('mauvaise');
         el.setAttribute('aria-invalid', 'true');
@@ -161,8 +167,9 @@
       <div class="grille g-2-1">
         <div class="pile">${groupes.length ? groupes.map((g) => ui.carte(`${g.c} · ${x.evalLabel(g.c, g.n)}`, html`<div class="tab-cadre" style="max-height:280px"><table class="tab"><thead><tr><th>Élève</th><th>Matière</th><th class="droite">Note</th></tr></thead><tbody>${g.L.slice().sort().map((k) => {
           const [id, , m] = k.split('|'), s = AK.eleves.trouver(id), mat = x.matieres(g.c, g.n).find(([z]) => z === m);
+          if (m === AK.notes.ABS) return html`<tr><td>${s ? x.nomComplet(s) : '?'}</td><td colspan="2"><b>Absent(e) à l’évaluation</b> <span class="mut">(moyenne 0, notes effacées)</span></td></tr>`;
           return html`<tr><td>${s ? x.nomComplet(s) : '?'}</td><td>${m}</td><td class="droite num"><b>${u.fmtNote(S().attente[k])}</b> / ${mat ? x.noteMax(g.c, mat[1]) : '?'}</td></tr>`;
-        })}</tbody></table></div>`, { sous: u.pluriel(g.L.length, 'note') + ' en attente', actions: html`<div class="ligne"><button type="button" class="btn btn-sm btn-dng" data-action="notes-rejeter" data-classe="${g.c}" data-ev="${g.n}">${ic('x')}Rejeter</button><button type="button" class="btn btn-sm btn-pri" data-action="notes-valider" data-classe="${g.c}" data-ev="${g.n}">${ic('check')}Valider</button></div>` })) : ui.carte('', ui.vide('Aucune note en attente', 'Toutes les saisies des enseignants sont validées.'))}</div>
+        })}</tbody></table></div>`, { sous: u.pluriel(g.L.length, 'saisie') + ' en attente', actions: html`<div class="ligne"><button type="button" class="btn btn-sm btn-dng" data-action="notes-rejeter" data-classe="${g.c}" data-ev="${g.n}">${ic('x')}Rejeter</button><button type="button" class="btn btn-sm btn-pri" data-action="notes-valider" data-classe="${g.c}" data-ev="${g.n}">${ic('check')}Valider</button></div>` })) : ui.carte('', ui.vide('Aucune note en attente', 'Toutes les saisies des enseignants sont validées.'))}</div>
         <div class="pile">
           ${ui.carte('Réglages', html`<div class="pile">${F.case({ lib: 'Les notes saisies par les enseignants doivent être validées par le directeur', nom: 'validation', coche: !!sc.validation, attrs: { 'data-change': 'notes-validation-option' } })}
             ${F.choix({ lib: 'Évaluation en cours (tableau de bord, rappels)', nom: 'evalCourante', val: sc.evalCourante || 1, options: [1, 2, 3, 4].map((n) => [n, C.EV_GEN[n - 1]]), attrs: { 'data-change': 'notes-eval-courante' } })}</div>`)}
@@ -179,11 +186,11 @@
     const cnt = (d) => x.actifs().filter((s) => x.decision(s) === d).length;
     const modif = peut('decision.modifier');
     return html`${ui.pageTete('Fin d’année', `Décisions d’après la MGA (seuil ${x.info(c).seuil}/${e} en ${c}), puis passage à l’année ${suiv || 'suivante'}.`, html`<button type="button" class="btn" data-action="doc-classe" data-modele="decisions" data-classe="${c}">${ic('print')}Imprimer les décisions</button>${peut('annee.passer') ? html`<button type="button" class="btn btn-pri" data-action="annee-passer">${ic('flag')}Passer à ${suiv || 'l’année suivante'}</button>` : ''}`)}
-      <div class="grille g4 mb">${ui.kpi({ icone: 'checkCircle', lib: 'Admis', val: cnt('Admis'), sous: 'toute l’école', ton: 'ok' })}${ui.kpi({ icone: 'rotate', lib: 'Redoublants', val: cnt('Redoublant'), sous: 'toute l’école' })}${ui.kpi({ icone: 'warn', lib: 'MGA incomplète', val: x.actifs().filter((s) => !x.decision(s)).length, sous: 'évaluations manquantes', ton: 'avert' })}${ui.kpi({ icone: 'flag', lib: 'Départs', val: S().students.filter((s) => s.statut !== 'Inscrit').length, sous: 'abandons, exclusions, transferts' })}</div>
+      <div class="grille g4 mb">${ui.kpi({ icone: 'checkCircle', lib: 'Admis', val: cnt('Admis'), sous: 'toute l’école', ton: 'ok' })}${ui.kpi({ icone: 'rotate', lib: 'Redoublants', val: cnt('Redoublant'), sous: 'toute l’école' })}${ui.kpi({ icone: 'warn', lib: 'Sans décision', val: x.actifs().filter((s) => !x.decision(s)).length, sous: 'MGA incomplète (évaluations manquantes)', ton: 'avert' })}${ui.kpi({ icone: 'flag', lib: 'Départs', val: S().students.filter((s) => s.statut !== 'Inscrit').length, sous: 'abandons, exclusions, transferts' })}</div>
       <div class="barre-outils">${pilulesClasses(c, 'notes/fin')}</div>
       <div class="tab-cadre"><table class="tab"><thead><tr><th>Élève</th>${[1, 2, 3, 4].map((n) => html`<th class="droite">${C.evCourt(n)}</th>`)}<th class="droite">MGA / ${e}</th><th>Proposition</th><th>Décision</th></tr></thead><tbody>
-        ${L.length ? L.map(({ s, m }) => html`<tr><td>${ui.quiEleve(s)}</td>${[1, 2, 3, 4].map((n) => html`<td class="droite num">${x.estAbsent(s.id, n) ? 'Abs.' : u.fmtNote(x.moyEval(s, n))}</td>`)}<td class="droite num"><b>${u.fmtNote(m)}</b></td><td>${ui.tagDecision(x.decisionProposee(s))}</td>
-          <td>${modif ? html`<select class="inp inp-sm" data-change="decision" data-id="${s.id}" aria-label="Décision pour ${x.nomComplet(s)}">${ui.options(C.DECISIONS, x.decision(s), '—')}</select>${s.decision && s.decision !== x.decisionProposee(s) ? html` ${ui.tag('modifiée', 'acc')}` : ''}` : ui.tagDecision(x.decision(s))}</td></tr>`) : html`<tr><td colspan="8">${ui.vide('Aucun élève inscrit', '')}</td></tr>`}
+        ${L.length ? L.map(({ s, m }) => html`<tr><td>${ui.quiEleve(s)}</td>${[1, 2, 3, 4].map((n) => html`<td class="droite num">${x.estAbsent(s.id, n) ? 'Abs.' : x.incomplet(s, n) ? html`<span class="tag avert" data-bulle="Évaluation incomplète : des matières n’ont pas de note">${u.fmtNote(x.moyEval(s, n))} *</span>` : u.fmtNote(x.moyEval(s, n))}</td>`)}<td class="droite num"><b>${u.fmtNote(m)}</b></td><td>${ui.tagDecision(x.decisionProposee(s))}${x.incompletAnnee(s) ? html` ${ui.tag('notes incomplètes', 'avert')}` : ''}</td>
+          <td>${modif ? html`<select class="inp inp-sm" id="dec-${s.id}" data-change="decision" data-id="${s.id}" aria-label="Décision pour ${x.nomComplet(s)}">${ui.options(C.DECISIONS, x.decision(s), '—')}</select>${s.decision && s.decision !== x.decisionProposee(s) ? html` ${ui.tag('modifiée', 'acc')}` : ''}` : ui.tagDecision(x.decision(s))}</td></tr>`) : html`<tr><td colspan="8">${ui.vide('Aucun élève inscrit', '')}</td></tr>`}
       </tbody></table></div>`;
   }
 
@@ -213,18 +220,18 @@
     'doc-classement': (el) => AK.docs.ouvrir('classement', [{ classe: el.dataset.classe, periode: perDe(el.dataset.per) }]),
     'notes-valider'(el) {
       const k = AK.notes.valider(el.dataset.classe, Number(el.dataset.ev));
-      ui.toast(`${u.pluriel(k, 'note validée', 'notes validées')} en ${el.dataset.classe}.`);
+      ui.toast(`${u.pluriel(k, 'saisie validée', 'saisies validées')} en ${el.dataset.classe}.`);
     },
     async 'notes-rejeter'(el) {
       const ok = await ui.confirmer({ titre: 'Rejeter des notes', danger: true, ok: 'Rejeter', message: `Les notes en attente de ${el.dataset.classe} (${C.evCourt(el.dataset.ev)}) seront effacées ; l’enseignant devra les saisir de nouveau.` });
       if (!ok) return;
       const k = AK.notes.rejeter(el.dataset.classe, Number(el.dataset.ev));
-      ui.toast(`${u.pluriel(k, 'note rejetée', 'notes rejetées')}.`, { type: 'avert' });
+      ui.toast(`${u.pluriel(k, 'saisie rejetée', 'saisies rejetées')}.`, { type: 'avert' });
     },
     'notes-periode'(el) {
       const c = el.dataset.classe, n = Number(el.dataset.ev), o = AK.notes.saisieOuverte(c, n), sa = S().saisie[c + '|' + n] || {};
       ui.menu(el, [
-        { icone: o ? 'lock' : 'unlock', lib: o ? 'Fermer la saisie' : (sa.fermee ? 'Rouvrir la saisie' : 'Rouvrir (retirer la date limite)'), f: () => (sa.fermee || o ? AK.notes.basculerSaisie(c, n) : AK.notes.dateLimite(c, n, '')) },
+        { icone: o ? 'lock' : 'unlock', lib: o ? 'Fermer la saisie' : 'Rouvrir la saisie', sous: !o && sa.fin && sa.fin < u.aujourdhui() ? 'La date limite dépassée sera retirée' : '', f: () => AK.notes.basculerSaisie(c, n) },
         { icone: 'clock', lib: 'Fixer une date limite…', sous: sa.fin ? 'Actuelle : ' + u.fmtDate(sa.fin) : 'Aucune', f: () => ui.fenetre({
           titre: `Date limite de saisie · ${c} · ${C.evCourt(n)}`, icone: 'clock', taille: 'sm', proteger: false,
           corps: html`<div class="pile">${F.date({ lib: 'Dernier jour de saisie pour les enseignants', nom: 'fin', val: sa.fin })}<p class="mut petit mb0">Laissez vide pour ne fixer aucune date. Le directeur peut toujours saisir.</p></div>`,
@@ -256,7 +263,9 @@
         message: html`<div class="pile-sm"><p class="mb0">Bilan du passage :</p><ul class="mb0"><li><b>${R.montent}</b> élève(s) admis passent au niveau supérieur ;</li><li><b>${R.restent}</b> restent dans leur classe (redoublants${R.sansDecision ? html`, dont <b>${R.sansDecision}</b> sans décision faute de MGA` : ''}) ;</li><li><b>${R.sortants + R.archives}</b> sont archivés (CM2 admis, départs${R.niveauNonOuvert.length ? ', admis vers un niveau non ouvert' : ''}).</li></ul>
           ${R.niveauNonOuvert.length ? ui.encadre(html`Niveau suivant non ouvert dans l’école : ${R.niveauNonOuvert.slice(0, 5).join(' ; ')}${R.niveauNonOuvert.length > 5 ? '…' : ''}. Ces élèves seront archivés avec la mention « à transférer ».`, 'avert') : ''}
           ${R.sansDecision ? ui.encadre(`${R.sansDecision} élève(s) sans MGA complète resteront dans leur classe. Fixez leur décision avant de continuer si nécessaire.`, 'avert') : ''}
-          <p class="mb0">Les notes, absences et appels de l’année sont archivés puis remis à zéro. <b>Une copie de sécurité est faite juste avant</b> (Données › Sauvegarde › Copies locales). Exportez aussi une sauvegarde sur clé USB.</p></div>`
+          ${R.incompletes ? ui.encadre(`${R.incompletes} élève(s) ont au moins une évaluation incomplète (matières sans note) : leur moyenne et la décision proposée ne portent que sur les matières notées. Vérifiez-les dans Fin d’année (mention « notes incomplètes »).`, 'avert') : ''}
+          ${R.attente ? ui.encadre(html`<b>${u.pluriel(R.attente, 'saisie')} d’enseignant en attente de validation</b> : elles seront archivées sans compter dans les moyennes. Validez-les d’abord (Notes › Validation).`, 'avert') : ''}
+          <p class="mb0">Les notes, absences et appels de l’année sont archivés puis remis à zéro. ${AK.stockage.copiesDisponibles() ? html`<b>Une copie de sécurité est faite juste avant</b> (Données › Sauvegarde › Copies locales) ; si elle échoue, le passage n’a pas lieu. Exportez aussi une sauvegarde sur clé USB.` : html`<b>Ce stockage ne permet pas de copie de sécurité locale : exportez d’abord une sauvegarde sur clé USB</b> (Données › Sauvegarde).`}</p></div>`
       });
       if (!ok) return;
       if (!(await AK.auth.confirmer('Passage à l’année suivante.', { forcer: true }))) return;
@@ -272,15 +281,23 @@
       const n = Number($('#grille-notes').dataset.ev);
       const voulu = el.checked;
       try {
-        AK.notes.marquerAbsent(el.dataset.id, n, voulu);
-      } catch (err) {
-        if (!err.correction) throw err;
-        const ok = await ui.confirmer({ titre: voulu ? 'Absent(e) à l’évaluation' : 'Retirer l’absence', message: err.message, ok: 'Confirmer', danger: voulu });
-        if (!ok) {
-          el.checked = !voulu;
-          return;
+        try {
+          AK.notes.marquerAbsent(el.dataset.id, n, voulu);
+        } catch (err) {
+          if (!err.correction) throw err;
+          // effacer des notes validées ou retirer une absence enregistrée : mot de passe, comme toute correction
+          const ok = err.validees && AK.session.estDirecteur()
+            ? await AK.auth.confirmer(err.message)
+            : await ui.confirmer({ titre: voulu ? 'Absent(e) à l’évaluation' : 'Retirer l’absence', message: err.message, ok: 'Confirmer', danger: voulu });
+          if (!ok) {
+            el.checked = !voulu;
+            return;
+          }
+          AK.notes.marquerAbsent(el.dataset.id, n, voulu, { confirme: true });
         }
-        AK.notes.marquerAbsent(el.dataset.id, n, voulu, { confirme: true });
+      } catch (err) {
+        el.checked = !voulu;
+        throw err;
       }
       AK.shell.redessiner();
     },

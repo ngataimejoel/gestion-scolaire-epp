@@ -49,6 +49,7 @@
     'rapports.generateur': NON,
     'stats.voir': NON,
     'document.imprimerClasse': ENS, // listes, bulletins et fiches de sa classe
+    'document.ecole': SOLO,         // listes et rapports de toute l'école
     'document.emettre': NON,        // certificats, attestations, cartes : directeur
     'document.annuler': NON,
     'document.registre': NON,

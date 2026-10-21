@@ -24,7 +24,8 @@
   /* ---------- Registre des élèves ---------- */
   function rendreListe(p) {
     const x = X(), L = elevesFiltres(p);
-    const dir = AK.session.estDirecteur();
+    // une classe hors du périmètre (adresse saisie à la main) n'est ni affichée ni proposée à l'impression
+    const classe = p.classe && AK.session.classes().includes(p.classe) ? p.classe : null;
     const filtres = html`<select class="inp inp-sm" data-change="eleves-filtre" data-f="classe" aria-label="Classe">${ui.options(AK.session.classes(), p.classe, 'Toutes les classes')}</select>
       <select class="inp inp-sm" data-change="eleves-filtre" data-f="statut" aria-label="Statut">${ui.options([['', 'Tous les statuts'], ...C.STATUTS.map((s) => [s, s])], p.statut == null ? 'Inscrit' : p.statut)}</select>
       <select class="inp inp-sm" data-change="eleves-filtre" data-f="dossier" aria-label="Dossier">${ui.options(DOSSIERS, p.dossier, 'Tous les dossiers')}</select>
@@ -40,14 +41,14 @@
       { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (s) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap"><button type="button" class="btn-ic" data-action="eleve-documents" data-id="${s.id}" aria-label="Documents de ${x.nomComplet(s)}" data-bulle="Documents">${ic('file')}</button>${peut('eleve.modifier', { classe: s.classe }) ? html`<button type="button" class="btn-ic" data-action="eleve-modifier" data-id="${s.id}" aria-label="Modifier ${x.nomComplet(s)}" data-bulle="Modifier">${ic('edit')}</button>` : ''}<button type="button" class="btn-ic" data-action="eleve-plus" data-id="${s.id}" aria-label="Autres actions pour ${x.nomComplet(s)}" aria-haspopup="menu">${ic('more')}</button></div>` }
     ];
     const actionsSel = (ids) => html`<button type="button" class="btn btn-sm" data-action="eleves-sel-doc" data-modele="fiche-scolaire">${ic('file')}Fiches scolaires</button>${peut('document.emettre') ? html`<button type="button" class="btn btn-sm" data-action="eleves-sel-doc" data-modele="certificat-scolarite">${ic('fileCheck')}Certificats</button><button type="button" class="btn btn-sm" data-action="eleves-sel-cartes">${ic('idCard')}Cartes (${ids.length})</button>` : ''}`;
-    const titre = p.classe ? `Classe de ${p.classe}` : 'Registre des élèves';
-    const g = L.filter((s) => s.sexe === 'Masculin').length;
-    return html`${ui.pageTete(titre, `${u.pluriel(L.length, 'élève')} · ${g} garçons · ${L.length - g} filles. Cliquez sur un nom pour ouvrir la fiche (notes, absences, documents).`,
-      html`${p.classe ? html`<button type="button" class="btn" data-action="doc-classe" data-modele="liste-classe" data-classe="${p.classe}">${ic('print')}Liste de la classe</button>` : dir ? html`<button type="button" class="btn" data-action="doc-ecole" data-modele="registre-eleves">${ic('print')}Registre général</button>` : ''}
+    const titre = classe ? `Classe de ${classe}` : 'Registre des élèves';
+    const g = L.filter((s) => s.sexe === 'Masculin').length, f = L.filter((s) => s.sexe === 'Féminin').length;
+    return html`${ui.pageTete(titre, `${u.pluriel(L.length, 'élève')} · ${g} garçons · ${f} filles. Cliquez sur un nom pour ouvrir la fiche (notes, absences, documents).`,
+      html`${classe ? html`<button type="button" class="btn" data-action="doc-classe" data-modele="liste-classe" data-classe="${classe}">${ic('print')}Liste de la classe</button>` : peut('document.ecole') ? html`<button type="button" class="btn" data-action="doc-ecole" data-modele="registre-eleves">${ic('print')}Registre général</button>` : ''}
       ${peut('eleve.inscrire', { classe: p.classe || AK.session.classes()[0] }) ? html`<button type="button" class="btn btn-pri" data-action="eleve-nouveau" data-classe="${p.classe || ''}">${ic('userPlus')}Inscrire un élève</button>` : ''}`)}
       ${ui.tableau({
         id: 'eleves', lignes: L, colonnes, filtres, recherche: (s) => x.nomComplet(s) + ' ' + s.prenoms + ' ' + s.nom + ' ' + s.mat + ' ' + (s.matNat || ''),
-        placeholder: 'Nom, prénom ou matricule…', unite: 'élève', parPage: 50, selection: true, actionsSelection: actionsSel, exporter: 'eleves', triDefaut: { cle: 'classe', sens: 'asc' },
+        placeholder: 'Nom, prénom ou matricule…', unite: 'élève', parPage: 50, selection: true, actionsSelection: actionsSel, exporter: peut('donnees.exporter') ? 'eleves' : null, triDefaut: { cle: 'classe', sens: 'asc' },
         legende: 'Registre des élèves',
         vide: S().students.length ? ui.vide('Aucun élève', 'Aucun élève ne correspond à ces filtres.') : ui.vide('Aucun élève inscrit', 'Inscrivez vos élèves un par un ou importez une liste Excel.', peut('eleve.inscrire', { classe: AK.session.classes()[0] }) ? html`<div class="ligne" style="justify-content:center"><button type="button" class="btn btn-pri" data-action="eleve-nouveau">${ic('userPlus')}Inscrire un élève</button><a class="btn" href="#eleves/import">${ic('down')}Importer un fichier Excel</a></div>` : '')
       })}`;
@@ -132,7 +133,14 @@
           }
           ui.toast(`${X().nomComplet(e)} inscrit(e) en ${e.classe} · matricule ${e.mat}`, { action: { lib: 'Ouvrir la fiche', f: () => ui.ouvrirTiroir('eleve', e.id) } });
         } else {
-          AK.eleves.modifier(s.id, d);
+          try {
+            AK.eleves.modifier(s.id, d);
+          } catch (err) {
+            if (!err.changementClasse) throw err;
+            const ok = await ui.confirmer({ titre: 'Changement de classe', icone: 'warn', message: err.message, ok: `Passer en ${d.classe}` });
+            if (!ok) return false;
+            AK.eleves.modifier(s.id, d, { changementConfirme: true });
+          }
           ui.toast('Dossier mis à jour.');
         }
       }
@@ -240,10 +248,10 @@
   function rendreImport() {
     const A = analyseImport;
     const n = A && A.items ? { ok: A.items.filter((i) => i.etat === 'ok').length, dbl: A.items.filter((i) => i.etat === 'doublon').length, err: A.items.filter((i) => i.etat === 'erreur').length } : null;
-    return html`${ui.pageTete('Import d’une liste d’élèves', 'Fichier Excel (.xlsx, .xls) ou CSV. Rien n’est enregistré avant votre confirmation ; une copie de sécurité est faite juste avant.')}
+    return html`${ui.pageTete('Import d’une liste d’élèves', `Fichier Excel (.xlsx, .xls) ou CSV. Rien n’est enregistré avant votre confirmation${AK.stockage.copiesDisponibles() ? ' ; une copie de sécurité est faite juste avant' : ''}.`)}
       <div class="grille g-2-1">
         ${ui.carte('1. Choisir le fichier', html`<div class="pile">
-          <label class="btn btn-pri" style="justify-self:start">${ic('folder')}Choisir un fichier Excel ou CSV<input type="file" hidden accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-change="import-fichier"></label>
+          <button type="button" class="btn btn-pri" style="justify-self:start" data-action="fichier-choisir">${ic('folder')}Choisir un fichier Excel ou CSV</button><input type="file" hidden accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-change="import-fichier">
           ${A && A.nom ? html`<p class="mb0">${ic('file')} <b>${A.nom}</b> · ${u.pluriel((A.items || []).length, 'ligne')} lue(s)</p>` : ''}
           ${A && A.erreur ? ui.encadre(A.erreur, 'erreur') : ''}</div>`)}
         ${ui.carte('Colonnes reconnues', html`<p class="petit mb0"><b>Obligatoires :</b> nom, prénoms, niveau (ou classe), sexe.<br><b>Facultatives :</b> naissance (ou jour, mois, année), matricule, parent, téléphone, extrait, n° acte, date acte, centre, nationalité, lieu, sous-préfecture, père, mère, domicile.</p><p class="petit mut mb0">Les doublons (même matricule, ou même nom et même naissance qu’un élève existant) ne sont jamais importés.</p>`)}
@@ -306,7 +314,7 @@
     'eleves-sel-doc'(el) {
       const ids = ui.tableauChoix('eleves');
       const L = ids.map((id) => AK.eleves.trouver(id)).filter(Boolean).sort(X().parClasse);
-      if (!L.length) return;
+      if (!L.length) throw new AK.ErreurMetier('Les élèves sélectionnés ne sont plus au registre : sélectionnez-les de nouveau.');
       AK.docs.ouvrir(el.dataset.modele, L.map((s) => ({ eleve: s })));
     },
     'eleves-sel-cartes'() {
@@ -318,12 +326,18 @@
       analyseImport = null;
       AK.shell.redessiner();
     },
-    async 'import-confirmer'() {
-      if (!analyseImport || !analyseImport.items) return;
-      const n = await AK.imports.importer(analyseImport);
-      analyseImport = null;
-      ui.toast(`${u.pluriel(n, 'élève importé', 'élèves importés')}. Copie de sécurité faite avant l’import.`);
-      AK.shell.aller('eleves/liste');
+    async 'import-confirmer'(el) {
+      const A = analyseImport;
+      if (!A || !A.items) return;
+      el.disabled = true;
+      try {
+        const r = await AK.imports.importer(A);
+        analyseImport = null;
+        ui.toast(`${u.pluriel(r.n, 'élève importé', 'élèves importés')}${r.ignores ? ` (${r.ignores} ligne(s) ignorée(s) : déjà inscrits ou plus valides)` : ''}. ${r.copie ? 'Copie de sécurité faite avant l’import.' : 'Aucune copie de sécurité locale avec ce stockage : exportez une sauvegarde.'}`, { type: r.copie ? 'ok' : 'avert', duree: 8000 });
+        AK.shell.aller('eleves/liste');
+      } finally {
+        el.disabled = false;
+      }
     }
   });
   AK.actions.defChange({

@@ -131,6 +131,13 @@
     actifs()
       .filter((s) => (!cls || s.classe === cls) && !estAbsent(s.id, n))
       .reduce((k, s) => k + matieres(s.classe, n).filter(([m]) => note(s.id, n, m) == null).length, 0);
+  /** Évaluation commencée mais incomplète (au moins une note et au moins une matière sans note, élève non absent). */
+  const incomplet = (s, n) => {
+    if (estAbsent(s.id, n)) return false;
+    const v = matieres(s.classe, n).map(([m]) => note(s.id, n, m));
+    return v.some((x) => x != null) && v.some((x) => x == null);
+  };
+  const incompletAnnee = (s) => [1, 2, 3, 4].some((n) => incomplet(s, n));
   function decisionProposee(s) {
     if (s.statut !== 'Inscrit') return s.statut;
     const a = mga(s);
@@ -185,7 +192,7 @@
   AK.calc = {
     niveaux, niveauSuivant, info, grille, matieres, noteMax, echelle, anneeRentree, evalLabel, evalDate, perLabel,
     actifs, actifsDe, parNom, parClasse, nomComplet, matOf, ageDe, ageAnormal, fmtNaissance, estIvoirien, compteSexe, initiales,
-    cle, note, estAbsent, resultat, moyEval, moy3, mga, score, mention, classement, rangTxt, moyClasse, reussite, notesManquantes,
+    cle, note, estAbsent, resultat, moyEval, moy3, mga, score, mention, classement, rangTxt, moyClasse, reussite, notesManquantes, incomplet, incompletAnnee,
     decisionProposee, decision,
     clsDe, clsTxt, enseignantDe, emploiGrade, estFemme, fonctTxt, fonctErr,
     estFerie, estJourClasse, joursClasse, derniersJoursClasse, absencesDe, moisCourant, moisInfo

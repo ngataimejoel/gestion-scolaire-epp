@@ -120,9 +120,12 @@
       u.poser(el, html`${v ? ic(v === 'J' ? 'info' : 'x', 'i-sm') : ic('check', 'i-sm')}${LIB[v]}`);
       AK.shell.redessiner();
     },
-    'appel-tous'(el) {
-      AK.absences.tousPresents(el.dataset.date, el.dataset.classe);
-      ui.toast(`Appel ${el.dataset.classe} enregistré.`);
+    async 'appel-tous'(el) {
+      const c = el.dataset.classe, date = el.dataset.date, d = S().att[date] || {};
+      const nA = X().actifsDe(c).filter((s) => d[s.id] === 'A').length;
+      if (peut('appel.lever') && nA && !(await ui.confirmer({ titre: 'Tout le monde présent', ok: 'Lever les absences', message: `${u.pluriel(nA, 'absence non justifiée')} du ${u.fmtDate(date)} en ${c} ${nA > 1 ? 'seront levées' : 'sera levée'}. Les absences justifiées sont conservées.` }))) return;
+      const j = AK.absences.tousPresents(date, c);
+      ui.toast(`Appel ${c} enregistré${j ? ` (${u.pluriel(j, 'absence justifiée')} conservée(s))` : ''}.`);
     },
     'appel-valider'(el) {
       AK.absences.valider(el.dataset.date, el.dataset.classe);

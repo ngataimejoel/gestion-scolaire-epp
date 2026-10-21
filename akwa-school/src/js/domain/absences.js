@@ -7,14 +7,21 @@
   const S = () => AK.store.etat;
   const E = (m, champ) => new AK.ErreurMetier(m, champ);
 
+  const dateAppel = (date) => {
+    if (V.date(date, 'Date') || !date) throw E('Date invalide.');
+    if (date > u.aujourdhui()) throw E('Impossible de faire l’appel d’un jour à venir.');
+  };
+  const classeOuverte = (classe) => {
+    if (!X.niveaux().includes(classe)) throw E('Classe inconnue.');
+  };
+
   const absences = {
     /** État suivant d'une case de l'appel : Présent → Absent → Absent justifié → Présent. */
     basculer(date, classe, sid) {
       const s = AK.eleves.trouver(sid);
-      if (!s || s.classe !== classe) throw E('Élève introuvable dans cette classe.');
+      if (!s || s.classe !== classe || s.statut !== 'Inscrit') throw E('Élève introuvable dans cette classe.');
       AK.perm.exiger('appel.faire', { classe });
-      if (V.date(date, 'Date')) throw E('Date invalide.');
-      if (date > u.aujourdhui()) throw E('Impossible de faire l’appel d’un jour à venir.');
+      dateAppel(date);
       const d = S().att[date] || {};
       const v = d[sid] || '';
       // un enseignant ne lève pas une absence déjà enregistrée
@@ -28,17 +35,30 @@
       }, { rendu: false });
       return nv;
     },
+    /**
+     * « Tout le monde présent » : le directeur lève les absences non justifiées du jour ; les absences
+     * justifiées (autorisation accordée) restent. Renvoie le nombre d'absences justifiées conservées.
+     */
     tousPresents(date, classe) {
+      classeOuverte(classe);
       AK.perm.exiger('appel.faire', { classe });
+      dateAppel(date);
       const directeur = AK.perm.peut('appel.lever');
-      AK.store.modifier(`Appel ${classe} du ${u.fmtDate(date)} : ${directeur ? 'tout le monde présent' : 'les autres élèves présents'}`, (st) => {
+      let gardees = 0;
+      AK.store.modifier(`Appel ${classe} du ${u.fmtDate(date)} : ${directeur ? 'absences non justifiées levées' : 'les autres élèves présents'}`, (st) => {
         const j = st.att[date] || (st.att[date] = {});
-        if (directeur) X.actifsDe(classe).forEach((s) => delete j[s.id]);
+        X.actifsDe(classe).forEach((s) => {
+          if (j[s.id] === 'J') gardees++;
+          else if (directeur) delete j[s.id];
+        });
         (st.appel[date] || (st.appel[date] = {}))[classe] = true;
       }, { categorie: 'appel' });
+      return gardees;
     },
     valider(date, classe) {
+      classeOuverte(classe);
       AK.perm.exiger('appel.faire', { classe });
+      dateAppel(date);
       AK.store.modifier(`Appel validé : ${classe}, ${u.fmtDate(date)}`, (st) => ((st.appel[date] || (st.appel[date] = {}))[classe] = true), { categorie: 'appel' });
     },
     joursDemande: (a) => X.joursClasse(a.du, a.au).length,
