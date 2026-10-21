@@ -71,10 +71,20 @@ async function autoTest() {
         }
       }, 100);
     })`);
-    const pdf = await fenetre.webContents.printToPDF({ pageSize: 'A4', printBackground: true });
+    // une feuille A4 dans la zone d'impression (la feuille de style d'impression masque tout le reste)
+    await fenetre.webContents.executeJavaScript(`(() => {
+      const z = document.createElement('div');
+      z.className = 'zone-impression';
+      z.innerHTML = '<section class="feuille"><div class="feuille-cadre" style="padding:20mm"><h1>AKWA SCHOOL</h1><p>Auto-test du moteur d’impression : feuille A4, accents é è à ç, chiffres 0123456789.</p></div></section>';
+      document.body.appendChild(z);
+    })()`);
+    const pdf = await fenetre.webContents.printToPDF({ preferCSSPageSize: true, printBackground: true });
+    const brut = pdf.toString('latin1');
     r.pdfOctets = pdf.length;
-    r.pdfSignature = pdf.subarray(0, 5).toString('latin1');
-    r.ok = r.page.pret && r.page.hote === 'natif' && r.pdfSignature === '%PDF-' && pdf.length > 1000;
+    r.pdfSignature = brut.slice(0, 5);
+    r.pdfPages = (brut.match(/\/Type\s*\/Page[^s]/g) || []).length;
+    r.pdfPolices = (brut.match(/\/FontFile/g) || []).length;
+    r.ok = r.page.pret && r.page.hote === 'natif' && r.pdfSignature === '%PDF-' && r.pdfPages >= 1 && r.pdfPolices >= 1;
   } catch (e) {
     r.erreur = String((e && e.message) || e);
   }
