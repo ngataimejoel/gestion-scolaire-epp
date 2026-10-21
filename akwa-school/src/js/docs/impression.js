@@ -9,9 +9,10 @@
    ===================================================================================== */
 (function (AK) {
   'use strict';
-  const u = AK.u, { html, $, $$ } = u, ic = AK.ic, ui = AK.ui;
+  const u = AK.u, { html, raw, $, $$ } = u, ic = AK.ic, ui = AK.ui;
   const MM = 96 / 25.4;
   let enCours = false;
+  let generation = 0; // contenu de la zone d'impression : vidée après impression seulement s'il n'a pas changé
 
   function zoneImpression() {
     let z = document.getElementById('impression');
@@ -32,6 +33,7 @@
     if (enCours) return;
     enCours = true;
     const z = zoneImpression();
+    generation++;
     u.poser(z, feuilles);
     try {
       await attendreImages(z);
@@ -41,7 +43,10 @@
       enCours = false;
     }
   }
-  addEventListener('afterprint', () => setTimeout(() => u.poser(zoneImpression(), ''), 300));
+  addEventListener('afterprint', () => {
+    const g = generation;
+    setTimeout(() => g === generation && u.poser(zoneImpression(), ''), 300);
+  });
 
   function ajusterZoom(racine, facteur) {
     const pages = $('.pages', racine);
@@ -76,6 +81,8 @@
       u.poser($('.pages', corps), pagesHtml(o.feuilles));
       const res = $('[data-resume]', corps);
       if (res) res.textContent = r.resume || '';
+      const bc = $('[data-copie]', corps.closest('dialog') || corps);
+      if (bc) bc.hidden = false; // une copie n'a de sens qu'après l'émission de l'original
       requestAnimationFrame(() => ajusterZoom(corps));
       return o.feuilles;
     };
@@ -87,7 +94,7 @@
           <span class="espace"></span>
           <div class="groupe-btn"><button type="button" class="btn btn-sm" data-z="-" aria-label="Réduire">${ic('zoomOut')}</button><button type="button" class="btn btn-sm" data-z="0" aria-label="Ajuster à la largeur">Ajuster</button><button type="button" class="btn btn-sm" data-z="+" aria-label="Agrandir">${ic('zoomIn')}</button></div>
           ${(o.exporter || []).map((x, i) => html`<button type="button" class="btn btn-sm" data-exp="${i}">${ic('down')}${x.lib}</button>`)}
-          ${o.copie ? html`<button type="button" class="btn btn-sm" data-copie>${ic('copy')}Imprimer une copie</button>` : ''}
+          ${o.copie ? html`<button type="button" class="btn btn-sm" data-copie${o.preparer ? raw(' hidden') : ''} data-bulle="Même référence, mention COPIE">${ic('copy')}Imprimer une copie</button>` : ''}
           <button type="button" class="btn btn-sm" data-pdf data-bulle="${typeof AK.hote.exporterPdf === 'function' ? 'Enregistre un fichier PDF' : 'Ouvre la boîte d’impression : choisissez « Enregistrer au format PDF »'}">${ic('down')}PDF</button>
           <button type="button" class="btn btn-pri" data-imprimer>${ic('print')}Imprimer</button>
         </div>
@@ -109,6 +116,7 @@
             // vrai fichier PDF produit par l'emballage natif (APK / .exe)
             const z = zoneImpression();
             try {
+              generation++;
               u.poser(z, await definitives(corps));
               await attendreImages(z);
               const nom = (o.nomFichier || o.titre || 'document').replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 80) + '.pdf';

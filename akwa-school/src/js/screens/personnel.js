@@ -103,8 +103,20 @@
           { cle: 'act', lib: '', cls: 'droite', rendu: (t) => html`<div class="ligne" style="justify-content:flex-end">${!t.compte ? html`<button type="button" class="btn btn-sm btn-pri" data-action="compte-creer" data-id="${t.id}"${t.actif === false ? raw(' disabled') : ''}>${ic('key')}Créer le compte</button>` : html`<button type="button" class="btn btn-sm" data-action="compte-reinit" data-id="${t.id}">${ic('refresh')}Nouveau mot de passe</button><button type="button" class="btn btn-sm" data-action="compte-basculer" data-id="${t.id}">${ic(t.compte.actif ? 'lock' : 'unlock')}${t.compte.actif ? 'Désactiver' : 'Activer'}</button>`}</div>` }
         ],
         vide: ui.vide('Aucun membre du personnel', 'Ajoutez d’abord les enseignants dans l’onglet Personnel.')
-      })}`;
+      })}
+      <div class="mt">${suiviClasses()}</div>`;
   }
+  /** Suivi des classes (évaluation en cours) : avancement des notes, saisie, appel, messages. */
+  function suiviClasses() {
+    const x = X(), n = S().school.evalCourante || 1, auj = u.aujourdhui();
+    return ui.carte(`Suivi des classes · ${C.EV_GEN[n - 1]}`, html`<div class="tab-cadre"><table class="tab"><thead><tr><th>Classe</th><th>Enseignant</th><th class="centre">Notes saisies</th><th class="centre">En attente</th><th class="centre">Saisie</th><th class="centre">Appel du jour</th><th class="centre">Absents du jour</th><th class="centre">Messages non lus</th></tr></thead><tbody>${x.niveaux().map((c) => {
+      const t = x.enseignantDe(c), L = x.actifsDe(c).filter((s) => !x.estAbsent(s.id, n)), tot = L.length * x.matieres(c, n).length;
+      const sa = S().saisie[c + '|' + n] || {}, abs = Object.keys(S().att[auj] || {}).filter((id) => { const s = AK.eleves.trouver(id); return s && s.classe === c; }).length;
+      const nl = t ? AK.personnel.nonLus(t.id).length : 0, att = AK.notes.enAttenteDe(c, n).length;
+      return html`<tr><td>${ui.lienClasse(c)}</td><td>${t ? t.nom : html`<span class="mut">—</span>`}</td><td class="centre num">${tot - x.notesManquantes(c, n)} / ${tot}</td><td class="centre">${att ? ui.tag(String(att), 'avert') : '—'}</td><td class="centre">${AK.notes.saisieOuverte(c, n) ? html`ouverte${sa.fin ? ' jusqu’au ' + u.fmtDate(sa.fin) : ''}` : ui.tag('fermée', 'mauvais')}</td><td class="centre">${(S().appel[auj] || {})[c] ? ui.tag('fait', 'ok', 'check') : x.estJourClasse(auj) ? ui.tag('pas fait', 'avert') : html`<span class="mut">pas classe</span>`}</td><td class="centre num">${abs}</td><td class="centre num">${nl || '—'}</td></tr>`;
+    })}</tbody></table></div>`, { sous: 'Ce que chaque enseignant a fait dans l’application', actions: html`<a class="btn btn-sm" href="#notes/validation">${ic('check')}Validation des notes</a>` });
+  }
+
   function montrerMdp(t, mdp) {
     ui.fenetre({
       titre: `Mot de passe provisoire · ${t.nom}`, icone: 'key', taille: 'sm', ok: 'J’ai noté le mot de passe', annuler: false, proteger: false,

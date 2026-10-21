@@ -61,10 +61,12 @@
 .carte-id.verso .v-tete { font-size: 6.6pt; font-weight: 800; text-transform: uppercase; color: var(--c-acc); border-bottom: 0.5pt solid var(--c-acc); padding-bottom: 1mm; margin-bottom: 1.4mm; position: relative; z-index: 2; }
 .carte-id.verso .v-texte { font-size: 5.6pt; line-height: 1.38; position: relative; z-index: 2; color: #222; }
 .carte-id.verso .v-texte p { margin: 0 0 1.2mm; }
-.carte-id.verso .v-pied { position: absolute; left: 3mm; right: 3mm; bottom: 3mm; display: flex; justify-content: space-between; align-items: flex-end; font-size: 5pt; color: var(--c-gris); z-index: 2; }
+.carte-id.verso .v-pied { position: absolute; left: 3mm; right: 3mm; bottom: 3mm; display: flex; justify-content: space-between; align-items: flex-end; gap: 2mm; font-size: 5pt; color: var(--c-gris); z-index: 2; }
+.carte-id.verso .v-pied span:first-child { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.carte-id.verso .v-pied span:last-child { flex: none; white-space: nowrap; font-family: "Consolas", "Cascadia Mono", monospace; font-weight: 700; color: #333; }
 
 /* Planche A4 de cartes avec traits de coupe */
 .planche { position: relative; }
 .planche .emplacement { position: absolute; }
 .planche .trait { position: absolute; background: #000; }
-.planche .legende-planche { position: absolute; left: 0; right: 0; bottom: 3mm; text-align: center; font: 6.5pt Arial, sans-serif; color: #777; }
+.planche .legende-planche { position: absolute; left: 0; right: 0; bottom: 2.5mm; text-align: center; font: 6pt Arial, sans-serif; color: #777; }

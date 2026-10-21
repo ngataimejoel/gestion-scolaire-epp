@@ -147,7 +147,8 @@ body.a-ecran-plein .toasts { z-index: 140; }
 .catalogue { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
 .modele-carte { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--line); border-radius: 13px; background: var(--surface); text-align: left; color: var(--ink); box-shadow: var(--sh-1); }
 .modele-carte:hover { border-color: color-mix(in srgb, var(--pri) 45%, var(--line)); box-shadow: var(--sh-2); }
-.modele-carte .i { width: 34px; height: 34px; padding: 8px; border-radius: 10px; background: var(--pri-soft); color: var(--pri); }
+.modele-carte > .i { width: 34px; height: 34px; padding: 8px; border-radius: 10px; background: var(--pri-soft); color: var(--pri); }
+.modele-carte .ligne { gap: 6px; }
 .modele-carte b { font-size: 14px; }
 .modele-carte small { color: var(--mut); font-size: 12.5px; }
 .editeur-modele { display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); gap: 16px; align-items: start; }

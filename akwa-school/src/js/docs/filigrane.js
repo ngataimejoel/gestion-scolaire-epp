@@ -55,7 +55,10 @@
   /** Texte en diagonale ou répété ; largeur/hauteur en mm de la zone. */
   function svgTexte(t, { couleur, opacite, taille, rotation, position, repetition }, l, h) {
     const cx = l / 2, cy = position === 'haut' ? h * 0.3 : position === 'bas' ? h * 0.72 : h / 2;
-    const fs = (Math.min(l, h) * (taille / 100)) / Math.max(4, t.length * 0.55);
+    // taille demandée, plafonnée pour que le texte tienne entier dans la feuille selon l'angle
+    const a = (Math.abs(rotation) * Math.PI) / 180;
+    const demi = Math.min(Math.abs(Math.cos(a)) > 1e-6 ? l / 2 / Math.abs(Math.cos(a)) : Infinity, Math.abs(Math.sin(a)) > 1e-6 ? (position === 'centre' ? h / 2 : h * 0.28) / Math.abs(Math.sin(a)) : Infinity);
+    const fs = Math.min((Math.min(l, h) * (taille / 100)) / Math.max(4, t.length * 0.55), repetition ? Infinity : (2 * demi * 0.8) / Math.max(1, t.length * 0.72));
     const style = `font-family:Arial,'Liberation Sans',sans-serif;font-weight:800;letter-spacing:${fs * 0.06}`;
     if (repetition) {
       const pas = fs * 4.2, lignes = [];

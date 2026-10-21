@@ -1,0 +1,38 @@
+/* =====================================================================================
+   Scolarité & finances : compléments propres aux écrans du lot « finances »
+   (situation d'un élève, dépenses par poste, grille des frais, taux de recouvrement).
+   Uniquement des jetons de 00-tokens.css : le thème sombre s'applique sans règle dédiée.
+   ===================================================================================== */
+
+/* Situation d'un élève (paramètre ?eleve=) */
+.fin-situation { border-color: color-mix(in srgb, var(--pri) 35%, var(--line)); }
+.fin-situation .carte-tete.fin-tete { flex-wrap: wrap; align-items: center; }
+.fin-situation h2 { overflow-wrap: anywhere; }
+.fin-situation h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; font-family: var(--font); font-weight: 700; }
+.fin-chiffres { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.fin-chiffre { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r); background: var(--surface-2); border: 1px solid var(--line); min-width: 0; }
+.fin-chiffre span { font-size: 12px; font-weight: 650; color: var(--mut); }
+.fin-chiffre b { font-size: 19px; color: var(--ink); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fin-chiffre.fort { background: var(--pri-soft); border-color: color-mix(in srgb, var(--pri) 25%, var(--line)); }
+.fin-chiffre.fort b { color: var(--pri); }
+
+/* Dépenses par poste : libellés longs, barre proportionnelle, montant et part */
+.fin-postes { display: grid; gap: 2px; }
+.fin-poste { display: grid; grid-template-columns: minmax(0, 210px) minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: var(--r-sm); background: none; color: var(--ink); font: inherit; text-align: left; }
+.fin-poste:hover { background: var(--sunk); }
+.fin-poste[aria-pressed="true"] { background: var(--pri-soft); box-shadow: inset 3px 0 0 var(--pri); }
+.fin-poste .nom { font-size: 13px; font-weight: 650; overflow-wrap: anywhere; }
+.fin-poste .val { font-size: 12.5px; color: var(--mut); white-space: nowrap; text-align: right; font-variant-numeric: tabular-nums; }
+.fin-poste .val b { color: var(--ink); }
+
+/* Grille des frais (fenêtre) et taux de recouvrement */
+.fin-grille-frais td { padding: 6px 8px; }
+.fin-montant { width: 108px; min-width: 88px; text-align: right; }
+.fin-taux { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; }
+.fin-taux .progression { flex: 1 1 60px; min-width: 60px; }
+
+@media (max-width: 560px) {
+  .fin-chiffres { grid-template-columns: minmax(0, 1fr); }
+  .fin-poste { grid-template-columns: minmax(0, 1fr) auto; }
+  .fin-poste .piste { grid-column: 1 / -1; grid-row: 2; }
+}

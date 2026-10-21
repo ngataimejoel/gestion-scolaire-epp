@@ -1,0 +1,55 @@
+/* =====================================================================================
+   Vie scolaire : emploi du temps (en-têtes de ligne, colonne des horaires figée au
+   défilement horizontal), calendrier (jour cliquable, étiquettes-boutons, version compacte
+   sur téléphone), suivi de discipline, légende des types, textes longs.
+   Uniquement les variables de 00-tokens.css : le thème sombre s'applique de lui-même.
+   ===================================================================================== */
+
+/* ---------- Emploi du temps ---------- */
+.tab.edt th[scope="row"] { position: sticky; top: auto; left: 0; z-index: 1; background: var(--surface); text-transform: none; letter-spacing: 0; font-size: var(--fs-sm); font-weight: 700; color: var(--ink); white-space: nowrap; border-bottom: 1px solid var(--line); }
+.tab.edt thead th:first-child { left: 0; z-index: 3; }
+.tab.edt select:hover { border-color: var(--pri); }
+.tab.edt select:focus-visible { outline: 2px solid var(--pri); outline-offset: 1px; }
+.vie-note { margin: 8px 2px 16px; }
+
+/* ---------- Textes saisis (longs, sans espace) ---------- */
+.vie-texte { white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; }
+.tab td.texte .vie-texte { display: block; max-width: 62ch; }
+
+/* ---------- Discipline : élèves à suivre ---------- */
+.vie-suivi .flex1 { display: grid; gap: 5px; text-align: left; }
+.vie-suivi .piste { height: 8px; }
+
+/* ---------- Calendrier ---------- */
+.cal-j .vie-jour { align-self: flex-start; border: 0; background: none; padding: 1px 5px; margin: -1px -5px 0; border-radius: var(--r-xs); font: inherit; font-weight: 700; font-size: 12px; color: var(--ink); min-width: 26px; min-height: 24px; text-align: left; cursor: pointer; }
+.cal-j .vie-jour:hover { background: var(--pri-soft); color: var(--pri); }
+.cal-j.auj .vie-jour { color: var(--pri); }
+button.cal-e, a.cal-e { border: 0; width: 100%; text-align: left; font-family: inherit; font-size: 10.5px; font-weight: 650; cursor: pointer; text-decoration: none; }
+button.cal-e:hover, a.cal-e:hover { filter: brightness(0.95); text-decoration: none; }
+.cal-h abbr { text-decoration: none; }
+
+/* Légende : pastilles reprenant les couleurs des étiquettes (le texte reste toujours affiché) */
+.vie-leg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; background: var(--pri-soft); box-shadow: inset 0 0 0 1px var(--pri); }
+.vie-leg.w { background: var(--acc-soft); box-shadow: inset 0 0 0 1px var(--acc-ink); }
+.vie-leg.g { background: var(--sunk-2); box-shadow: inset 0 0 0 1px var(--ink-2); }
+.vie-leg.b { background: var(--info-soft); box-shadow: inset 0 0 0 1px var(--info); }
+.vie-leg.repos { background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line-2); }
+
+/* Indicateurs : deux par ligne sur téléphone et tablette (au lieu d'un seul) */
+@media (max-width: 900px) {
+  .grille.g4.vie-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
+
+/* Téléphone : cases compactes, étiquettes réduites à une barre (détail dans « À venir » et la vue Liste) */
+@media (max-width: 560px) {
+  .cal { gap: 2px; }
+  .cal-j { min-height: 50px; padding: 2px 3px; border-radius: 7px; }
+  .cal-h { font-size: 10.5px; }
+  .cal-e, button.cal-e, a.cal-e { font-size: 0; line-height: 0; height: 5px; padding: 0; border-radius: 3px; }
+  .cal-j .vie-jour { min-width: 22px; padding: 1px 3px; margin: -1px -3px 0; }
+  .tab.edt th[scope="row"] { white-space: normal; min-width: 66px; max-width: 76px; padding: 8px 8px; font-size: 11.5px; line-height: 1.25; }
+  .tab.edt td { padding: 4px 3px; }
+  .tab.edt select { min-width: 112px; }
+  .grille.g4.vie-kpis .kpi { padding: 12px; }
+  .grille.g4.vie-kpis .kpi-v { font-size: 22px; }
+}

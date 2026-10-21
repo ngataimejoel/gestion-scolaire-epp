@@ -94,7 +94,40 @@
     const ok = await AK.store.maintenant();
     if (!ok) ui.toast('Les données sont chargées mais n’ont pas pu être enregistrées : vérifiez le stockage du navigateur.', { type: 'erreur', duree: 0 });
     else ui.toast((notes && notes[0]) || 'Données chargées.');
+    // données reprises sans mot de passe administrateur (ex. application Android 1.x : mot de passe gardé par le téléphone)
+    if (AK.hote.authentificationLocale && !AK.auth.aUnAdmin()) return choisirMdpAdmin();
     connexion();
+  }
+
+  /** Mot de passe du directeur pour des données qui n'en ont pas encore (reprise, restauration). */
+  function choisirMdpAdmin() {
+    ecranPlein(html`${marque('Mot de passe du directeur', 'Les données reprises ne contiennent pas de mot de passe administrateur utilisable sur cet appareil. Choisissez-en un.')}
+      <form class="pile" novalidate data-ep-form>
+        <div class="champ"><label for="ep-mdp">Mot de passe (${C.SECU.MDP_MIN} caractères au moins, lettres et chiffres)</label><input id="ep-mdp" class="inp" type="password" name="mdp" autocomplete="new-password" required data-force><div class="force" data-n="0" aria-hidden="true"><i></i><i></i><i></i><i></i></div></div>
+        <div class="champ"><label for="ep-mdp2">Confirmez le mot de passe</label><input id="ep-mdp2" class="inp" type="password" name="mdp2" autocomplete="new-password" required></div>
+        ${ui.encadre('Ce mot de passe n’est jamais conservé en clair. Un code de secours vous sera remis pour le cas où vous l’oublieriez.', '', 'lock')}
+        <button class="btn btn-pri btn-lg">Enregistrer le mot de passe</button>
+      </form>`);
+    const f = $('[data-ep-form]');
+    brancherForce(f);
+    f.onsubmit = async (e) => {
+      e.preventDefault();
+      ui.effacerErreurs(f);
+      const d = ui.lireFormulaire(f);
+      const err = V.motDePasse(d.mdp);
+      if (err) return ui.erreurChamp(f, 'mdp', err);
+      if (d.mdp !== d.mdp2) return ui.erreurChamp(f, 'mdp2', 'Les deux mots de passe ne sont pas identiques.');
+      const b = f.querySelector('.btn-pri');
+      b.classList.add('occupe');
+      try {
+        const code = await AK.auth.configurerAdmin(d.mdp);
+        await AK.store.maintenant();
+        montrerCodeSecours(code, () => connexion());
+      } catch (er) {
+        b.classList.remove('occupe');
+        ui.erreur(er);
+      }
+    };
   }
 
   function assistantEcole() {

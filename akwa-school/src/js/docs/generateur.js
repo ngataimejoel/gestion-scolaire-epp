@@ -44,6 +44,8 @@
     const feuilles = [], cartes = [], docs = [], avertissements = [];
     for (const [i, ctx0] of contextes.entries()) {
       const ctx = { ...ctx0 };
+      if ((d.sujet === 'eleve' && !ctx.eleve) || (d.sujet === 'agent' && !ctx.agent) || (d.sujet === 'classe' && !ctx.classe))
+        throw new AK.ErreurMetier(`Document « ${d.lib} » : ${d.sujet === 'eleve' ? 'élève' : d.sujet === 'agent' ? 'membre du personnel' : 'classe'} non précisé(e).`);
       const refus = d.refuser ? d.refuser(ctx, r) : null;
       if (refus) {
         avertissements.push(refus);

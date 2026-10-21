@@ -259,6 +259,110 @@
       }
     };
   }
+  /* ---------- Fichiers privés d'une application installée (APK Android : pont AkwaNative) ----------
+     Les données sont écrites dans des fichiers internes à l'application (écriture atomique côté Java) :
+     akwa2_etat.json (texte, images à part), i_<empreinte>.json (une image par fichier, écrite une fois),
+     akwa2_copies.json (index) et akwa2_c_<n>.json (copies de sécurité). Noms imposés par le pont :
+     [a-z0-9_]{1,40}.json. */
+  function adaptateurFichiers(N) {
+    const ETAT = 'akwa2_etat.json', INDEX = 'akwa2_copies.json', IMAGES = 'akwa2_images.json';
+    const nomImg = (e) => 'i_' + String(e).replace(/[^0-9a-z]/g, '_') + '.json';
+    const lireJSON = (nom, defaut) => {
+      try {
+        const t = N.lire(nom);
+        return t ? JSON.parse(t) : defaut;
+      } catch (e) {
+        return defaut;
+      }
+    };
+    const ecrire = (nom, texte) => {
+      if (!N.ecrire(nom, texte)) throw new AK.ErreurMetier('Enregistrement impossible sur le téléphone (mémoire pleine ?). Libérez de la place puis réessayez ; exportez une sauvegarde.');
+    };
+    const connues = new Set(lireJSON(IMAGES, []));
+    const ecrireImages = (images) => {
+      let ajout = false;
+      images.forEach((v, k) => {
+        if (connues.has(k)) return;
+        ecrire(nomImg(k), JSON.stringify(v));
+        connues.add(k);
+        ajout = true;
+      });
+      if (ajout) ecrire(IMAGES, JSON.stringify([...connues]));
+    };
+    const image = (e) => {
+      try {
+        const t = N.lire(nomImg(e));
+        return t ? JSON.parse(t) : null;
+      } catch (x) {
+        return null;
+      }
+    };
+    return {
+      nom: 'Fichiers de l’application Android',
+      async charger() {
+        const texte = N.lire(ETAT);
+        return texte ? reconstituer(texte, image) : null;
+      },
+      async enregistrer(S) {
+        const { texte, images } = serialiser(S);
+        ecrireImages(images);
+        ecrire(ETAT, texte);
+        return texte.length;
+      },
+      async copie(S, motif) {
+        const { texte, images } = serialiser(S);
+        ecrireImages(images);
+        const L = lireJSON(INDEX, []);
+        const n = L.reduce((m, c) => Math.max(m, c.n || 0), 0) + 1;
+        const id = (motif === 'jour' ? 'J' : 'O') + '-' + new Date().toISOString();
+        ecrire('akwa2_c_' + n + '.json', JSON.stringify({ id, motif, t: Date.now(), texte }));
+        L.push({ id, n, motif, t: Date.now(), eleves: S.students.length, octets: texte.length });
+        ecrire(INDEX, JSON.stringify(L));
+        await this.elaguerCopies();
+        return id;
+      },
+      async listeCopies() {
+        return lireJSON(INDEX, []).map(({ id, motif, t, eleves, octets }) => ({ id, motif, t, eleves, octets })).sort((a, b) => b.t - a.t);
+      },
+      async lireCopie(id) {
+        const c = lireJSON(INDEX, []).find((x) => x.id === id);
+        const f = c && lireJSON('akwa2_c_' + c.n + '.json', null);
+        if (!f) throw new AK.ErreurMetier('Copie de sécurité introuvable.');
+        return reconstituer(f.texte, image).S;
+      },
+      async elaguerCopies() {
+        const L = lireJSON(INDEX, []).sort((a, b) => b.t - a.t);
+        const jours = L.filter((c) => c.motif === 'jour').slice(COPIES_JOUR);
+        const ops = L.filter((c) => c.motif !== 'jour').slice(COPIES_OPERATION);
+        const retirer = new Set([...jours, ...ops].map((c) => c.id));
+        if (!retirer.size) return;
+        ecrire(INDEX, JSON.stringify(L.filter((c) => !retirer.has(c.id))));
+        [...jours, ...ops].forEach((c) => N.supprimer('akwa2_c_' + c.n + '.json'));
+      },
+      async menage(S) {
+        const utiles = new Set(serialiser(S).images.keys());
+        lireJSON(INDEX, []).forEach((c) => {
+          const f = lireJSON('akwa2_c_' + c.n + '.json', null);
+          if (f) (f.texte.match(/@img:[0-9a-f]{16}-[0-9a-z]+/g) || []).forEach((x) => utiles.add(x.slice(PREFIXE_IMG.length)));
+        });
+        let n = 0;
+        [...connues].forEach((k) => {
+          if (!utiles.has(k) && N.supprimer(nomImg(k))) {
+            connues.delete(k);
+            n++;
+          }
+        });
+        if (n) ecrire(IMAGES, JSON.stringify([...connues]));
+        return n;
+      },
+      async effacerTout() {
+        lireJSON(INDEX, []).forEach((c) => N.supprimer('akwa2_c_' + c.n + '.json'));
+        connues.forEach((k) => N.supprimer(nomImg(k)));
+        connues.clear();
+        [ETAT, INDEX, IMAGES].forEach((f) => N.supprimer(f));
+      }
+    };
+  }
   function lsDisponible() {
     try {
       const k = '__akwa_test__';
@@ -293,6 +397,11 @@
     description: () => (actif ? actif.nom : 'non initialisé'),
     /** Données d'AKWA SCHOOL 1.x laissées par l'ancienne version dans ce navigateur (lecture seule). */
     ancienneVersion() {
+      // application installée : fichier de données de l'ancienne version (ex. Android 1.x : etat_v8.json)
+      if (AK.hote && typeof AK.hote.ancienneVersion === 'function') {
+        const o = AK.hote.ancienneVersion();
+        if (o) return o;
+      }
       try {
         const t = localStorage.getItem(CLE_LS_1X);
         if (!t) return null;
@@ -306,5 +415,6 @@
     reconstituer
   };
   AK.stockage = stockage;
-  AK.stockage._adaptateurs = { adaptateurIDB, adaptateurLS, adaptateurMemoire, ouvrir };
+  AK.stockage._adaptateurs = { adaptateurIDB, adaptateurLS, adaptateurMemoire, adaptateurFichiers, ouvrir };
+  AK.stockage.adaptateurFichiers = adaptateurFichiers;
 })(window.AK);

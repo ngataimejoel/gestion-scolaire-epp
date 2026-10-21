@@ -76,7 +76,22 @@
   ],
   "verificateur": {
     "gabarit": "verifier/verifier.html",
-    "css": [],
-    "js": []
+    "css": [
+      "styles/00-tokens.css",
+      "verifier/verifier.css"
+    ],
+    "js": [
+      "js/core/ns.js",
+      "js/core/util.js",
+      "js/core/icons.js",
+      "js/core/config.js",
+      "js/core/validate.js",
+      "vendor/qrcode-generator.js",
+      "js/security/crypto.js",
+      "js/docs/qr.js",
+      "js/docs/qrdecode.js",
+      "js/docs/verification.js",
+      "verifier/verifier.js"
+    ]
   }
 }

@@ -80,7 +80,13 @@
   -webkit-backdrop-filter: saturate(140%) blur(10px);
   border-bottom: 1px solid var(--line);
 }
-.ariane { display: flex; align-items: center; gap: 4px; min-width: 0; font-size: 13px; color: var(--mut); }
+.ariane { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 0 1 auto; overflow: hidden; font-size: 13px; color: var(--mut); }
+.ariane a, .ariane b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 26ch; flex: 0 1 auto; min-width: 0; }
+.ariane .i { flex: none; }
+@media (max-width: 1500px) {
+  /* le nom de l'école figure déjà dans le menu : le fil commence à la section */
+  .ariane > a:first-child, .ariane > a:first-child + .i { display: none; }
+}
 .ariane a { color: var(--mut); padding: 3px 6px; border-radius: 6px; }
 .ariane a:hover { background: var(--sunk); color: var(--ink); text-decoration: none; }
 .ariane b { color: var(--ink); padding: 3px 6px; font-weight: 600; white-space: nowrap; }

@@ -19,10 +19,12 @@ const DIST = join(RACINE, 'dist');
 const manifeste = JSON.parse(readFileSync(join(SRC, 'manifest.json'), 'utf8'));
 /* Options de développement :
      --ajouter js/screens/x.js   ajoute un script (avant l'outil de vérification) sans toucher au manifeste
+     --css styles/screens/x.css  ajoute une feuille de style
      --sortie chemin.html        écrit l'application ailleurs que dans dist/ (constructions en parallèle) */
 const argv = process.argv.slice(2);
 const optionsDe = (nom) => argv.flatMap((a, i) => (a === nom && argv[i + 1] ? [argv[i + 1]] : []));
 for (const p of optionsDe('--ajouter')) if (!manifeste.js.includes(p)) manifeste.js.splice(manifeste.js.indexOf('@verificateur'), 0, p);
+for (const p of optionsDe('--css')) if (!manifeste.css.includes(p)) manifeste.css.push(p);
 const SORTIE = optionsDe('--sortie')[0];
 const lire = (p) => readFileSync(join(SRC, p), 'utf8');
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.webp': 'image/webp' };

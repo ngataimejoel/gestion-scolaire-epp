@@ -5,6 +5,8 @@
      - « bureau » : application Windows AKWA SCHOOL (PySide6, QWebChannel) : données dans la
        base SQLite de l'application, connexion et mots de passe gérés par l'application,
        fichiers enregistrés par une boîte de dialogue Windows. Même contrat que pont_v8.js.
+     - « natif » : emballage générique (contrat AkwaNatif ci-dessous : Electron, autre WebView).
+     - « android » : application Android existante (pont AkwaNative de epp-expert/android).
    Le reste de l'application ne connaît que AK.hote.
    ===================================================================================== */
 (function (AK) {
@@ -144,9 +146,74 @@
     };
   }
 
+  /**
+   * Application Android AKWA SCHOOL existante (epp-expert/android, pont Java « AkwaNative », Pont.java) :
+   * données dans les fichiers privés de l'application (lire/ecrire, écriture atomique), fichiers enregistrés
+   * par le sélecteur d'Android (enregistrerFichier, réponse asynchrone par akwaRetour), impression par le
+   * service d'impression d'Android (imprimerPage) qui propose aussi « Enregistrer au format PDF ».
+   * Les mots de passe restent gérés par la page (empreintes PBKDF2), comme dans la version navigateur.
+   */
+  function hoteAndroid() {
+    const N = window.AkwaNative;
+    const base = hoteNavigateur();
+    const attentes = {};
+    let compteur = 0;
+    window.akwaRetour = function (id) {
+      const f = attentes[id];
+      delete attentes[id];
+      let r = null;
+      try {
+        r = JSON.parse(N.resultat(id));
+      } catch (e) { /* réponse illisible */ }
+      if (f) f(r || { ok: false, message: 'Réponse illisible du téléphone.' });
+    };
+    const attendre = (lancer) => new Promise((ok) => {
+      const id = 'r' + ++compteur;
+      attentes[id] = ok;
+      lancer(id);
+    });
+    let version = '';
+    try {
+      version = JSON.parse(N.infos()).version || '';
+    } catch (e) { /* version inconnue */ }
+    return {
+      ...base,
+      type: 'android',
+      libelle: 'Application Android' + (version ? ' ' + version : ''),
+      pdfDirect: false,
+      async demarrer() {
+        await AK.stockage.initialiser(AK.stockage.adaptateurFichiers(N));
+        return null;
+      },
+      async fichier(nom, contenu, type) {
+        let t = typeof contenu === 'string' ? contenu : await contenu.text();
+        type = type || 'text/plain';
+        if (/^text\/csv/.test(type) && t.charCodeAt(0) === 0xfeff) t = t.slice(1); // le pont ajoute lui-même l'indicateur UTF-8
+        const r = await attendre((id) => N.enregistrerFichier(id, nom, type, t));
+        if (r && r.ok) return nom;
+        if (r && r.annule) return '';
+        throw new AK.ErreurMetier((r && r.message) || 'Enregistrement du fichier impossible.');
+      },
+      imprimer(paysage) {
+        N.imprimerPage(!!paysage);
+      },
+      /** Données de l'application Android 1.x (interface v8) laissées sur le téléphone : lues, jamais effacées. */
+      ancienneVersion() {
+        try {
+          const o = JSON.parse(N.lire('etat_v8.json') || 'null');
+          return o && Array.isArray(o.students) ? o : null;
+        } catch (e) {
+          return null;
+        }
+      }
+    };
+  }
+
   AK.hote = window.qt && window.qt.webChannelTransport && window.APP_DATA && typeof window.QWebChannel === 'function'
     ? hoteBureau()
     : window.AkwaNatif && typeof window.AkwaNatif.enregistrerFichier === 'function'
       ? hoteNatif()
-      : hoteNavigateur();
+      : window.AkwaNative && typeof window.AkwaNative.ecrire === 'function' && typeof window.AkwaNative.enregistrerFichier === 'function'
+        ? hoteAndroid()
+        : hoteNavigateur();
 })(window.AK);

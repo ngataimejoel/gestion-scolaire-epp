@@ -161,7 +161,7 @@
   };
   function champsPlanche(idModele, o) {
     const r = AK.modeles.reglages(idModele), f = AK.cartes.format(r);
-    const col = Math.max(1, Math.floor((210 - 16 + 2) / (f.l + 2))), lig = Math.max(1, Math.floor((297 - 16 - 6 + 2) / (f.h + 2)));
+    const { col, lig } = AK.cartes.grille(f);
     return html`<div class="pile">
       <p class="mb0 petit">${ic('idCard')} Format du modèle : <b>${f.lib}</b>${f.cle === 'perso' ? ` (${f.l} × ${f.h} mm)` : ''} · ${peut('modeles.gerer') ? html`<a href="#parametres/modeles?modele=${idModele}">modifier le modèle</a>` : ''}</p>
       ${F.radios({ lib: 'Impression', nom: 'mode', val: o.mode, options: [['planche', `Planche A4 (${col * lig} cartes par feuille, traits de coupe)`], ['unitaire', 'À l’unité (imprimante à cartes, une carte par page)']] })}

@@ -1,6 +1,6 @@
 /* =====================================================================================
    Cartes d'identification : formats, planches A4 avec traits de coupe, recto-verso.
-   ID-1 (85,6 × 53,98 mm) : 10 cartes par feuille A4 (2 × 5), gouttière de 2 mm.
+   ID-1 (85,6 × 53,98 mm) : 10 cartes par feuille A4 (2 × 5), gouttière de 2 mm, traits de coupe.
    Impression « à l'unité » : une carte par page au format exact (imprimante à cartes).
    ===================================================================================== */
 (function (AK) {
@@ -33,6 +33,16 @@
     return T.join('');
   }
 
+  /* Planche A4 : marges de 6 mm au moins (zone imprimable des imprimantes courantes), gouttière
+     de 2 mm entre les cartes pour que la découpe ne morde jamais sur la voisine.
+     ID-1 : 2 colonnes × 5 lignes = 10 cartes (marges réelles ≈ 18 × 9,5 mm). */
+  const A4 = { l: 210, h: 297 }, MARGE_MIN = 6, GOUTTIERE = 2;
+  function grille(f) {
+    const col = Math.max(1, Math.floor((A4.l - 2 * MARGE_MIN + GOUTTIERE) / (f.l + GOUTTIERE)));
+    const lig = Math.max(1, Math.floor((A4.h - 2 * MARGE_MIN + GOUTTIERE) / (f.h + GOUTTIERE)));
+    return { col, lig, gout: GOUTTIERE, parPage: col * lig };
+  }
+
   /**
    * Assemble les cartes en feuilles.
    * cartes : [{ html, verso, statut, format }] ; o = { mode: 'planche'|'unitaire', traits: true, verso: false, debut: 0 }
@@ -49,11 +59,9 @@
       if (pages.length) pages[0] = html`${perso}${pages[0]}`;
       return pages;
     }
-    const A4 = { l: 210, h: 297 }, gout = 2, marge = 8;
-    const col = Math.max(1, Math.floor((A4.l - 2 * marge + gout) / (f.l + gout)));
-    const lig = Math.max(1, Math.floor((A4.h - 2 * marge - 6 + gout) / (f.h + gout)));
+    const { col, lig, gout } = grille(f);
     const parPage = col * lig;
-    const x0 = (A4.l - (col * f.l + (col - 1) * gout)) / 2, y0 = (A4.h - (lig * f.h + (lig - 1) * gout)) / 2 - 2;
+    const x0 = (A4.l - (col * f.l + (col - 1) * gout)) / 2, y0 = (A4.h - (lig * f.h + (lig - 1) * gout)) / 2;
     const debut = Math.min(parPage - 1, Math.max(0, Number(o.debut) || 0));
     const pages = [];
     const cases = [...Array(debut).fill(null), ...cartes];
@@ -83,5 +91,5 @@
     return `${an + 1}-07-31`;
   }
 
-  AK.cartes = { FORMATS, format, planches, expiration };
+  AK.cartes = { FORMATS, format, grille, planches, expiration };
 })(window.AK);

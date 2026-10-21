@@ -39,7 +39,8 @@
   ui.tagStatut = (s) => ui.tag(s, s === 'Inscrit' ? 'ok' : 'mauvais');
   ui.lienClasse = (c) => html`<a class="tag pri" href="#eleves/liste?classe=${c}" data-bulle="Voir les élèves de ${c}">${c}</a>`;
   ui.nomEleve = (s) => html`<button type="button" class="lien" data-action="fiche-eleve" data-id="${s.id}">${X().nomComplet(s)}</button>`;
-  ui.quiEleve = (s) => html`<div class="qui">${ui.avatar(s)}<span class="tronque">${ui.nomEleve(s)}<br><span class="mut petit">${s.classe} · ${X().matOf(s)}</span></span></div>`;
+  /** Avatar + nom cliquable ; o.detail === false : sans la ligne « classe · matricule » (déjà en colonnes). */
+  ui.quiEleve = (s, o = {}) => html`<div class="qui">${ui.avatar(s)}<span class="tronque">${ui.nomEleve(s)}${o.detail === false ? '' : html`<br><span class="mut petit">${s.classe} · ${X().matOf(s)}</span>`}</span></div>`;
   ui.nomAgent = (t) => html`<button type="button" class="lien" data-action="fiche-agent" data-id="${t.id}">${t.nom}</button>`;
   ui.onglets = (liste, actif) =>
     html`<nav class="onglets" aria-label="Sections">${liste.map(([lien, lib, compte]) => html`<a href="#${lien}" class="${lien === actif ? 'actif' : ''}"${lien === actif ? raw(' aria-current="page"') : ''}>${lib}${compte ? html`<span class="compte">${compte}</span>` : ''}</a>`)}</nav>`;

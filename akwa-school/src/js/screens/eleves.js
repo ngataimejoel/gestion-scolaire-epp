@@ -30,12 +30,12 @@
       <select class="inp inp-sm" data-change="eleves-filtre" data-f="dossier" aria-label="Dossier">${ui.options(DOSSIERS, p.dossier, 'Tous les dossiers')}</select>
       ${p.classe || p.dossier || (p.statut != null && p.statut !== 'Inscrit') ? html`<button type="button" class="btn btn-sm btn-ghost" data-action="aller" data-route="eleves/liste">${ic('x')}Effacer les filtres</button>` : ''}`;
     const colonnes = [
-      { cle: 'nom', lib: 'Élève', tri: (s) => x.nomComplet(s), rendu: (s) => ui.quiEleve(s), csv: (s) => x.nomComplet(s) },
+      { cle: 'nom', lib: 'Élève', tri: (s) => x.nomComplet(s), rendu: (s) => ui.quiEleve(s, { detail: false }), csv: (s) => x.nomComplet(s) },
       { cle: 'mat', lib: 'Matricule', tri: (s) => x.matOf(s), rendu: (s) => html`<span class="mono">${x.matOf(s)}</span>` },
       { cle: 'classe', lib: 'Classe', tri: (s) => C.TOUS_NIVEAUX.indexOf(s.classe), csv: (s) => s.classe, rendu: (s) => html`${ui.lienClasse(s.classe)}${s.redoublant ? html` <span class="tag" data-bulle="Redoublant">RED</span>` : ''}` },
       { cle: 'sexe', lib: 'Sexe', tri: (s) => s.sexe, rendu: (s) => (s.sexe === 'Masculin' ? 'G' : s.sexe === 'Féminin' ? 'F' : '—'), csv: (s) => s.sexe },
       { cle: 'age', lib: 'Âge', tri: (s) => x.ageDe(s), csv: (s) => x.ageDe(s) ?? '', rendu: (s) => html`${x.ageDe(s) ?? '—'} ans${x.ageAnormal(s) ? html` ${ui.tag('âge', 'avert')}` : ''}${s.ageEstime ? html` <span class="mut petit">(estimé)</span>` : ''}` },
-      { cle: 'extrait', lib: 'Extrait de naissance', tri: (s) => (s.extrait ? 1 : 0), csv: (s) => (s.extrait ? `N° ${(s.acte && s.acte.num) || '?'} du ${u.fmtDate(s.acte && s.acte.date)}` : 'Non'), rendu: (s) => (s.extrait ? ui.tag(`N° ${(s.acte && s.acte.num) || '?'}`, 'ok', 'check') : ui.tag('Sans extrait', 'avert')) },
+      { cle: 'extrait', lib: 'Extrait', tri: (s) => (s.extrait ? 1 : 0), csv: (s) => (s.extrait ? `N° ${(s.acte && s.acte.num) || '?'} du ${u.fmtDate(s.acte && s.acte.date)}` : 'Non'), rendu: (s) => (s.extrait ? ui.tag(`N° ${(s.acte && s.acte.num) || '?'}`, 'ok', 'check') : ui.tag('Sans extrait', 'avert')) },
       { cle: 'statut', lib: 'Statut', tri: (s) => s.statut, rendu: (s) => ui.tagStatut(s.statut), csv: (s) => s.statut },
       { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (s) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap"><button type="button" class="btn-ic" data-action="eleve-documents" data-id="${s.id}" aria-label="Documents de ${x.nomComplet(s)}" data-bulle="Documents">${ic('file')}</button>${peut('eleve.modifier', { classe: s.classe }) ? html`<button type="button" class="btn-ic" data-action="eleve-modifier" data-id="${s.id}" aria-label="Modifier ${x.nomComplet(s)}" data-bulle="Modifier">${ic('edit')}</button>` : ''}<button type="button" class="btn-ic" data-action="eleve-plus" data-id="${s.id}" aria-label="Autres actions pour ${x.nomComplet(s)}" aria-haspopup="menu">${ic('more')}</button></div>` }
     ];
