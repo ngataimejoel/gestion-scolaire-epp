@@ -9,7 +9,7 @@ function chargerPlaywright() {
   throw new Error('Playwright introuvable : installez-le (npm i -D playwright) ou définissez NODE_PATH.');
 }
 const { chromium } = chargerPlaywright();
-const FICHIER = path.resolve(__dirname, '../../dist/AKWA_SCHOOL.html');
+const FICHIER = process.env.AKWA_FICHIER ? path.resolve(process.env.AKWA_FICHIER) : path.resolve(__dirname, '../../dist/AKWA_SCHOOL.html');
 const URL = 'file://' + FICHIER;
 
 async function ouvrir({ largeur = 1366, hauteur = 860, profil } = {}) {
@@ -54,12 +54,13 @@ async function demo(page) {
   await page.waitForSelector('#contenu .accueil-tete');
 }
 async function aller(page, route) {
-  await page.evaluate((r) => { location.hash = r; }, route);
+  await page.evaluate((r) => { if (location.hash === '#' + r) AK.shell.dessiner(); else location.hash = r; }, route);
   await page.waitForTimeout(120);
 }
 async function confirmerMdp(page, mdp) {
   await page.waitForSelector('dialog[open] #mdp-admin');
-  await page.fill('dialog[open] #mdp-admin', mdp);
-  await page.click('dialog[open] [type=submit]');
+  const d = page.locator('dialog[open]:has(#mdp-admin)').last();
+  await d.locator('#mdp-admin').fill(mdp);
+  await d.locator('[type=submit]').click();
 }
 module.exports = { chromium, URL, FICHIER, ouvrir, creerEcole, demo, aller, confirmerMdp, fs, path };

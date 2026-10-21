@@ -163,3 +163,10 @@ body.a-ecran-plein .toasts { z-index: 140; }
   .accueil-tete { grid-template-columns: minmax(0, 1fr); }
   .accueil-tete .actions-rapides { justify-content: flex-start; }
 }
+
+/* Listes de choix (élèves, personnel) dans les fenêtres */
+.liste-choix { display: grid; max-height: min(52vh, 460px); overflow: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.ligne-choix { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.ligne-choix:last-child { border-bottom: 0; }
+.ligne-choix:hover { background: var(--sunk); }
+.ligne-choix:has(input:checked) { background: var(--pri-soft); }

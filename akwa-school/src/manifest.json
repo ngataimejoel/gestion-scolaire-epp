@@ -66,6 +66,11 @@
     "js/docs/modeles/divers.js",
     "js/ui/shell.js",
     "js/screens/accueil.js",
+    "js/screens/eleves.js",
+    "js/screens/notes.js",
+    "js/screens/absences.js",
+    "js/screens/personnel.js",
+    "js/screens/documents.js",
     "@verificateur",
     "js/ui/app.js"
   ],

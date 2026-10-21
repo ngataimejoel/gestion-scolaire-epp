@@ -56,7 +56,8 @@
       c.M = canon.matricule || '';
     }
     let sig = null;
-    if (AK.cles.active() && AK.crypto.dispo() && !S().meta.demo) {
+    // seul le directeur peut déverrouiller la clé ; un document émis par un enseignant reste vérifiable par le registre
+    if (AK.cles.active() && AK.crypto.dispo() && !S().meta.demo && (AK.cles.disponible() || AK.session.estDirecteur())) {
       c.K = AK.cles.active().id;
       sig = await AK.cles.signer(AK.qr.message(c));
       if (!sig) delete c.K; // signature refusée (mot de passe non saisi) : document non signé

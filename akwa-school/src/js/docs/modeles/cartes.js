@@ -51,6 +51,7 @@
     id: 'carte-eleve', version: 1, lib: 'Carte d’identité scolaire', categorie: 'carte', sujet: 'eleve', icone: 'idCard',
     description: 'Format carte bancaire (ID-1), portrait ou badge ; planche A4 de 10 cartes avec traits de coupe ou impression à l’unité.',
     emission: { type: 'CEL', politique: 'registre', expire: (ctx, r) => AK.cartes.expiration(r) },
+    refuser: (ctx) => (ctx.eleve.statut !== 'Inscrit' ? `${AK.calc.nomComplet(ctx.eleve)} n’est plus inscrit(e) (${ctx.eleve.statut}) : pas de carte scolaire.` : null),
     champsOptionnels: [['naissance', 'Date de naissance', true], ['sexe', 'Sexe', false], ['signature', 'Zone de signature du directeur', true]],
     defauts: {
       titre: 'Carte scolaire', champs: { naissance: true, sexe: false, signature: true },

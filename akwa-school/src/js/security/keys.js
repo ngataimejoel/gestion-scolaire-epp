@@ -17,6 +17,7 @@
   const K = AK.crypto, u = AK.u;
   const S = () => AK.store.etat;
   let cleEnMemoire = null; // { id, cle: CryptoKey non exportable }
+  let refusLe = 0; // mot de passe refusé : ne pas redemander à chaque document d'un même lot
 
   const cles = {
     liste: () => (S() ? S().cles.liste : []),
@@ -61,8 +62,13 @@
     async signer(message) {
       if (!cles.active()) return null;
       if (!cles.disponible()) {
-        const mdp = await AK.ui.saisirMotDePasse('Signature électronique : saisissez le mot de passe administrateur pour déverrouiller la clé de signature.');
-        if (!mdp) return null;
+        if (Date.now() - refusLe < 60000) return null;
+        const mdp = await AK.ui.saisirMotDePasse('Signature électronique : saisissez le mot de passe administrateur pour déverrouiller la clé de signature. Sans lui, les documents seront émis sans signature (vérifiables seulement par le registre).');
+        if (!mdp) {
+          refusLe = Date.now();
+          return null;
+        }
+        refusLe = 0;
         if (!(await cles.deverrouiller(mdp))) throw new AK.ErreurMetier('Mot de passe incorrect : la clé de signature reste verrouillée.');
       }
       return { kid: cleEnMemoire.id, sig: await K.signer(cleEnMemoire.cle, message) };

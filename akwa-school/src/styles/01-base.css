@@ -65,6 +65,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: var(--s4) 0; }
 .pile-sm { display: grid; gap: var(--s2); }
 .pile-lg { display: grid; gap: var(--s5); }
 .flex1 { flex: 1 1 auto; min-width: 0; }
+.espace { flex: 1 1 auto; }
 .mt0 { margin-top: 0 !important; }
 .mb0 { margin-bottom: 0 !important; }
 .mt { margin-top: var(--s4); }

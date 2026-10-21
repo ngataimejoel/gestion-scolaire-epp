@@ -56,25 +56,43 @@
   }
 
   /**
-   * Aperçu : o = { titre, feuilles: [Html], resume, exporter: [{ lib, f }], copie: f (imprimer une copie) }
+   * Aperçu : o = { titre, feuilles: [Html], resume, format, papier, avertissement, exporter: [{ lib, f }],
+   *              copie: f (imprimer une copie), nomFichier,
+   *              preparer: async () → { feuilles, resume } (appelée une fois avant la première impression :
+   *              émission au registre ; les feuilles définitives remplacent alors l'aperçu) }
    */
+  const pagesHtml = (F) => F.map((p, i) => html`<div class="feuille-cadre"><span class="num-page">Page ${i + 1} / ${F.length}</span>${p}</div>`);
+
   function apercu(o) {
     let facteur = 1;
     const n = o.feuilles.length;
+    let prete = !o.preparer;
+    /* Émission (une seule fois) puis remplacement de l'aperçu par les feuilles définitives. */
+    const definitives = async (corps) => {
+      if (prete) return o.feuilles;
+      const r = await o.preparer();
+      o.feuilles = r.feuilles;
+      prete = true;
+      u.poser($('.pages', corps), pagesHtml(o.feuilles));
+      const res = $('[data-resume]', corps);
+      if (res) res.textContent = r.resume || '';
+      requestAnimationFrame(() => ajusterZoom(corps));
+      return o.feuilles;
+    };
     const f = ui.fenetre({
       titre: o.titre || 'Aperçu avant impression', icone: 'print', taille: 'plein dlg-apercu', sansPied: true, proteger: false,
       corps: html`<div class="pile">
         <div class="barre-apercu">
-          <span class="puce">${ic('file')}${u.pluriel(n, 'page')}${o.format ? ' · ' + o.format : ''}</span>${o.resume ? html`<span class="mut petit">${o.resume}</span>` : ''}
+          <span class="puce">${ic('file')}${u.pluriel(n, 'page')}${o.format ? ' · ' + o.format : ''}</span><span class="mut petit" data-resume>${o.resume || ''}</span>
           <span class="espace"></span>
           <div class="groupe-btn"><button type="button" class="btn btn-sm" data-z="-" aria-label="Réduire">${ic('zoomOut')}</button><button type="button" class="btn btn-sm" data-z="0" aria-label="Ajuster à la largeur">Ajuster</button><button type="button" class="btn btn-sm" data-z="+" aria-label="Agrandir">${ic('zoomIn')}</button></div>
           ${(o.exporter || []).map((x, i) => html`<button type="button" class="btn btn-sm" data-exp="${i}">${ic('down')}${x.lib}</button>`)}
           ${o.copie ? html`<button type="button" class="btn btn-sm" data-copie>${ic('copy')}Imprimer une copie</button>` : ''}
-          <button type="button" class="btn btn-sm" data-pdf data-bulle="Ouvre la boîte d’impression : choisissez « Enregistrer au format PDF »">${ic('down')}PDF</button>
+          <button type="button" class="btn btn-sm" data-pdf data-bulle="${typeof AK.hote.exporterPdf === 'function' ? 'Enregistre un fichier PDF' : 'Ouvre la boîte d’impression : choisissez « Enregistrer au format PDF »'}">${ic('down')}PDF</button>
           <button type="button" class="btn btn-pri" data-imprimer>${ic('print')}Imprimer</button>
         </div>
         ${o.avertissement ? ui.encadre(o.avertissement, 'avert') : ''}
-        <div class="apercu"><div class="pages">${o.feuilles.map((p, i) => html`<div class="feuille-cadre"><span class="num-page">Page ${i + 1} / ${n}</span>${p}</div>`)}</div></div>
+        <div class="apercu"><div class="pages">${pagesHtml(o.feuilles)}</div></div>
         <p class="mut petit mb0">${ic('info', 'i-sm')} Réglages d’impression conseillés : papier ${o.papier || 'A4'}, échelle 100 %, marges « Aucune » ou « Par défaut », « Graphiques d’arrière-plan » activé pour les couleurs et filigranes.</p>
       </div>`,
       apres(racine) {
@@ -90,9 +108,9 @@
           } else if (b.hasAttribute('data-pdf') && typeof AK.hote.exporterPdf === 'function') {
             // vrai fichier PDF produit par l'emballage natif (APK / .exe)
             const z = zoneImpression();
-            u.poser(z, o.feuilles);
-            await attendreImages(z);
             try {
+              u.poser(z, await definitives(corps));
+              await attendreImages(z);
               const nom = (o.nomFichier || o.titre || 'document').replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 80) + '.pdf';
               const ou = await AK.hote.exporterPdf(nom, !!z.querySelector('.feuille.paysage'));
               if (ou) ui.toast('PDF enregistré : ' + ou);
@@ -103,11 +121,19 @@
             }
           } else if (b.hasAttribute('data-imprimer') || b.hasAttribute('data-pdf')) {
             if (b.hasAttribute('data-pdf')) ui.toast('Dans la fenêtre qui s’ouvre, choisissez l’imprimante « Enregistrer au format PDF » (ou « Microsoft Print to PDF »).', { type: 'attente', duree: 7000 });
-            if (o.avantImpression) await o.avantImpression();
-            imprimer(o.feuilles);
+            try {
+              imprimer(await definitives(corps));
+            } catch (err) {
+              ui.erreur(err);
+            }
           } else if (b.hasAttribute('data-copie')) {
-            const copies = await o.copie();
-            if (copies) imprimer(copies);
+            try {
+              const copies = await o.copie();
+              if (copies) imprimer(copies);
+              else ui.toast('Copie impossible : document non inscrit au registre.', { type: 'avert' });
+            } catch (err) {
+              ui.erreur(err);
+            }
           } else if (b.dataset.exp != null) {
             try {
               await o.exporter[+b.dataset.exp].f();

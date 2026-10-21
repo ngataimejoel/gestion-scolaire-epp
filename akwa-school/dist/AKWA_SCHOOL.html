@@ -257,6 +257,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: var(--s4) 0; }
 .pile-sm { display: grid; gap: var(--s2); }
 .pile-lg { display: grid; gap: var(--s5); }
 .flex1 { flex: 1 1 auto; min-width: 0; }
+.espace { flex: 1 1 auto; }
 .mt0 { margin-top: 0 !important; }
 .mb0 { margin-bottom: 0 !important; }
 .mt { margin-top: var(--s4); }
@@ -934,6 +935,13 @@ body.a-ecran-plein .toasts { z-index: 140; }
   .accueil-tete { grid-template-columns: minmax(0, 1fr); }
   .accueil-tete .actions-rapides { justify-content: flex-start; }
 }
+
+/* Listes de choix (élèves, personnel) dans les fenêtres */
+.liste-choix { display: grid; max-height: min(52vh, 460px); overflow: auto; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.ligne-choix { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.ligne-choix:last-child { border-bottom: 0; }
+.ligne-choix:hover { background: var(--sunk); }
+.ligne-choix:has(input:checked) { background: var(--pri-soft); }
 
 /* ==== styles/05-documents.css ==== */
 /* =====================================================================================
@@ -4567,6 +4575,7 @@ return {matrix:matrix,
   const K = AK.crypto, u = AK.u;
   const S = () => AK.store.etat;
   let cleEnMemoire = null; // { id, cle: CryptoKey non exportable }
+  let refusLe = 0; // mot de passe refusé : ne pas redemander à chaque document d'un même lot
 
   const cles = {
     liste: () => (S() ? S().cles.liste : []),
@@ -4611,8 +4620,13 @@ return {matrix:matrix,
     async signer(message) {
       if (!cles.active()) return null;
       if (!cles.disponible()) {
-        const mdp = await AK.ui.saisirMotDePasse('Signature électronique : saisissez le mot de passe administrateur pour déverrouiller la clé de signature.');
-        if (!mdp) return null;
+        if (Date.now() - refusLe < 60000) return null;
+        const mdp = await AK.ui.saisirMotDePasse('Signature électronique : saisissez le mot de passe administrateur pour déverrouiller la clé de signature. Sans lui, les documents seront émis sans signature (vérifiables seulement par le registre).');
+        if (!mdp) {
+          refusLe = Date.now();
+          return null;
+        }
+        refusLe = 0;
         if (!(await cles.deverrouiller(mdp))) throw new AK.ErreurMetier('Mot de passe incorrect : la clé de signature reste verrouillée.');
       }
       return { kid: cleEnMemoire.id, sig: await K.signer(cleEnMemoire.cle, message) };
@@ -6998,7 +7012,7 @@ return {matrix:matrix,
   };
   document.addEventListener('mouseover', (e) => {
     const t = e.target.closest('[data-bulle]');
-    if (!t) {
+    if (!t || !t.dataset.bulle) {
       if (bulle) bulle.hidden = true;
       return;
     }
@@ -7009,7 +7023,7 @@ return {matrix:matrix,
   });
   document.addEventListener('focusin', (e) => {
     const t = e.target.closest && e.target.closest('[data-bulle]');
-    if (!t) {
+    if (!t || !t.dataset.bulle) {
       if (bulle) bulle.hidden = true;
       return;
     }
@@ -7366,8 +7380,13 @@ return {matrix:matrix,
     return { champs, message: message(sansSig), signature: champs.S || null };
   }
 
+  /** Emplacement réservé dans un aperçu : le vrai QR (référence, signature) est créé à l'impression. */
+  const BROUILLON = '@brouillon';
+  const SVG_BROUILLON = u.raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="QR code créé à l’impression"><rect x="1" y="1" width="38" height="38" rx="2" fill="#fff" stroke="#8a94a6" stroke-width=".8" stroke-dasharray="2 1.6"/><path d="M6 6h9v9H6zM25 6h9v9h-9zM6 25h9v9H6z" fill="none" stroke="#8a94a6" stroke-width="1.4"/><text x="20" y="22" font-size="4.2" text-anchor="middle" fill="#5c687a" font-family="sans-serif">QR</text><text x="27" y="31" font-size="3.2" text-anchor="middle" fill="#5c687a" font-family="sans-serif">à l’impression</text></svg>');
+
   /** Matrice → SVG vectoriel (zone de silence de 4 modules), net à toutes les tailles. */
   function svg(texteQR, { niveau = 'M', titre = 'QR code' } = {}) {
+    if (texteQR === BROUILLON) return SVG_BROUILLON;
     const m = AK.vendor.qr.matrix(texteQR, niveau);
     const n = m.size;
     let d = '';
@@ -7386,7 +7405,7 @@ return {matrix:matrix,
     return u.raw(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" shape-rendering="crispEdges" role="img" aria-label="${u.esc(titre)}"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`);
   }
 
-  AK.qr = { PREFIXE, propre, empreinteTitulaire, message, texte, lire, svg };
+  AK.qr = { PREFIXE, BROUILLON, propre, empreinteTitulaire, message, texte, lire, svg };
 })(window.AK);
 
 //# sourceURL=akwa/js/docs/qr.js
@@ -8139,7 +8158,8 @@ return {matrix:matrix,
       c.M = canon.matricule || '';
     }
     let sig = null;
-    if (AK.cles.active() && AK.crypto.dispo() && !S().meta.demo) {
+    // seul le directeur peut déverrouiller la clé ; un document émis par un enseignant reste vérifiable par le registre
+    if (AK.cles.active() && AK.crypto.dispo() && !S().meta.demo && (AK.cles.disponible() || AK.session.estDirecteur())) {
       c.K = AK.cles.active().id;
       sig = await AK.cles.signer(AK.qr.message(c));
       if (!sig) delete c.K; // signature refusée (mot de passe non saisi) : document non signé
@@ -8483,6 +8503,7 @@ return {matrix:matrix,
   /** Bloc de vérification : QR + référence + état de la signature électronique. */
   function verification(qrTexte, doc, taille = 22) {
     if (!qrTexte) return '';
+    if (qrTexte === AK.qr.BROUILLON) return html`<div class="doc-verif"><div class="qr" style="width:${taille}mm;height:${taille}mm">${AK.qr.svg(qrTexte)}</div><div class="txt"><b>Document vérifiable</b><br>Référence et QR code attribués<br>au moment de l’impression.</div></div>`;
     const cle = doc && doc.kid ? AK.cles.liste().find((c) => c.id === doc.kid) : null;
     return html`<div class="doc-verif"><div class="qr" style="width:${taille}mm;height:${taille}mm">${AK.qr.svg(qrTexte, { titre: 'QR code de vérification ' + (doc ? doc.ref : '') })}</div><div class="txt"><b>Document vérifiable</b><br>Réf. <span class="ref">${doc ? doc.ref : ''}</span><br>${cle ? html`Signé électroniquement (clé ${cle.id} · ${cle.empreinte})` : 'Contrôle par le registre de l’école'}<br>AKWA SCHOOL › Vérifier un document</div></div>`;
   }
@@ -8687,25 +8708,43 @@ return {matrix:matrix,
   }
 
   /**
-   * Aperçu : o = { titre, feuilles: [Html], resume, exporter: [{ lib, f }], copie: f (imprimer une copie) }
+   * Aperçu : o = { titre, feuilles: [Html], resume, format, papier, avertissement, exporter: [{ lib, f }],
+   *              copie: f (imprimer une copie), nomFichier,
+   *              preparer: async () → { feuilles, resume } (appelée une fois avant la première impression :
+   *              émission au registre ; les feuilles définitives remplacent alors l'aperçu) }
    */
+  const pagesHtml = (F) => F.map((p, i) => html`<div class="feuille-cadre"><span class="num-page">Page ${i + 1} / ${F.length}</span>${p}</div>`);
+
   function apercu(o) {
     let facteur = 1;
     const n = o.feuilles.length;
+    let prete = !o.preparer;
+    /* Émission (une seule fois) puis remplacement de l'aperçu par les feuilles définitives. */
+    const definitives = async (corps) => {
+      if (prete) return o.feuilles;
+      const r = await o.preparer();
+      o.feuilles = r.feuilles;
+      prete = true;
+      u.poser($('.pages', corps), pagesHtml(o.feuilles));
+      const res = $('[data-resume]', corps);
+      if (res) res.textContent = r.resume || '';
+      requestAnimationFrame(() => ajusterZoom(corps));
+      return o.feuilles;
+    };
     const f = ui.fenetre({
       titre: o.titre || 'Aperçu avant impression', icone: 'print', taille: 'plein dlg-apercu', sansPied: true, proteger: false,
       corps: html`<div class="pile">
         <div class="barre-apercu">
-          <span class="puce">${ic('file')}${u.pluriel(n, 'page')}${o.format ? ' · ' + o.format : ''}</span>${o.resume ? html`<span class="mut petit">${o.resume}</span>` : ''}
+          <span class="puce">${ic('file')}${u.pluriel(n, 'page')}${o.format ? ' · ' + o.format : ''}</span><span class="mut petit" data-resume>${o.resume || ''}</span>
           <span class="espace"></span>
           <div class="groupe-btn"><button type="button" class="btn btn-sm" data-z="-" aria-label="Réduire">${ic('zoomOut')}</button><button type="button" class="btn btn-sm" data-z="0" aria-label="Ajuster à la largeur">Ajuster</button><button type="button" class="btn btn-sm" data-z="+" aria-label="Agrandir">${ic('zoomIn')}</button></div>
           ${(o.exporter || []).map((x, i) => html`<button type="button" class="btn btn-sm" data-exp="${i}">${ic('down')}${x.lib}</button>`)}
           ${o.copie ? html`<button type="button" class="btn btn-sm" data-copie>${ic('copy')}Imprimer une copie</button>` : ''}
-          <button type="button" class="btn btn-sm" data-pdf data-bulle="Ouvre la boîte d’impression : choisissez « Enregistrer au format PDF »">${ic('down')}PDF</button>
+          <button type="button" class="btn btn-sm" data-pdf data-bulle="${typeof AK.hote.exporterPdf === 'function' ? 'Enregistre un fichier PDF' : 'Ouvre la boîte d’impression : choisissez « Enregistrer au format PDF »'}">${ic('down')}PDF</button>
           <button type="button" class="btn btn-pri" data-imprimer>${ic('print')}Imprimer</button>
         </div>
         ${o.avertissement ? ui.encadre(o.avertissement, 'avert') : ''}
-        <div class="apercu"><div class="pages">${o.feuilles.map((p, i) => html`<div class="feuille-cadre"><span class="num-page">Page ${i + 1} / ${n}</span>${p}</div>`)}</div></div>
+        <div class="apercu"><div class="pages">${pagesHtml(o.feuilles)}</div></div>
         <p class="mut petit mb0">${ic('info', 'i-sm')} Réglages d’impression conseillés : papier ${o.papier || 'A4'}, échelle 100 %, marges « Aucune » ou « Par défaut », « Graphiques d’arrière-plan » activé pour les couleurs et filigranes.</p>
       </div>`,
       apres(racine) {
@@ -8721,9 +8760,9 @@ return {matrix:matrix,
           } else if (b.hasAttribute('data-pdf') && typeof AK.hote.exporterPdf === 'function') {
             // vrai fichier PDF produit par l'emballage natif (APK / .exe)
             const z = zoneImpression();
-            u.poser(z, o.feuilles);
-            await attendreImages(z);
             try {
+              u.poser(z, await definitives(corps));
+              await attendreImages(z);
               const nom = (o.nomFichier || o.titre || 'document').replace(/[^\p{L}\p{N} _.-]+/gu, '_').slice(0, 80) + '.pdf';
               const ou = await AK.hote.exporterPdf(nom, !!z.querySelector('.feuille.paysage'));
               if (ou) ui.toast('PDF enregistré : ' + ou);
@@ -8734,11 +8773,19 @@ return {matrix:matrix,
             }
           } else if (b.hasAttribute('data-imprimer') || b.hasAttribute('data-pdf')) {
             if (b.hasAttribute('data-pdf')) ui.toast('Dans la fenêtre qui s’ouvre, choisissez l’imprimante « Enregistrer au format PDF » (ou « Microsoft Print to PDF »).', { type: 'attente', duree: 7000 });
-            if (o.avantImpression) await o.avantImpression();
-            imprimer(o.feuilles);
+            try {
+              imprimer(await definitives(corps));
+            } catch (err) {
+              ui.erreur(err);
+            }
           } else if (b.hasAttribute('data-copie')) {
-            const copies = await o.copie();
-            if (copies) imprimer(copies);
+            try {
+              const copies = await o.copie();
+              if (copies) imprimer(copies);
+              else ui.toast('Copie impossible : document non inscrit au registre.', { type: 'avert' });
+            } catch (err) {
+              ui.erreur(err);
+            }
           } else if (b.dataset.exp != null) {
             try {
               await o.exporter[+b.dataset.exp].f();
@@ -9142,7 +9189,8 @@ return {matrix:matrix,
 
   /**
    * Génère les feuilles d'un modèle pour une liste de contextes.
-   * options : { reglages (brouillon d'éditeur), apercu (sans émission, SPÉCIMEN), copie, duplicataDe, statutForce }
+   * options : { reglages (brouillon d'éditeur), apercu (sans émission, SPÉCIMEN), brouillon (aperçu avant
+   *             émission : référence et QR réservés), copie, reutiliser, duplicataDe, statutForce }
    * Renvoie { feuilles, cartes, docs, avertissements }.
    */
   async function generer(idModele, contextes, options = {}) {
@@ -9152,16 +9200,24 @@ return {matrix:matrix,
     const feuilles = [], cartes = [], docs = [], avertissements = [];
     for (const [i, ctx0] of contextes.entries()) {
       const ctx = { ...ctx0 };
+      const refus = d.refuser ? d.refuser(ctx, r) : null;
+      if (refus) {
+        avertissements.push(refus);
+        continue;
+      }
+      if (d.emission && d.emission.extra) ctx.cleExtra = d.emission.extra(ctx);
       let statut = options.statutForce || (S().meta.demo ? 'specimen' : null);
       let qrTexte = '', doc = null;
-      if (d.emission && options.reutiliser && options.reutiliser[i]) {
+      const idSujet = ctx.eleve ? ctx.eleve.id : ctx.agent ? ctx.agent.id : null;
+      const deja = options.reutiliser ? (idSujet ? options.reutiliser.find((x) => x.sujet && x.sujet.id === idSujet) : options.reutiliser[i]) : null;
+      if (d.emission && deja) {
         // réimpression d'un document déjà émis (copie, ou exemplaire d'archive d'un document annulé)
-        const res = AK.registre.reimprimer(options.reutiliser[i].ref, options.copie ? 'copie' : 'reimpression');
+        const res = AK.registre.reimprimer(deja.ref, options.copie ? 'copie' : 'reimpression');
         doc = res.doc;
         qrTexte = doc.qr || '';
         statut = options.statutForce || res.statutFiligrane || statut;
         docs.push(doc);
-      } else if (d.emission && !options.apercu) {
+      } else if (d.emission && !options.apercu && !options.brouillon) {
         const res = await AK.registre.emettre({
           type: d.emission.type, modele: d.id, version: d.version, politique: d.emission.politique || 'registre',
           cleUnique: d.emission.cleUnique ? d.emission.cleUnique(ctx) : null,
@@ -9172,6 +9228,9 @@ return {matrix:matrix,
         qrTexte = res.qrTexte;
         statut = options.statutForce || res.statutFiligrane || statut;
         docs.push(doc);
+      } else if (d.emission && options.brouillon) {
+        doc = { ref: 'attribuée à l’impression', kid: null, brouillon: true, expire: d.emission.expire ? d.emission.expire(ctx, r) : null };
+        qrTexte = AK.qr.BROUILLON;
       } else if (d.emission && options.apercu) {
         const ref = AK.valid.reference(d.emission.type, new Date().getFullYear(), 0);
         doc = { ref, kid: null, emisLe: new Date().toISOString(), expire: d.emission.expire ? d.emission.expire(ctx, r) : null };
@@ -9207,26 +9266,49 @@ return {matrix:matrix,
     return { feuilles, cartes, docs, avertissements, reglages: r, modele: d };
   }
 
-  /** Génère puis ouvre l'aperçu. */
+  /**
+   * Génère puis ouvre l'aperçu. Pour un document inscrit au registre, l'aperçu est un brouillon :
+   * la référence, la signature et le QR code ne sont créés qu'au moment d'imprimer ou d'exporter
+   * (fermer l'aperçu n'inscrit donc rien au registre).
+   */
   async function ouvrir(idModele, contextes, options = {}) {
     const d = AK.modeles.get(idModele);
+    if (!d) throw new AK.ErreurMetier('Modèle de document inconnu.');
     if (!contextes.length) throw new AK.ErreurMetier('Aucun document à produire.');
+    const differer = !!d.emission && !options.apercu && !options.reutiliser;
+    if (differer && !AK.perm.peut('document.emettre') && !(d.emission.politique === 'unique' && contextes.every((c) => AK.perm.peut('document.imprimerClasse', { classe: c.eleve ? c.eleve.classe : c.classe }))))
+      throw new AK.ErreurDroits('L’émission de ce document est réservée au directeur.');
     const attente = contextes.length > 8 ? AK.ui.toast(`Préparation de ${contextes.length} documents…`, { type: 'attente', duree: 0 }) : null;
+    const feuillesDe = (g) => (g.cartes.length ? AK.cartes.planches(g.cartes, options.planche || {}) : g.feuilles);
+    const resumeDe = (g) => (g.docs.length ? `${u.pluriel(g.docs.length, 'document')} inscrit(s) au registre${g.docs.some((x) => x.signe) ? ', signé(s) électroniquement' : ''}${g.docs.length === 1 ? ' · ' + g.docs[0].ref : ''}` : '');
     try {
-      const g = await generer(idModele, contextes, options);
-      let feuilles = g.feuilles;
-      if (g.cartes.length) feuilles = AK.cartes.planches(g.cartes, options.planche || {});
+      const g = await generer(idModele, contextes, differer ? { ...options, brouillon: true } : options);
+      if (!g.feuilles.length && !g.cartes.length) throw new AK.ErreurMetier([...new Set(g.avertissements)].join(' ') || 'Aucun document à produire.');
       const r = g.reglages;
+      let final = differer ? null : g;
+      const preparer = async () => {
+        if (!final) {
+          final = await generer(idModele, contextes, options);
+          if (options.surEmission) options.surEmission(final);
+          if (AK.shell && AK.session.ouverte()) AK.shell.redessiner(); // registre, fiches : à jour sous l'aperçu
+        }
+        return { feuilles: feuillesDe(final), resume: resumeDe(final) };
+      };
       AK.impression.apercu({
         titre: options.titre || (contextes.length > 1 ? `${d.lib} · ${contextes.length} documents` : d.lib),
-        feuilles,
-        format: g.cartes.length ? (options.planche && options.planche.mode === 'unitaire' ? 'cartes à l’unité' : 'planche A4') : `A4 ${r.page.orientation === 'paysage' ? 'paysage' : 'portrait'}`,
-        resume: g.docs.length ? `${u.pluriel(g.docs.length, 'document')} inscrit(s) au registre${g.docs.some((x) => x.signe) ? ', signé(s) électroniquement' : ''}` : '',
+        feuilles: feuillesDe(g),
+        format: g.cartes.length ? (options.planche && options.planche.mode === 'unitaire' ? 'cartes à l’unité' : 'planche A4') : `${r.page.papier || 'A4'} ${r.page.orientation === 'paysage' ? 'paysage' : 'portrait'}`,
+        papier: r.page.papier || 'A4',
+        resume: differer ? 'Aperçu : la référence et le QR code seront attribués à l’impression' : resumeDe(g),
         avertissement: [...new Set(g.avertissements)].join(' ') || null,
         exporter: options.exporter,
-        copie: d.emission && g.docs.length === contextes.length && AK.perm.peut('document.registre') && !options.copie ? async () => {
-          const c = await generer(idModele, contextes, { ...options, copie: true, apercu: false, reutiliser: g.docs });
-          return c.cartes.length ? AK.cartes.planches(c.cartes, options.planche || {}) : c.feuilles;
+        nomFichier: options.nomFichier,
+        preparer: differer ? preparer : null,
+        copie: d.emission && AK.perm.peut('document.registre') && !options.copie ? async () => {
+          await preparer();
+          if (!final.docs.length) return null;
+          const c = await generer(idModele, contextes, { ...options, copie: true, apercu: false, reutiliser: final.docs });
+          return feuillesDe(c);
         } : null
       });
       return g;
@@ -9235,7 +9317,34 @@ return {matrix:matrix,
     }
   }
 
-  AK.docs = { generer, ouvrir, canonDe };
+  /** Contexte de génération d'un document du registre (pour une copie ou un duplicata). */
+  function contexteDe(doc) {
+    const ctx = {};
+    if (doc.sujet && doc.sujet.type === 'eleve') {
+      ctx.eleve = AK.eleves.trouver(doc.sujet.id);
+      if (!ctx.eleve) throw new AK.ErreurMetier('L’élève de ce document n’est plus dans le registre des élèves (supprimé ou archivé).');
+    } else if (doc.sujet && doc.sujet.type === 'agent') {
+      ctx.agent = AK.personnel.trouver(doc.sujet.id);
+      if (!ctx.agent) throw new AK.ErreurMetier('Le membre du personnel de ce document n’est plus enregistré.');
+    }
+    if (doc.type === 'BUL' && doc.cleUnique) ctx.periode = Number(String(doc.cleUnique).split('|')[3]) || 1;
+    return ctx;
+  }
+  /**
+   * Une copie conforme n'est possible que si les données du document n'ont pas changé depuis
+   * l'émission (même empreinte). Sinon il faut émettre un nouveau document (ou une nouvelle version).
+   */
+  async function conforme(doc) {
+    const d = AK.modeles.get(doc.modele);
+    if (!d) return { ok: false, motif: 'Modèle de document introuvable.' };
+    const ctx = contexteDe(doc);
+    if (d.emission && d.emission.extra) ctx.cleExtra = d.emission.extra(ctx);
+    if (S().school.year !== doc.annee) return { ok: false, ctx, motif: `Document de l’année ${doc.annee || '?'} : les données de l’année ont changé, une copie fidèle n’est plus possible.` };
+    const H = await AK.qr.empreinteTitulaire({ ...canonDe(ctx), type: doc.type, ref: doc.ref });
+    return H === doc.H ? { ok: true, ctx } : { ok: false, ctx, motif: 'Les données de ce document ont changé depuis son émission (dossier modifié, note corrigée…). Une copie ne serait pas fidèle à l’original : émettez un nouveau document.' };
+  }
+
+  AK.docs = { generer, ouvrir, canonDe, contexteDe, conforme };
 })(window.AK);
 
 //# sourceURL=akwa/js/docs/generateur.js
@@ -9319,9 +9428,9 @@ return {matrix:matrix,
         }
       }
     } else if (q) {
-      point('integrite', 'av', 'Intégrité', 'QR code non signé : seule la comparaison avec le registre de l’école est possible.');
+      point('integrite', 'info', 'Intégrité', 'QR code non signé : l’authenticité repose uniquement sur la comparaison avec le registre de l’école (empreinte ci-dessous).');
     } else {
-      point('integrite', 'av', 'Intégrité', 'Référence saisie à la main : pas de contrôle de signature.');
+      point('integrite', 'info', 'Intégrité', 'Référence saisie à la main : pas de signature à contrôler. Comparez le document présenté avec les informations du registre.');
     }
 
     /* 3 et 4. Registre et statut */
@@ -9366,7 +9475,8 @@ return {matrix:matrix,
     else if (registreOk && statutOk && (sigOk || !q || !q.signature)) R.verdict = av ? 'douteux' : 'valide';
     else R.verdict = 'douteux';
     const libType = AK.registre ? AK.registre.libelleType(R.type) : R.type;
-    R.titre = { valide: 'Document authentique et en vigueur', douteux: 'Vérification incomplète : prudence', invalide: 'Document NON valable', inconnu: 'Document inconnu' }[R.verdict];
+    const titreValide = sigOk ? 'Document authentique et en vigueur' : R.format === 'reference' ? 'Référence inscrite au registre et en vigueur' : 'Inscrit au registre et en vigueur (document non signé)';
+    R.titre = { valide: titreValide, douteux: 'Vérification incomplète : prudence', invalide: 'Document NON valable', inconnu: 'Document inconnu' }[R.verdict];
     R.resume = `${libType || 'Document'} · ${ref}`;
     return R;
   }
@@ -9421,12 +9531,19 @@ return {matrix:matrix,
   const pied = (ctx, r, o) => html`<div style="display:grid;grid-template-columns:${ctx.qrTexte ? 'auto 1fr' : '1fr'};gap:6mm;align-items:end;margin-top:auto">${ctx.qrTexte ? AK.mise.verification(ctx.qrTexte, ctx.doc, r.qr.taille) : ''}<div>${o.signatures(r, ctx)}</div></div>`;
   const colonne = (contenu) => html`<div style="display:flex;flex-direction:column;height:100%">${contenu}</div>`;
   const anneeCle = () => S().school.year || '';
+  /* Empreinte du contenu variable d'un document (notes, rang, dossier) : si elle change, le registre
+     enregistre une nouvelle version et signale les exemplaires antérieurs comme dépassés. */
+  const resumeNotes = (s, n) => {
+    const x = X(), cl = x.classement(s.classe, n).w.find((z) => z.s.id === s.id);
+    return [x.matieres(s.classe, n).map(([m]) => x.note(s.id, n, m) ?? '').join(','), x.estAbsent(s.id, n) ? 'ABS' : '', cl ? cl.rank : ''].join('/');
+  };
+  const resumeDossier = (s) => u.empreinte(JSON.stringify([s.nom, s.prenoms, s.sexe, s.naissance, s.lieu, s.nationalite, s.classe, s.matNat, s.mat, s.pere, s.mere, s.parent, s.tel, s.acte, s.sang, s.allergies, s.entree, s.statut, s.motifDepart, s.parcours, !!s.photo]));
 
   /* ---------- Bulletin de composition ---------- */
   def({
     id: 'bulletin', version: 1, lib: 'Bulletin de notes (composition)', categorie: 'eleve', sujet: 'eleve', icone: 'award',
     description: 'Notes par discipline, moyenne, rang, mention, absences. Une référence par élève et par composition.',
-    emission: { type: 'BUL', politique: 'unique', cleUnique: (c) => `BUL|${c.eleve.id}|${anneeCle()}|${c.periode}` },
+    emission: { type: 'BUL', politique: 'unique', cleUnique: (c) => `BUL|${c.eleve.id}|${anneeCle()}|${c.periode}`, extra: (c) => u.empreinte(resumeNotes(c.eleve, c.periode)) },
     champsOptionnels: [['photo', 'Photo de l’élève', true], ['naissance', 'Date et lieu de naissance', true], ['enseignant', 'Nom de l’enseignant(e)', true], ['moyClasse', 'Moyenne de la classe par discipline', true], ['appreciation', 'Appréciation par discipline', true], ['absences', 'Absences', true], ['observations', 'Zone d’observations', true]],
     defauts: {
       titre: 'BULLETIN DE NOTES',
@@ -9465,7 +9582,7 @@ return {matrix:matrix,
   def({
     id: 'bulletin-annuel', version: 1, lib: 'Bulletin annuel (MGA et décision)', categorie: 'eleve', sujet: 'eleve', icone: 'award',
     description: 'Moyennes des quatre évaluations, MGA, rang, décision de fin d’année.',
-    emission: { type: 'BUA', politique: 'unique', cleUnique: (c) => `BUA|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'BUA', politique: 'unique', cleUnique: (c) => `BUA|${c.eleve.id}|${anneeCle()}`, extra: (c) => u.empreinte([1, 2, 3, 4].map((n) => resumeNotes(c.eleve, n)).join(';') + '|' + X().decision(c.eleve)) },
     champsOptionnels: [['photo', 'Photo de l’élève', true], ['naissance', 'Date et lieu de naissance', true], ['enseignant', 'Nom de l’enseignant(e)', true], ['observations', 'Zone d’observations', true]],
     defauts: {
       titre: 'BULLETIN ANNUEL', champs: { photo: true, naissance: true, enseignant: true, observations: true },
@@ -9494,7 +9611,7 @@ return {matrix:matrix,
   def({
     id: 'fiche-scolaire', version: 2, lib: 'Fiche scolaire (modèle officiel)', categorie: 'eleve', sujet: 'eleve', icone: 'file',
     description: 'Identité, parents, tuteur, parcours scolaire sur 8 ans. QR code minimal (plus aucune donnée personnelle dedans).',
-    emission: { type: 'FIS', politique: 'unique', cleUnique: (c) => `FIS|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'FIS', politique: 'unique', cleUnique: (c) => `FIS|${c.eleve.id}|${anneeCle()}`, extra: (c) => resumeDossier(c.eleve) },
     champsOptionnels: [['photo', 'Photo de l’élève', true], ['sante', 'Groupe sanguin et allergies', true], ['parents', 'Parents et tuteur', true]],
     defauts: {
       titre: 'FICHE SCOLAIRE', champs: { photo: true, sante: true, parents: true }, lieuDate: false,
@@ -9542,6 +9659,7 @@ return {matrix:matrix,
     id: 'certificat-scolarite', version: 1, lib: 'Certificat de scolarité', categorie: 'eleve', sujet: 'eleve', icone: 'fileCheck',
     description: 'Atteste l’inscription régulière de l’élève pour l’année en cours. Référence unique et QR code vérifiable.',
     emission: { type: 'CSC', politique: 'registre' },
+    refuser: (ctx) => (ctx.eleve.statut !== 'Inscrit' ? `${X().nomComplet(ctx.eleve)} n’est plus inscrit(e) (${ctx.eleve.statut}) : délivrez une attestation de fréquentation ou un certificat de transfert.` : null),
     champsOptionnels: [['photo', 'Photo de l’élève', false]],
     defauts: {
       titre: 'CERTIFICAT DE SCOLARITÉ',
@@ -9550,7 +9668,6 @@ return {matrix:matrix,
     },
     rendu(ctx, r, o) {
       const s = ctx.eleve;
-      if (s.statut !== 'Inscrit') return { contenu: html`${o.entete(r)}${o.titre(r.titre)}<p class="doc-texte">Cet élève n’est plus inscrit (${s.statut}) : délivrez une attestation de fréquentation ou un certificat de transfert.</p>`, avertissement: `${X().nomComplet(s)} n’est plus inscrit(e) : un certificat de scolarité ne convient pas.` };
       return {
         contenu: colonne(html`${o.entete(r)}${o.titre(r.titre, r.sousTitre)}${r.champs.photo ? html`<div style="display:flex;justify-content:flex-end">${photoBloc(s, r)}</div>` : ''}<div class="doc-texte">${o.rediger(r.texte, ctx)}</div>
           <div style="margin-top:auto">${o.signatures(r, ctx)}<div style="margin-top:6mm">${AK.mise.verification(ctx.qrTexte, ctx.doc, r.qr.taille)}</div></div>`)
@@ -9607,7 +9724,7 @@ return {matrix:matrix,
   def({
     id: 'fiche-individuelle', version: 1, lib: 'Fiche individuelle de l’élève', categorie: 'eleve', sujet: 'eleve', icone: 'user',
     description: 'Dossier complet de l’élève pour le classeur de l’école : identité, extrait, parents, santé. Document interne.',
-    emission: { type: 'FII', politique: 'unique', cleUnique: (c) => `FII|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'FII', politique: 'unique', cleUnique: (c) => `FII|${c.eleve.id}|${anneeCle()}`, extra: (c) => resumeDossier(c.eleve) },
     champsOptionnels: [['photo', 'Photo', true], ['sante', 'Santé (groupe sanguin, allergies)', true], ['contacts', 'Téléphones des parents', true], ['resultats', 'Résultats de l’année', true]],
     defauts: {
       titre: 'FICHE INDIVIDUELLE DE L’ÉLÈVE', sousTitre: 'Document interne · données personnelles à protéger',
@@ -9632,7 +9749,7 @@ return {matrix:matrix,
   def({
     id: 'fiche-inscription', version: 1, lib: 'Fiche d’inscription', categorie: 'eleve', sujet: 'eleve', icone: 'filePlus',
     description: 'Fiche remplie à l’inscription, avec engagement et signature du parent, et liste des pièces fournies.',
-    emission: { type: 'FIN', politique: 'unique', cleUnique: (c) => `FIN|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'FIN', politique: 'unique', cleUnique: (c) => `FIN|${c.eleve.id}|${anneeCle()}`, extra: (c) => resumeDossier(c.eleve) },
     champsOptionnels: [['photo', 'Photo', true], ['pieces', 'Liste des pièces à fournir', true], ['engagement', 'Engagement du parent', true]],
     defauts: {
       titre: 'FICHE D’INSCRIPTION', champs: { photo: true, pieces: true, engagement: true },
@@ -9711,6 +9828,7 @@ return {matrix:matrix,
     id: 'carte-eleve', version: 1, lib: 'Carte d’identité scolaire', categorie: 'carte', sujet: 'eleve', icone: 'idCard',
     description: 'Format carte bancaire (ID-1), portrait ou badge ; planche A4 de 10 cartes avec traits de coupe ou impression à l’unité.',
     emission: { type: 'CEL', politique: 'registre', expire: (ctx, r) => AK.cartes.expiration(r) },
+    refuser: (ctx) => (ctx.eleve.statut !== 'Inscrit' ? `${AK.calc.nomComplet(ctx.eleve)} n’est plus inscrit(e) (${ctx.eleve.statut}) : pas de carte scolaire.` : null),
     champsOptionnels: [['naissance', 'Date de naissance', true], ['sexe', 'Sexe', false], ['signature', 'Zone de signature du directeur', true]],
     defauts: {
       titre: 'Carte scolaire', champs: { naissance: true, sexe: false, signature: true },
@@ -10825,6 +10943,1568 @@ return {matrix:matrix,
 })(window.AK);
 
 //# sourceURL=akwa/js/screens/accueil.js
+</script>
+<script>
+/* =====================================================================================
+   Élèves & classes : registre des élèves (filtres, tri, pagination, sélection, export),
+   formulaire d'inscription par onglets (contrôle des doublons), fiche élève (tiroir),
+   départ et statut, suppression vers la corbeille, classes, import Excel avec aperçu.
+   Les droits sont vérifiés par les fonctions métier (AK.eleves) : masquer un bouton n'est
+   qu'un confort d'affichage.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u, { html, raw } = u, ic = AK.ic, ui = AK.ui, C = AK.cfg, F = AK.ui.champ;
+  const S = () => AK.store.etat;
+  const X = () => AK.calc;
+  const peut = (a, ctx) => AK.perm.peut(a, ctx);
+
+  const DOSSIERS = [['sans', 'Sans extrait'], ['avec', 'Avec extrait'], ['age', 'Âge à vérifier'], ['photo', 'Sans photo']];
+  const filtreDossier = (s, d) => (d === 'sans' ? !s.extrait : d === 'avec' ? s.extrait : d === 'age' ? X().ageAnormal(s) : d === 'photo' ? !s.photo : true);
+
+  function elevesFiltres(p) {
+    const cl = AK.session.classes();
+    const st = p.statut == null ? 'Inscrit' : p.statut;
+    return S().students.filter((s) => cl.includes(s.classe) && (!p.classe || s.classe === p.classe) && (!st || s.statut === st) && (!p.dossier || filtreDossier(s, p.dossier)));
+  }
+
+  /* ---------- Registre des élèves ---------- */
+  function rendreListe(p) {
+    const x = X(), L = elevesFiltres(p);
+    const dir = AK.session.estDirecteur();
+    const filtres = html`<select class="inp inp-sm" data-change="eleves-filtre" data-f="classe" aria-label="Classe">${ui.options(AK.session.classes(), p.classe, 'Toutes les classes')}</select>
+      <select class="inp inp-sm" data-change="eleves-filtre" data-f="statut" aria-label="Statut">${ui.options([['', 'Tous les statuts'], ...C.STATUTS.map((s) => [s, s])], p.statut == null ? 'Inscrit' : p.statut)}</select>
+      <select class="inp inp-sm" data-change="eleves-filtre" data-f="dossier" aria-label="Dossier">${ui.options(DOSSIERS, p.dossier, 'Tous les dossiers')}</select>
+      ${p.classe || p.dossier || (p.statut != null && p.statut !== 'Inscrit') ? html`<button type="button" class="btn btn-sm btn-ghost" data-action="aller" data-route="eleves/liste">${ic('x')}Effacer les filtres</button>` : ''}`;
+    const colonnes = [
+      { cle: 'nom', lib: 'Élève', tri: (s) => x.nomComplet(s), rendu: (s) => ui.quiEleve(s), csv: (s) => x.nomComplet(s) },
+      { cle: 'mat', lib: 'Matricule', tri: (s) => x.matOf(s), rendu: (s) => html`<span class="mono">${x.matOf(s)}</span>` },
+      { cle: 'classe', lib: 'Classe', tri: (s) => C.TOUS_NIVEAUX.indexOf(s.classe), csv: (s) => s.classe, rendu: (s) => html`${ui.lienClasse(s.classe)}${s.redoublant ? html` <span class="tag" data-bulle="Redoublant">RED</span>` : ''}` },
+      { cle: 'sexe', lib: 'Sexe', tri: (s) => s.sexe, rendu: (s) => (s.sexe === 'Masculin' ? 'G' : s.sexe === 'Féminin' ? 'F' : '—'), csv: (s) => s.sexe },
+      { cle: 'age', lib: 'Âge', tri: (s) => x.ageDe(s), csv: (s) => x.ageDe(s) ?? '', rendu: (s) => html`${x.ageDe(s) ?? '—'} ans${x.ageAnormal(s) ? html` ${ui.tag('âge', 'avert')}` : ''}${s.ageEstime ? html` <span class="mut petit">(estimé)</span>` : ''}` },
+      { cle: 'extrait', lib: 'Extrait de naissance', tri: (s) => (s.extrait ? 1 : 0), csv: (s) => (s.extrait ? `N° ${(s.acte && s.acte.num) || '?'} du ${u.fmtDate(s.acte && s.acte.date)}` : 'Non'), rendu: (s) => (s.extrait ? ui.tag(`N° ${(s.acte && s.acte.num) || '?'}`, 'ok', 'check') : ui.tag('Sans extrait', 'avert')) },
+      { cle: 'statut', lib: 'Statut', tri: (s) => s.statut, rendu: (s) => ui.tagStatut(s.statut), csv: (s) => s.statut },
+      { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (s) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap"><button type="button" class="btn-ic" data-action="eleve-documents" data-id="${s.id}" aria-label="Documents de ${x.nomComplet(s)}" data-bulle="Documents">${ic('file')}</button>${peut('eleve.modifier', { classe: s.classe }) ? html`<button type="button" class="btn-ic" data-action="eleve-modifier" data-id="${s.id}" aria-label="Modifier ${x.nomComplet(s)}" data-bulle="Modifier">${ic('edit')}</button>` : ''}<button type="button" class="btn-ic" data-action="eleve-plus" data-id="${s.id}" aria-label="Autres actions pour ${x.nomComplet(s)}" aria-haspopup="menu">${ic('more')}</button></div>` }
+    ];
+    const actionsSel = (ids) => html`<button type="button" class="btn btn-sm" data-action="eleves-sel-doc" data-modele="fiche-scolaire">${ic('file')}Fiches scolaires</button>${peut('document.emettre') ? html`<button type="button" class="btn btn-sm" data-action="eleves-sel-doc" data-modele="certificat-scolarite">${ic('fileCheck')}Certificats</button><button type="button" class="btn btn-sm" data-action="eleves-sel-cartes">${ic('idCard')}Cartes (${ids.length})</button>` : ''}`;
+    const titre = p.classe ? `Classe de ${p.classe}` : 'Registre des élèves';
+    const g = L.filter((s) => s.sexe === 'Masculin').length;
+    return html`${ui.pageTete(titre, `${u.pluriel(L.length, 'élève')} · ${g} garçons · ${L.length - g} filles. Cliquez sur un nom pour ouvrir la fiche (notes, absences, documents).`,
+      html`${p.classe ? html`<button type="button" class="btn" data-action="doc-classe" data-modele="liste-classe" data-classe="${p.classe}">${ic('print')}Liste de la classe</button>` : dir ? html`<button type="button" class="btn" data-action="doc-ecole" data-modele="registre-eleves">${ic('print')}Registre général</button>` : ''}
+      ${peut('eleve.inscrire', { classe: p.classe || AK.session.classes()[0] }) ? html`<button type="button" class="btn btn-pri" data-action="eleve-nouveau" data-classe="${p.classe || ''}">${ic('userPlus')}Inscrire un élève</button>` : ''}`)}
+      ${ui.tableau({
+        id: 'eleves', lignes: L, colonnes, filtres, recherche: (s) => x.nomComplet(s) + ' ' + s.prenoms + ' ' + s.nom + ' ' + s.mat + ' ' + (s.matNat || ''),
+        placeholder: 'Nom, prénom ou matricule…', unite: 'élève', parPage: 50, selection: true, actionsSelection: actionsSel, exporter: 'eleves', triDefaut: { cle: 'classe', sens: 'asc' },
+        legende: 'Registre des élèves',
+        vide: S().students.length ? ui.vide('Aucun élève', 'Aucun élève ne correspond à ces filtres.') : ui.vide('Aucun élève inscrit', 'Inscrivez vos élèves un par un ou importez une liste Excel.', peut('eleve.inscrire', { classe: AK.session.classes()[0] }) ? html`<div class="ligne" style="justify-content:center"><button type="button" class="btn btn-pri" data-action="eleve-nouveau">${ic('userPlus')}Inscrire un élève</button><a class="btn" href="#eleves/import">${ic('down')}Importer un fichier Excel</a></div>` : '')
+      })}`;
+  }
+
+  /* ---------- Formulaire élève ---------- */
+  const listeDonnees = (id, L) => html`<datalist id="${id}">${L.map((v) => html`<option value="${v}">`)}</datalist>`;
+  function formulaire(s, classeDefaut) {
+    const neuf = !s;
+    s = s || { pere: {}, mere: {}, acte: {}, nationalite: C.NAT_DEFAUT, classe: classeDefaut || '' };
+    const a = s.acte || {}, ex = neuf ? false : !!s.extrait, tut = !!(s.parent || s.tel);
+    const classes = X().niveaux().filter((c) => AK.session.classes().includes(c) && peut(neuf ? 'eleve.inscrire' : 'eleve.modifier', { classe: c }));
+    const cls = s.classe || (classes.length === 1 ? classes[0] : '');
+    const parent = (k, lib, p = {}) => html`<section class="section-form"><h3>${ic('user')}${lib}</h3><div class="form-grille">
+      ${F.texte({ lib: 'Nom', nom: k + '_nom', val: p.nom, attrs: { 'data-input': 'maj-nom', autocomplete: 'off', maxlength: 40 } })}
+      ${F.texte({ lib: 'Prénoms', nom: k + '_prenoms', val: p.prenoms, attrs: { 'data-input': 'maj-prenoms', autocomplete: 'off', maxlength: 60 } })}
+      ${F.texte({ lib: 'Profession', nom: k + '_profession', val: p.profession, attrs: { list: 'dl-prof-' + k, maxlength: 60 } })}
+      ${F.tel({ lib: 'Contact', nom: k + '_tel', val: p.tel })}
+      ${F.texte({ lib: 'Domicile', nom: k + '_domicile', val: p.domicile, plein: true, attrs: { placeholder: 'Ex. : Ouaninou, quartier Commerce', maxlength: 80 } })}</div></section>`;
+    const identite = html`<div class="pile">
+      <div class="ligne-entre"><span class="puce">${ic('hash')}Matricule école : <b>${neuf ? AK.eleves.prochainMatricule() + ' (attribué à l’enregistrement)' : s.mat}</b></span></div>
+      <div class="form-grille">
+        ${F.texte({ lib: 'Nom', nom: 'nom', val: s.nom, req: true, attrs: { 'data-input': 'maj-nom', autocomplete: 'off', autocapitalize: 'characters', maxlength: 40, autofocus: true } })}
+        ${F.texte({ lib: 'Prénoms', nom: 'prenoms', val: s.prenoms, req: true, attrs: { 'data-input': 'maj-prenoms', autocomplete: 'off', maxlength: 60 } })}
+        ${F.radios({ lib: 'Sexe *', nom: 'sexe', val: s.sexe, options: [['Masculin', 'Masculin'], ['Féminin', 'Féminin']] })}
+        ${F.texte({ lib: 'Nationalité', nom: 'nationalite', val: s.nationalite, attrs: { list: 'dl-nat', maxlength: 40 }, aide: 'Liste officielle ; par défaut : ivoirienne.' })}
+        ${F.texte({ lib: 'Matricule national (DESPS)', nom: 'matNat', val: s.matNat, attrs: { maxlength: 12, autocomplete: 'off', placeholder: 'Ex. : 12345678A', autocapitalize: 'characters' }, aide: 'Facultatif. De 6 à 12 lettres et chiffres. Il remplace le matricule école sur les documents.' })}
+        ${F.image({ lib: 'Photo', nom: 'photo', val: s.photo, bouton: 'Choisir une photo', max: 360, aide: 'Facultative. Réduite automatiquement (JPEG).' })}
+      </div></div>`;
+    const naissance = html`<div class="pile">
+      ${F.case({ lib: 'L’enfant a un extrait d’acte de naissance (ou un jugement supplétif)', nom: 'extrait', coche: ex, attrs: { 'data-change': 'eleve-bascule' } })}
+      <div class="form-grille" data-si="extrait"${ex ? '' : raw(' hidden')}>
+        ${F.date({ lib: 'Date de naissance', nom: 'naissance', val: s.ageEstime ? '' : s.naissance, req: true, attrs: { max: u.aujourdhui() } })}
+        ${F.texte({ lib: 'Lieu de naissance (localité)', nom: 'lieu', val: s.lieu, attrs: { list: 'dl-sp', maxlength: 60 } })}
+        ${F.texte({ lib: 'N° de l’acte', nom: 'acte_num', val: a.num, req: true, attrs: { maxlength: 20, placeholder: 'Ex. : 245' } })}
+        ${F.date({ lib: 'Date de l’acte (établi le)', nom: 'acte_date', val: a.date, req: true, attrs: { max: u.aujourdhui() } })}
+        ${F.texte({ lib: 'Centre d’état civil', nom: 'acte_centre', val: a.centre, attrs: { maxlength: 80, placeholder: 'Ex. : Centre d’état civil de Ouaninou' } })}
+        ${F.texte({ lib: 'Sous-préfecture', nom: 'acte_sp', val: a.sp, attrs: { list: 'dl-sp', maxlength: 60 } })}
+        ${F.image({ lib: 'Photo de l’extrait (facultatif)', nom: 'extraitPhoto', val: s.extraitPhoto, bouton: 'Photographier l’extrait', max: 1200, plein: true })}
+      </div>
+      <div class="form-grille" data-si="sansExtrait"${ex ? raw(' hidden') : ''}>
+        ${F.nombre({ lib: 'Âge de l’enfant (en années)', nom: 'age', val: s.ageEstime && X().ageDe(s) != null ? X().ageDe(s) : '', req: true, attrs: { min: 2, max: 20, step: 1, inputmode: 'numeric' } })}
+        <div class="champ">${ui.encadre('Sans extrait, l’âge est estimé (1er janvier) et le nom de l’un des parents ou du tuteur est obligatoire. Le dossier apparaîtra dans « Dossiers à régulariser ».', 'avert')}</div>
+      </div></div>`;
+    const parents = html`<div class="pile">${parent('pere', 'Père', s.pere)}${parent('mere', 'Mère', s.mere)}
+      ${F.case({ lib: 'Tuteur ou tutrice (personne à contacter si ce n’est ni le père ni la mère)', nom: 'tuteur', coche: tut, attrs: { 'data-change': 'eleve-bascule' } })}
+      <div class="form-grille" data-si="tuteur"${tut ? '' : raw(' hidden')}>
+        ${F.texte({ lib: 'Nom et prénoms du tuteur', nom: 'parent', val: s.parent, attrs: { 'data-input': 'maj-nom-complet', maxlength: 80, autocomplete: 'off' } })}
+        ${F.tel({ lib: 'Contact du tuteur', nom: 'tel', val: s.tel })}
+      </div></div>`;
+    const scolarite = html`<div class="form-grille">
+      ${F.choix({ lib: 'Classe', nom: 'classe', val: cls, req: true, options: classes, vide: 'Choisir…', attrs: { 'data-change': 'eleve-classe' } })}
+      ${F.date({ lib: 'Entré(e) à l’école le', nom: 'entree', val: cls === 'CP1' && neuf ? u.aujourdhui() : s.entree, attrs: { max: u.ajouterJours(u.aujourdhui(), 31), readonly: cls === 'CP1' && neuf }, aide: 'Inscription au CP1 : date du jour. Autres classes : date d’arrivée dans l’école.' })}
+      ${F.case({ lib: 'Redoublant(e) cette année', nom: 'redoublant', coche: !!s.redoublant })}
+      <span></span>
+      ${F.choix({ lib: 'Groupe sanguin', nom: 'sang', val: s.sang, options: C.SANG, vide: 'Non renseigné' })}
+      ${F.texte({ lib: 'Allergies / handicap', nom: 'allergies', val: s.allergies, attrs: { maxlength: 120, placeholder: 'Aucun' }, aide: 'Donnée de santé : visible par la direction et l’enseignant de la classe, jamais dans un QR code.' })}
+    </div>`;
+    return html`${ui.ongletsForm([['id', 'Identité', identite], ['nais', 'Naissance', naissance], ['par', 'Parents & tuteur', parents], ['sco', 'Scolarité & santé', scolarite]])}
+      ${listeDonnees('dl-nat', AK.ref.NATIONALITES.map((n) => n[1]))}${listeDonnees('dl-sp', AK.ref.SOUS_PREFECTURES)}${listeDonnees('dl-prof-pere', C.PROF_P)}${listeDonnees('dl-prof-mere', C.PROF_M)}`;
+  }
+
+  function ouvrirFormulaire(s, classeDefaut) {
+    const neuf = !s;
+    ui.fenetre({
+      titre: neuf ? 'Inscrire un élève' : `Modifier le dossier · ${X().nomComplet(s)}`, icone: neuf ? 'userPlus' : 'edit', taille: 'lg',
+      ok: neuf ? 'Inscrire l’élève' : 'Enregistrer les modifications', corps: formulaire(s, classeDefaut),
+      async surValider(d) {
+        if (neuf) {
+          let e;
+          try {
+            e = AK.eleves.inscrire(d);
+          } catch (err) {
+            if (!err.doublons) throw err;
+            const ok = await ui.confirmer({
+              titre: 'Élève peut-être déjà inscrit', icone: 'users',
+              message: html`<p>${err.message}</p><p class="mb0">S’il s’agit d’un <b>autre enfant</b> (homonyme), confirmez. Sinon, annulez et ouvrez la fiche existante.</p>`,
+              ok: 'C’est un autre enfant : inscrire', annuler: 'Annuler'
+            });
+            if (!ok) return false;
+            e = AK.eleves.inscrire(d, { accepterDoublon: true });
+          }
+          ui.toast(`${X().nomComplet(e)} inscrit(e) en ${e.classe} · matricule ${e.mat}`, { action: { lib: 'Ouvrir la fiche', f: () => ui.ouvrirTiroir('eleve', e.id) } });
+        } else {
+          AK.eleves.modifier(s.id, d);
+          ui.toast('Dossier mis à jour.');
+        }
+      }
+    });
+  }
+
+  /* ---------- Fiche élève (tiroir) ---------- */
+  function fiche(id) {
+    const s = AK.eleves.trouver(id);
+    if (!s || !AK.session.classes().includes(s.classe)) return null;
+    const x = X(), a = s.acte || {}, dir = AK.session.estDirecteur();
+    const kv = (L) => html`<dl class="kv">${L.filter(Boolean).map(([k, v]) => html`<dt>${k}</dt><dd>${v || '—'}</dd>`)}</dl>`;
+    const par = (lib, p) => (p && (p.nom || p.prenoms) ? html`<div><b>${lib} :</b> ${[p.nom, p.prenoms].filter(Boolean).join(' ')}${p.profession ? html` <span class="mut">· ${p.profession}</span>` : ''}${p.tel ? html`<br><a href="tel:${p.tel}">${p.tel}</a>` : ''}${p.domicile ? html` <span class="mut">· ${p.domicile}</span>` : ''}</div>` : '');
+    const evals = AK.notes.EVALS.map((n) => {
+      const abs = x.estAbsent(s.id, n), m = x.moyEval(s, n), cl = x.classement(s.classe, n).all.find((r) => r.s === s);
+      return html`<tr><td>${x.evalLabel(s.classe, n)}</td><td class="num">${abs ? 'Absent' : m == null ? '—' : u.fmtNote(m) + ' / ' + x.echelle(s.classe)}</td><td class="num">${cl && cl.rank ? x.rangTxt(cl.rank) : '—'}</td></tr>`;
+    });
+    const mg = x.mga(s);
+    const absL = x.absencesDe(s.id);
+    const docs = AK.registre.duSujet(s.id).slice(-6).reverse();
+    const fin = dir && AK.pro ? { du: AK.pro.duDe(s), paye: AK.pro.payeDe(s) } : null;
+    return html`<div class="pile">
+      <div class="fiche-hero">${ui.avatar(s, 'xl')}<div class="flex1"><h2>${x.nomComplet(s)}</h2><div class="ligne mt0">${ui.lienClasse(s.classe)}${ui.tagStatut(s.statut)}${s.redoublant ? ui.tag('Redoublant') : ''}<span class="mono petit mut">${x.matOf(s)}</span></div></div></div>
+      <div class="ligne">${peut('eleve.modifier', { classe: s.classe }) ? html`<button type="button" class="btn btn-sm" data-action="eleve-modifier" data-id="${s.id}">${ic('edit')}Modifier</button>` : ''}
+        ${peut('eleve.statut', { classe: s.classe }) ? html`<button type="button" class="btn btn-sm" data-action="eleve-statut" data-id="${s.id}">${ic('flag')}${s.statut === 'Inscrit' ? 'Départ' : 'Statut : ' + s.statut}</button>` : ''}
+        <button type="button" class="btn btn-sm btn-pri" data-action="eleve-documents" data-id="${s.id}">${ic('file')}Documents</button>
+        <a class="btn btn-sm" href="#notes/saisie?classe=${s.classe}">${ic('award')}Notes</a><a class="btn btn-sm" href="#absences/appel?classe=${s.classe}">${ic('clip')}Appel</a></div>
+      ${!s.extrait ? ui.encadre(html`Extrait de naissance non fourni : âge estimé. ${peut('eleve.modifier', { classe: s.classe }) ? html`<button type="button" class="lien" data-action="eleve-modifier" data-id="${s.id}" data-onglet="nais">Saisir l’extrait</button>` : ''}`, 'avert') : ''}
+      ${ui.carte('Résultats', html`<div class="tab-cadre"><table class="tab"><thead><tr><th>Évaluation</th><th class="num">Moyenne</th><th class="num">Rang</th></tr></thead><tbody>${evals}</tbody><tfoot><tr><th>MGA</th><th class="num">${mg == null ? '—' : u.fmtNote(mg)}</th><th class="num">${ui.tagDecision(x.decision(s) === s.statut ? null : x.decision(s))}</th></tr></tfoot></table></div>`)}
+      ${ui.carte('Identité', kv([['Né(e) le', html`${x.fmtNaissance(s)}${s.lieu ? ' à ' + s.lieu : ''}`], ['Âge', x.ageDe(s) != null ? x.ageDe(s) + ' ans' : null], ['Sexe', s.sexe], ['Nationalité', u.capitale(s.nationalite)], ['Matricule école', s.mat], ['Matricule national', s.matNat], s.extrait ? ['Acte de naissance', `N° ${a.num || '?'} du ${u.fmtDate(a.date)}${a.centre ? ' · ' + a.centre : ''}${a.sp ? ' · ' + a.sp : ''}`] : null, ['Entré(e) le', u.fmtDate(s.entree)], s.statut !== 'Inscrit' ? ['Départ', `${s.statut}${s.departLe ? ' le ' + u.fmtDate(s.departLe) : ''}${s.motifDepart ? ' · ' + s.motifDepart : ''}`] : null]))}
+      ${ui.carte('Parents et contacts', html`<div class="pile-sm">${par('Père', s.pere)}${par('Mère', s.mere)}${s.parent || s.tel ? html`<div><b>Tuteur :</b> ${s.parent || '—'}${s.tel ? html`<br><a href="tel:${s.tel}">${s.tel}</a>` : ''}</div>` : ''}${!(s.pere && s.pere.nom) && !(s.mere && s.mere.nom) && !s.parent ? html`<span class="mut">Aucun parent renseigné.</span>` : ''}</div>`)}
+      ${ui.carte('Santé', kv([['Groupe sanguin', s.sang], ['Allergies / handicap', s.allergies || 'Aucun']]), { sous: 'Données confidentielles' })}
+      ${ui.carte(`Absences (${absL.length})`, absL.length ? html`<div class="liste">${absL.slice(0, 8).map((z) => html`<div><span class="dt"><b>${z.d.slice(8)}</b>${C.MOIS[+z.d.slice(5, 7) - 1].slice(0, 4)}</span><span class="flex1">${u.fmtJour(z.d)}</span><span class="m">${z.v === 'J' ? ui.tag('Justifiée', 'ok') : ui.tag('Non justifiée', 'avert')}</span></div>`)}</div>` : html`<p class="mut mb0">Aucune absence enregistrée.</p>`)}
+      ${fin ? ui.carte('Scolarité (frais)', kv([['Montant dû', u.fcfa(fin.du)], ['Versé', u.fcfa(fin.paye)], ['Reste', u.fcfa(Math.max(0, fin.du - fin.paye))]]), { actions: html`<a class="btn btn-sm" href="#finances/paiements?eleve=${s.id}">${ic('coin')}Versements</a>` }) : ''}
+      ${docs.length ? ui.carte('Documents émis', html`<div class="liste">${docs.map((d) => html`<a href="#documents/registre?ref=${d.ref}"><span class="flex1"><b>${AK.registre.libelleType(d.type)}</b><br><span class="mono petit mut">${d.ref}</span></span><span class="m">${u.fmtDate(d.emisLe.slice(0, 10))}</span></a>`)}</div>`) : ''}
+      ${peut('eleve.supprimer', { classe: s.classe }) ? html`<div class="ligne"><span class="espace"></span><button type="button" class="btn btn-sm btn-dng" data-action="eleve-supprimer" data-id="${s.id}">${ic('trash')}Supprimer (corbeille)</button></div>` : ''}
+    </div>`;
+  }
+  ui.defTiroir('eleve', fiche);
+
+  /* ---------- Départ / statut ---------- */
+  function fenetreStatut(s) {
+    ui.fenetre({
+      titre: `Statut de ${X().nomComplet(s)}`, icone: 'flag', taille: 'sm', ok: 'Enregistrer',
+      corps: html`<div class="pile">${F.choix({ lib: 'Statut', nom: 'statut', val: s.statut === 'Inscrit' ? 'Transféré' : s.statut, options: C.STATUTS })}
+        ${F.zone({ lib: 'Motif / précision', nom: 'motif', val: s.motifDepart, lignes: 2, attrs: { maxlength: 200, placeholder: 'Ex. : transfert vers EPP Touba 2, déménagement des parents' } })}
+        ${ui.encadre('L’élève reste dans le registre (statut et date de départ). Ses notes sont conservées. Après un transfert, vous pouvez délivrer un certificat de transfert.', 'info')}</div>`,
+      surValider(d) {
+        AK.eleves.changerStatut(s.id, d.statut, d.motif);
+        ui.toast(`Statut enregistré : ${d.statut}.`, d.statut === 'Transféré' && peut('document.emettre') ? { action: { lib: 'Certificat de transfert', f: () => AK.docs.ouvrir('certificat-transfert', [{ eleve: s }]) } } : {});
+      }
+    });
+  }
+
+  /* ---------- Documents d'un élève ---------- */
+  function menuDocuments(el, s) {
+    const L = AK.modeles.liste().filter((d) => d.sujet === 'eleve' && d.categorie !== 'carte');
+    const items = L.filter((d) => !d.emission || peut('document.emettre') || (d.emission.politique === 'unique' && peut('document.imprimerClasse', { classe: s.classe }))).map((d) => ({
+      icone: d.icone || 'file', lib: d.lib, sous: d.emission ? (d.emission.politique === 'unique' ? 'Référence unique, QR vérifiable' : 'Inscrit au registre, QR vérifiable') : '',
+      f: () => documentEleve(d.id, s)
+    }));
+    if (peut('document.emettre')) items.push('sep', { icone: 'idCard', lib: 'Carte d’identité scolaire', sous: 'Format carte bancaire', f: () => AK.docsUi.cartes('carte-eleve', [s.id]) });
+    ui.menu(el, items, X().nomComplet(s));
+  }
+  async function documentEleve(id, s) {
+    if (id === 'bulletin') return AK.docsUi.bulletins([s]);
+    return AK.docs.ouvrir(id, [{ eleve: s }], { nomFichier: `${id}-${X().nomComplet(s)}` });
+  }
+
+  async function supprimer(s) {
+    AK.perm.exiger('eleve.supprimer', { classe: s.classe });
+    const nDocs = AK.registre.duSujet(s.id).filter((d) => d.statut === 'valide').length;
+    const ok = await ui.confirmer({
+      titre: 'Supprimer un élève', danger: true, ok: 'Mettre à la corbeille',
+      message: html`<p><b>${X().nomComplet(s)}</b> (${s.classe}) et ses notes, absences et dossiers seront placés dans la <b>corbeille</b> (Données › Corbeille), d’où ils peuvent être restaurés.</p>${s.statut === 'Inscrit' ? html`<p>Pour un élève qui quitte l’école, préférez <b>« Départ »</b> : il reste au registre.</p>` : ''}${nDocs ? html`<p class="mb0">${ic('warn')} ${u.pluriel(nDocs, 'document émis reste', 'documents émis restent')} valide(s) au registre ; annulez-les si nécessaire.</p>` : ''}`
+    });
+    if (!ok) return;
+    if (AK.session.estDirecteur() && !(await AK.auth.confirmer(`Supprimer ${X().nomComplet(s)} (corbeille).`))) return;
+    AK.eleves.supprimer(s.id);
+    ui.fermerTiroir();
+    ui.toast('Élève placé dans la corbeille.', { action: { lib: 'Voir la corbeille', f: () => AK.shell.aller('donnees/corbeille') } });
+  }
+
+  /* ---------- Classes ---------- */
+  function rendreClasses() {
+    const x = X(), ev = S().school.evalCourante || 1, auj = u.aujourdhui(), dir = AK.session.estDirecteur();
+    const classes = AK.session.classes();
+    if (!classes.length) return html`${ui.pageTete('Classes')}${ui.vide('Aucune classe', 'Aucune classe ne vous est affectée. Le directeur affecte les classes dans Personnel.')}`;
+    return html`${ui.pageTete('Classes', 'Effectifs, enseignant, avancement des notes et appel du jour pour chaque classe ouverte.', dir ? html`<button type="button" class="btn" data-action="doc-ecole" data-modele="effectifs">${ic('print')}Tableau des effectifs</button><a class="btn" href="#parametres/ecole">${ic('settings')}Classes ouvertes</a>` : '')}
+      <div class="grille gauto">${classes.map((c) => {
+        const L = x.actifsDe(c), g = L.filter((s) => s.sexe === 'Masculin').length, t = x.enseignantDe(c), mo = x.moyClasse(c, ev), manq = x.notesManquantes(c, ev), appel = (S().appel[auj] || {})[c];
+        return html`<section class="carte pile">
+          <div class="ligne-entre"><h2 style="font-size:22px">${c}</h2>${x.estJourClasse(auj) ? ui.tag(appel ? 'Appel fait' : 'Appel à faire', appel ? 'ok' : 'avert') : ui.tag('Pas classe aujourd’hui')}</div>
+          <div><span class="kpi-v" style="font-size:26px">${L.length}</span> <span class="mut">élèves · ${g} G · ${L.length - g} F</span></div>
+          <div class="repartition" aria-hidden="true">${g ? html`<i class="g-col" style="flex:${g}"></i>` : ''}${L.length - g ? html`<i class="f-col" style="flex:${L.length - g}"></i>` : ''}</div>
+          <div class="petit mut">Grille ${x.grille(c).lib} · seuil ${x.info(c).seuil}/${x.echelle(c)} · ${x.evalLabel(c, ev)} : <b style="color:var(--ink)">${mo == null ? '—' : u.fmtNote(mo)}</b> · notes manquantes : <b style="color:var(--ink)">${manq}</b></div>
+          ${dir ? html`<div class="champ"><label for="ens-${c}">Enseignant(e)</label><select class="inp" id="ens-${c}" data-change="classe-affecter" data-classe="${c}">${ui.options(S().teachers.filter((z) => z.actif !== false).map((z) => [z.id, z.nom]), t && t.id, '— À affecter —')}</select></div>` : html`<div class="petit">Enseignant(e) : <b>${t ? t.nom : '—'}</b></div>`}
+          <div class="ligne"><a class="btn btn-sm" href="#eleves/liste?classe=${c}">${ic('users')}Liste</a><a class="btn btn-sm" href="#notes/saisie?classe=${c}">${ic('edit')}Notes</a><a class="btn btn-sm" href="#absences/appel?classe=${c}">${ic('clip')}Appel</a><a class="btn btn-sm" href="#notes/resultats?classe=${c}">${ic('award')}Classement</a></div>
+        </section>`;
+      })}</div>`;
+  }
+
+  /* ---------- Import Excel ---------- */
+  let analyseImport = null;
+  function rendreImport() {
+    const A = analyseImport;
+    const n = A && A.items ? { ok: A.items.filter((i) => i.etat === 'ok').length, dbl: A.items.filter((i) => i.etat === 'doublon').length, err: A.items.filter((i) => i.etat === 'erreur').length } : null;
+    return html`${ui.pageTete('Import d’une liste d’élèves', 'Fichier Excel (.xlsx, .xls) ou CSV. Rien n’est enregistré avant votre confirmation ; une copie de sécurité est faite juste avant.')}
+      <div class="grille g-2-1">
+        ${ui.carte('1. Choisir le fichier', html`<div class="pile">
+          <label class="btn btn-pri" style="justify-self:start">${ic('folder')}Choisir un fichier Excel ou CSV<input type="file" hidden accept=".xlsx,.xls,.csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" data-change="import-fichier"></label>
+          ${A && A.nom ? html`<p class="mb0">${ic('file')} <b>${A.nom}</b> · ${u.pluriel((A.items || []).length, 'ligne')} lue(s)</p>` : ''}
+          ${A && A.erreur ? ui.encadre(A.erreur, 'erreur') : ''}</div>`)}
+        ${ui.carte('Colonnes reconnues', html`<p class="petit mb0"><b>Obligatoires :</b> nom, prénoms, niveau (ou classe), sexe.<br><b>Facultatives :</b> naissance (ou jour, mois, année), matricule, parent, téléphone, extrait, n° acte, date acte, centre, nationalité, lieu, sous-préfecture, père, mère, domicile.</p><p class="petit mut mb0">Les doublons (même matricule, ou même nom et même naissance qu’un élève existant) ne sont jamais importés.</p>`)}
+      </div>
+      ${n ? html`<div class="titre-section mt"><h2>2. Vérifier</h2><span class="ligne">${ui.tag(`${n.ok} à importer`, 'ok')}${n.dbl ? ui.tag(`${n.dbl} doublon(s) ignoré(s)`, 'avert') : ''}${n.err ? ui.tag(`${n.err} ligne(s) en erreur`, 'mauvais') : ''}</span></div>
+        ${ui.tableau({
+          id: 'import', lignes: A.items, cleId: (i) => String(i.ligne), parPage: 100, unite: 'ligne', recherche: (i) => i.s.nom + ' ' + i.s.prenoms + ' ' + i.motif,
+          filtres: html``, colonnes: [
+            { cle: 'l', lib: 'Ligne', tri: (i) => i.ligne, rendu: (i) => i.ligne },
+            { cle: 'etat', lib: 'État', tri: (i) => i.etat, rendu: (i) => (i.etat === 'ok' ? ui.tag('À importer', 'ok') : i.etat === 'doublon' ? ui.tag('Doublon', 'avert') : ui.tag('Erreur', 'mauvais')) },
+            { cle: 'nom', lib: 'Nom et prénoms', tri: (i) => i.s.nom + i.s.prenoms, rendu: (i) => `${i.s.nom} ${i.s.prenoms}` },
+            { cle: 'c', lib: 'Classe', tri: (i) => i.s.classe, rendu: (i) => i.s.classe || '—' },
+            { cle: 'sx', lib: 'Sexe', rendu: (i) => i.s.sexe || '—' },
+            { cle: 'n', lib: 'Naissance', rendu: (i) => (i.s.naissance ? u.fmtDate(i.s.naissance) : '—') },
+            { cle: 'm', lib: 'Remarque', rendu: (i) => i.motif || '' }
+          ]
+        })}
+        <div class="ligne mt"><span class="espace"></span><button type="button" class="btn" data-action="import-annuler">Annuler</button><button type="button" class="btn btn-pri" data-action="import-confirmer"${n.ok ? '' : raw(' disabled')}>${ic('check')}Importer ${u.pluriel(n.ok, 'élève')}</button></div>` : ''}`;
+  }
+
+  /* ---------- Écrans ---------- */
+  AK.ecrans.def('eleves/liste', { rendu: rendreListe, droit: 'eleve.voir' });
+  AK.ecrans.def('eleves/classes', { rendu: rendreClasses, droit: 'eleve.voir' });
+  AK.ecrans.def('eleves/import', { rendu: rendreImport, droit: 'eleve.importer' });
+
+  /* ---------- Actions ---------- */
+  const eleveDe = (el) => {
+    const s = AK.eleves.trouver(el.dataset.id);
+    if (!s) throw new AK.ErreurMetier('Élève introuvable (peut-être supprimé).');
+    return s;
+  };
+  AK.actions.def({
+    'fiche-eleve': (el) => ui.ouvrirTiroir('eleve', el.dataset.id),
+    'eleve-nouveau': (el) => ouvrirFormulaire(null, el.dataset.classe || AK.shell.params().classe),
+    async 'eleve-modifier'(el) {
+      const s = eleveDe(el);
+      AK.perm.exiger('eleve.modifier', { classe: s.classe });
+      if (AK.session.estDirecteur() && !(await AK.auth.confirmer(`Modifier le dossier déjà enregistré de ${X().nomComplet(s)}.`))) return;
+      ouvrirFormulaire(s);
+      if (el.dataset.onglet) setTimeout(() => {
+        const t = [...document.querySelectorAll('dialog[open] [role=tab]')].find((b) => b.id.endsWith('-t-' + el.dataset.onglet));
+        if (t) t.click();
+      }, 40);
+    },
+    'eleve-statut': (el) => {
+      const s = eleveDe(el);
+      AK.perm.exiger('eleve.statut', { classe: s.classe });
+      fenetreStatut(s);
+    },
+    'eleve-documents': (el) => menuDocuments(el, eleveDe(el)),
+    'eleve-plus'(el) {
+      const s = eleveDe(el);
+      const items = [{ icone: 'user', lib: 'Ouvrir la fiche', f: () => ui.ouvrirTiroir('eleve', s.id) }];
+      if (peut('eleve.statut', { classe: s.classe })) items.push({ icone: 'flag', lib: s.statut === 'Inscrit' ? 'Enregistrer un départ' : 'Changer le statut', f: () => fenetreStatut(s) });
+      if (peut('autorisation.demander', { classe: s.classe })) items.push({ icone: 'cal', lib: 'Demande d’autorisation d’absence', f: () => AK.ecransAbsences.demande('eleve', s.id) });
+      if (peut('eleve.supprimer', { classe: s.classe })) items.push('sep', { icone: 'trash', lib: 'Supprimer (corbeille)', danger: true, f: () => supprimer(s) });
+      ui.menu(el, items, X().nomComplet(s));
+    },
+    'eleve-supprimer': (el) => supprimer(eleveDe(el)),
+    'eleves-sel-doc'(el) {
+      const ids = ui.tableauChoix('eleves');
+      const L = ids.map((id) => AK.eleves.trouver(id)).filter(Boolean).sort(X().parClasse);
+      if (!L.length) return;
+      AK.docs.ouvrir(el.dataset.modele, L.map((s) => ({ eleve: s })));
+    },
+    'eleves-sel-cartes'() {
+      AK.docsUi.cartes('carte-eleve', ui.tableauChoix('eleves'));
+    },
+    'doc-classe': (el) => AK.docs.ouvrir(el.dataset.modele, [{ classe: el.dataset.classe }]),
+    'doc-ecole': (el) => AK.docs.ouvrir(el.dataset.modele, [{}]),
+    'import-annuler'() {
+      analyseImport = null;
+      AK.shell.redessiner();
+    },
+    async 'import-confirmer'() {
+      if (!analyseImport || !analyseImport.items) return;
+      const n = await AK.imports.importer(analyseImport);
+      analyseImport = null;
+      ui.toast(`${u.pluriel(n, 'élève importé', 'élèves importés')}. Copie de sécurité faite avant l’import.`);
+      AK.shell.aller('eleves/liste');
+    }
+  });
+  AK.actions.defChange({
+    'eleves-filtre'(el) {
+      const p = { ...AK.shell.params() };
+      p[el.dataset.f] = el.value;
+      if (el.dataset.f === 'statut' && el.value === 'Inscrit') delete p.statut;
+      Object.keys(p).forEach((k) => p[k] === '' && k !== 'statut' && delete p[k]);
+      ui.tableauEtat('eleves').page = 1;
+      AK.shell.aller('eleves/liste', p);
+    },
+    'eleve-bascule'(el) {
+      const f = el.form;
+      if (el.name === 'extrait') {
+        f.querySelector('[data-si="extrait"]').hidden = !el.checked;
+        f.querySelector('[data-si="sansExtrait"]').hidden = el.checked;
+      } else f.querySelector('[data-si="tuteur"]').hidden = !el.checked;
+    },
+    'eleve-classe'(el) {
+      const e = el.form.elements.entree;
+      if (!e) return;
+      const cp1 = el.value === 'CP1' && /Inscrire/.test(el.form.querySelector('[type=submit]').textContent);
+      e.readOnly = cp1;
+      if (cp1) e.value = u.aujourdhui();
+    },
+    'classe-affecter'(el) {
+      try {
+        AK.personnel.affecter(el.dataset.classe, el.value);
+        ui.toast(el.value ? `Classe ${el.dataset.classe} affectée.` : `Classe ${el.dataset.classe} sans enseignant.`);
+      } catch (err) {
+        if (err.ficheAgent) ui.toast(err.message, { type: 'erreur', action: { lib: 'Ouvrir la fiche', f: () => ui.ouvrirTiroir('agent', err.ficheAgent) } });
+        else ui.erreur(err);
+        AK.shell.redessiner();
+      }
+    },
+    async 'import-fichier'(el) {
+      const f = el.files && el.files[0];
+      el.value = '';
+      if (!f) return;
+      try {
+        const rows = await AK.imports.lireTableur(f);
+        analyseImport = { nom: f.name, ...AK.imports.analyser(rows) };
+      } catch (err) {
+        analyseImport = { nom: f.name, erreur: err.message || 'Fichier illisible.' };
+      }
+      AK.shell.redessiner();
+    }
+  });
+  /* Saisie : majuscules du nom, majuscule à chaque prénom (curseur conservé) */
+  const majChamp = (el, f) => {
+    const p = el.selectionStart, v = f(el.value);
+    if (v !== el.value) {
+      el.value = v;
+      try {
+        el.setSelectionRange(p, p);
+      } catch (e) { /* champ sans curseur */ }
+    }
+  };
+  AK.actions.defSaisie({
+    'maj-nom': (el) => majChamp(el, (v) => v.toUpperCase()),
+    'maj-prenoms': (el) => majChamp(el, u.majPrenoms),
+    'maj-nom-complet': (el) => majChamp(el, u.majNomComplet)
+  });
+
+  AK.ecransEleves = { elevesFiltres, ouvrirFormulaire };
+})(window.AK);
+
+//# sourceURL=akwa/js/screens/eleves.js
+</script>
+<script>
+/* =====================================================================================
+   Notes & bulletins : saisie (grille clavier, recalcul immédiat sans perte de saisie),
+   corrections protégées, validation des saisies des enseignants, résultats et bulletins,
+   décisions de fin d'année et passage à l'année suivante (bilan + copie de sécurité).
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u, { html, raw, $, $$ } = u, ic = AK.ic, ui = AK.ui, C = AK.cfg, F = AK.ui.champ;
+  const S = () => AK.store.etat;
+  const X = () => AK.calc;
+  const peut = (a, ctx) => AK.perm.peut(a, ctx);
+
+  const classeDe = (p) => {
+    const L = AK.session.classes();
+    return L.includes(p.classe) ? p.classe : L[0] || null;
+  };
+  const evDe = (p, avecA) => (avecA && p.ev === 'A' ? 'A' : [1, 2, 3, 4].includes(Number(p.ev)) ? Number(p.ev) : S().school.evalCourante || 1);
+  const pilulesClasses = (c, route, extra = {}) => ui.pilules(AK.session.classes().map((k) => [k, k]), c, 'notes-classe', { 'data-route': route, ...extra });
+  const choixEval = (c, ev, avecA, route) => html`<select class="inp inp-sm" data-change="notes-ev" data-route="${route}" aria-label="Évaluation">${ui.options([...[1, 2, 3, 4].map((n) => [n, X().evalLabel(c, n)]), ...(avecA ? [['A', 'Annuel (MGA)']] : [])], ev)}</select>`;
+  const valeur = (v) => (v == null ? '' : u.fmtSaisie(v));
+
+  /* ---------- Saisie ---------- */
+  function rendreSaisie(p) {
+    const c = classeDe(p);
+    if (!c) return html`${ui.pageTete('Saisie des notes')}${ui.vide('Aucune classe', 'Aucune classe ne vous est affectée.')}`;
+    const x = X(), n = evDe(p), M = x.matieres(c, n), g = x.grille(c), L = x.actifsDe(c).sort(x.parNom);
+    const ouverte = AK.notes.saisieOuverte(c, n), sa = S().saisie[c + '|' + n] || {};
+    const ens = AK.session.estEnseignant(), dir = AK.session.estDirecteur();
+    const lecture = ens && !ouverte;
+    const ligne = (s) => {
+      const ab = x.estAbsent(s.id, n);
+      return html`<tr data-eleve="${s.id}"><td><div class="qui">${ui.avatar(s)}<span class="tronque">${ui.nomEleve(s)}</span></div></td>
+        <td class="centre"><input type="checkbox" data-change="note-absent" data-id="${s.id}" aria-label="Absent(e) à l’évaluation : ${x.nomComplet(s)}"${ab ? raw(' checked') : ''}${lecture ? raw(' disabled') : ''}></td>
+        ${M.map(([m, w], j) => {
+          const k = x.cle(s.id, n, m), v = S().grades[k], att = S().attente[k];
+          const aff = v != null ? v : att;
+          return html`<td class="centre"><input class="note-in${att != null && v == null ? ' attente' : ''}" data-change="note" data-id="${s.id}" data-m="${m}" data-j="${j}" data-max="${x.noteMax(c, w)}" data-avant="${valeur(aff)}" value="${valeur(aff)}" inputmode="decimal" autocomplete="off" placeholder="/${x.noteMax(c, w)}" aria-label="${m} sur ${x.noteMax(c, w)}, ${x.nomComplet(s)}"${att != null && v == null ? raw(' data-bulle="En attente de validation par le directeur"') : ''}${ab || lecture ? raw(' disabled') : ''}></td>`;
+        })}
+        <td class="num droite" data-total="${s.id}"></td><td class="num droite"><b data-moy="${s.id}"></b></td><td class="num droite" data-rang="${s.id}"></td></tr>`;
+    };
+    const actions = html`${x.info(c).grille === 'CP' && peut('notes.matieres', { classe: c }) ? html`<button type="button" class="btn" data-action="notes-matieres-cp" data-classe="${c}" data-ev="${n}">${ic('list')}Matières de la composition</button>` : ''}
+      <a class="btn" href="#notes/resultats?classe=${c}&ev=${n}">${ic('award')}Classement</a>
+      ${dir ? html`<button type="button" class="btn" data-action="notes-periode" data-classe="${c}" data-ev="${n}" aria-haspopup="menu">${ic(ouverte ? 'unlock' : 'lock')}${ouverte ? 'Saisie ouverte' : 'Saisie fermée'}</button>` : ''}`;
+    return html`${ui.pageTete('Saisie des notes', html`Barème officiel de la grille ${g.lib}. <kbd>Tab</kbd> : matière suivante · <kbd>Entrée</kbd> : élève suivant. Chaque note est enregistrée dès qu’on quitte la case.`, actions)}
+      <div class="barre-outils">${pilulesClasses(c, 'notes/saisie')}${choixEval(c, n, false, 'notes/saisie')}<span class="puce" id="notes-compte"></span>${sa.fin ? html`<span class="puce">${ic('clock')}Date limite : ${u.fmtDate(sa.fin)}</span>` : ''}</div>
+      ${lecture ? ui.encadre('La saisie est fermée pour cette évaluation (date limite dépassée ou fermée par le directeur). Les notes sont affichées en lecture seule.', 'avert', 'lock') : ''}
+      ${ens && S().school.validation && ouverte ? ui.encadre('Vos nouvelles notes sont transmises au directeur pour validation (case orangée tant qu’elles ne sont pas validées).', 'info') : ''}
+      ${L.length ? html`<div class="tab-cadre" style="max-height:calc(100vh - 290px)"><table class="tab tab-notes" id="grille-notes" data-classe="${c}" data-ev="${n}" aria-label="Notes ${c}, ${x.evalLabel(c, n)}">
+        <thead><tr><th>Élève</th><th class="centre">Absent</th>${M.map(([m, w]) => html`<th class="centre">${m}<br><span class="mut petit">/${x.noteMax(c, w)}</span></th>`)}<th class="droite">Total</th><th class="droite">Moy. /${g.echelle}</th><th class="droite">Rang</th></tr></thead>
+        <tbody>${L.map(ligne)}</tbody>
+        <tfoot><tr><th>Moyenne de la classe</th><th></th>${M.map(([m]) => html`<th class="centre num" data-moy-mat="${m}"></th>`)}<th></th><th class="droite num" id="notes-moy-classe"></th><th></th></tr></tfoot></table></div>`
+        : ui.vide('Aucun élève inscrit', `Aucun élève inscrit en ${c}.`, peut('eleve.inscrire', { classe: c }) ? html`<button type="button" class="btn btn-pri" data-action="eleve-nouveau" data-classe="${c}">${ic('userPlus')}Inscrire un élève</button>` : '')}`;
+  }
+  /** Recalcule totaux, moyennes, rangs et compteur sans redessiner (la saisie garde le focus). */
+  function recalculer() {
+    const t = $('#grille-notes');
+    if (!t) return;
+    const c = t.dataset.classe, n = Number(t.dataset.ev), x = X();
+    const L = x.actifsDe(c), { w } = x.classement(c, n);
+    L.forEach((s) => {
+      const r = x.resultat(s, n), z = w.find((o) => o.s.id === s.id);
+      const set = (sel, v) => {
+        const el = t.querySelector(sel);
+        if (el) el.textContent = v;
+      };
+      set(`[data-total="${s.id}"]`, r && !r.abs ? u.fmtNote(r.total) : '—');
+      set(`[data-moy="${s.id}"]`, r ? (r.abs ? 'Absent' : u.fmtNote(r.moy)) : '—');
+      set(`[data-rang="${s.id}"]`, z ? x.rangTxt(z.rank) : '—');
+    });
+    x.matieres(c, n).forEach(([m]) => {
+      const el = t.querySelector(`[data-moy-mat="${CSS.escape(m)}"]`);
+      if (el) el.textContent = u.fmtNote(u.moyenne(L.filter((s) => !x.estAbsent(s.id, n)).map((s) => x.note(s.id, n, m)).filter((v) => v != null)));
+    });
+    const mc = $('#notes-moy-classe');
+    if (mc) mc.textContent = u.fmtNote(x.moyClasse(c, n));
+    const tot = L.filter((s) => !x.estAbsent(s.id, n)).length * x.matieres(c, n).length;
+    const cpt = $('#notes-compte');
+    if (cpt) cpt.textContent = `${tot - x.notesManquantes(c, n)} / ${tot} notes saisies`;
+  }
+
+  async function enregistrerNote(el) {
+    const t = $('#grille-notes');
+    const n = Number(t.dataset.ev);
+    const tenter = (opt) => AK.notes.saisir(el.dataset.id, n, el.dataset.m, el.value, opt);
+    let r;
+    try {
+      r = tenter();
+    } catch (err) {
+      if (err.correction) {
+        const ok = AK.session.estDirecteur() ? await AK.auth.confirmer(err.message) : false;
+        if (!ok) {
+          if (!AK.session.estDirecteur()) ui.toast('Une note déjà validée ne peut être corrigée que par le directeur.', { type: 'avert' });
+          el.value = el.dataset.avant;
+          return;
+        }
+        r = tenter({ correctionConfirmee: true });
+      } else {
+        el.classList.add('mauvaise');
+        el.setAttribute('aria-invalid', 'true');
+        ui.toast(err.message, { type: 'erreur' });
+        el.focus();
+        el.select();
+        return;
+      }
+    }
+    el.classList.remove('mauvaise');
+    el.removeAttribute('aria-invalid');
+    el.value = valeur(r.v);
+    el.dataset.avant = el.value;
+    el.classList.toggle('attente', r.etat === 'attente' && r.v != null);
+    if (r.etat !== 'inchange') {
+      el.classList.remove('ok');
+      void el.offsetWidth;
+      el.classList.add('ok');
+    }
+    recalculer();
+  }
+
+  /* ---------- Résultats & bulletins ---------- */
+  function rendreResultats(p) {
+    const c = classeDe(p);
+    if (!c) return html`${ui.pageTete('Résultats')}${ui.vide('Aucune classe', 'Aucune classe ne vous est affectée.')}`;
+    const x = X(), per = evDe(p, true), { w, all } = x.classement(c, per), e = x.echelle(c), mc = x.moyClasse(c, per), rs = x.reussite(c, per);
+    const annuel = per === 'A';
+    const manque = annuel ? x.actifsDe(c).filter((s) => x.mga(s) == null).length : x.notesManquantes(c, per);
+    const kpis = html`<div class="grille g4 mb">
+      ${ui.kpi({ icone: 'chart', lib: 'Moyenne de la classe', val: mc == null ? '—' : html`${u.fmtNote(mc)}<small> / ${e}</small>`, sous: `${u.pluriel(w.length, 'élève')} classé(s)` })}
+      ${ui.kpi({ icone: 'checkCircle', lib: 'Taux de réussite', val: u.pct(rs.ok, rs.n), sous: `seuil ${x.info(c).seuil} / ${e}` })}
+      ${ui.kpi({ icone: 'award', lib: 'Premier', val: w[0] ? w[0].s.prenoms.split(' ')[0] + ' ' + w[0].s.nom : '—', sous: w[0] ? u.fmtNote(w[0].avg) + ' / ' + e : '' })}
+      ${ui.kpi({ icone: 'warn', lib: annuel ? 'MGA incomplètes' : 'Notes manquantes', val: manque, sous: annuel ? (x.info(c).regle === 'MOYENNE4' ? 'les 4 évaluations sont nécessaires' : '3 compositions + passage') : 'à compléter', lien: !annuel && manque ? `notes/saisie?classe=${c}&ev=${per}` : null, ton: manque ? 'avert' : '' })}</div>`;
+    const colonnes = [
+      { cle: 'rang', lib: 'Rang', tri: (z) => z.rank ?? 999, rendu: (z) => html`<b>${x.rangTxt(z.rank)}</b>` },
+      { cle: 'nom', lib: 'Élève', tri: (z) => x.nomComplet(z.s), rendu: (z) => ui.quiEleve(z.s), csv: (z) => x.nomComplet(z.s) },
+      ...(annuel
+        ? [1, 2, 3, 4].map((n) => ({ cle: 'e' + n, lib: C.evCourt(n), cls: 'droite num', tri: (z) => x.moyEval(z.s, n), rendu: (z) => (x.estAbsent(z.s.id, n) ? 'Abs.' : u.fmtNote(x.moyEval(z.s, n))) }))
+        : [{ cle: 'tot', lib: 'Total', cls: 'droite num', tri: (z) => { const r = x.resultat(z.s, per); return r && !r.abs ? r.total : null; }, rendu: (z) => { const r = x.resultat(z.s, per); return r && !r.abs ? u.fmtNote(r.total) : '—'; } }]),
+      { cle: 'moy', lib: annuel ? `MGA / ${e}` : `Moyenne / ${e}`, cls: 'droite num', tri: (z) => z.avg, rendu: (z) => { const r = annuel ? null : x.resultat(z.s, per); return html`<b>${r && r.abs ? 'Absent' : u.fmtNote(z.avg)}</b>`; } },
+      { cle: 'mention', lib: 'Mention', tri: (z) => z.avg, rendu: (z) => x.mention(z.avg, c), csv: (z) => x.mention(z.avg, c) },
+      { cle: 'dec', lib: annuel ? 'Décision' : 'Appréciation', csv: (z) => (annuel ? x.decision(z.s) : z.avg == null ? '' : z.avg >= x.info(c).seuil ? 'Seuil atteint' : 'Sous le seuil'), rendu: (z) => (annuel ? ui.tagDecision(x.decision(z.s)) : z.avg == null ? ui.tag(x.estAbsent(z.s.id, per) ? 'Absent' : 'Notes manquantes') : z.avg >= x.info(c).seuil ? ui.tag('Seuil atteint', 'ok') : ui.tag('Sous le seuil', 'avert')) },
+      { cle: 'b', lib: '', cls: 'droite', csv: false, rendu: (z) => html`<button type="button" class="btn btn-sm" data-action="bulletin" data-id="${z.s.id}" data-per="${per}">${ic('file')}Bulletin</button>` }
+    ];
+    return html`${ui.pageTete('Résultats & bulletins', 'Classement, mentions et bulletins de composition ou annuels (MGA).', html`<button type="button" class="btn" data-action="doc-classement" data-classe="${c}" data-per="${per}">${ic('print')}Imprimer le classement</button><button type="button" class="btn btn-pri" data-action="bulletins-classe" data-classe="${c}" data-per="${per}">${ic('file')}Tous les bulletins</button>`)}
+      <div class="barre-outils">${pilulesClasses(c, 'notes/resultats')}${choixEval(c, per, true, 'notes/resultats')}</div>
+      ${kpis}
+      ${ui.tableau({ id: 'resultats-' + c + '-' + per, lignes: all, cleId: (z) => z.s.id, colonnes, parPage: 80, unite: 'élève', exporter: `resultats-${c}-${per}`, legende: `Classement ${c}`, vide: ui.vide('Aucun élève inscrit', '') })}`;
+  }
+
+  /* ---------- Validation (directeur) ---------- */
+  function rendreValidation() {
+    const x = X(), groupes = [];
+    x.niveaux().forEach((c) => [1, 2, 3, 4].forEach((n) => {
+      const L = AK.notes.enAttenteDe(c, n);
+      if (L.length) groupes.push({ c, n, L });
+    }));
+    const sc = S().school;
+    const etat = html`<div class="tab-cadre"><table class="tab"><thead><tr><th>Classe</th>${[1, 2, 3, 4].map((n) => html`<th class="centre">${C.evCourt(n)}</th>`)}</tr></thead><tbody>${x.niveaux().map((c) => html`<tr><td><b>${c}</b></td>${[1, 2, 3, 4].map((n) => {
+      const sa = S().saisie[c + '|' + n] || {}, o = AK.notes.saisieOuverte(c, n);
+      return html`<td class="centre"><button type="button" class="btn btn-sm ${o ? '' : 'btn-dng'}" data-action="notes-periode" data-classe="${c}" data-ev="${n}" aria-haspopup="menu">${ic(o ? 'unlock' : 'lock', 'i-sm')}${o ? 'Ouverte' : 'Fermée'}${sa.fin ? html`<small class="mut">&nbsp;→ ${u.fmtDate(sa.fin).slice(0, 5)}</small>` : ''}</button></td>`;
+    })}</tr>`)}</tbody></table></div>`;
+    return html`${ui.pageTete('Validation des saisies', 'Les notes saisies par les enseignants attendent votre validation avant de compter dans les moyennes (si l’option est active).')}
+      <div class="grille g-2-1">
+        <div class="pile">${groupes.length ? groupes.map((g) => ui.carte(`${g.c} · ${x.evalLabel(g.c, g.n)}`, html`<div class="tab-cadre" style="max-height:280px"><table class="tab"><thead><tr><th>Élève</th><th>Matière</th><th class="droite">Note</th></tr></thead><tbody>${g.L.slice().sort().map((k) => {
+          const [id, , m] = k.split('|'), s = AK.eleves.trouver(id), mat = x.matieres(g.c, g.n).find(([z]) => z === m);
+          return html`<tr><td>${s ? x.nomComplet(s) : '?'}</td><td>${m}</td><td class="droite num"><b>${u.fmtNote(S().attente[k])}</b> / ${mat ? x.noteMax(g.c, mat[1]) : '?'}</td></tr>`;
+        })}</tbody></table></div>`, { sous: u.pluriel(g.L.length, 'note') + ' en attente', actions: html`<div class="ligne"><button type="button" class="btn btn-sm btn-dng" data-action="notes-rejeter" data-classe="${g.c}" data-ev="${g.n}">${ic('x')}Rejeter</button><button type="button" class="btn btn-sm btn-pri" data-action="notes-valider" data-classe="${g.c}" data-ev="${g.n}">${ic('check')}Valider</button></div>` })) : ui.carte('', ui.vide('Aucune note en attente', 'Toutes les saisies des enseignants sont validées.'))}</div>
+        <div class="pile">
+          ${ui.carte('Réglages', html`<div class="pile">${F.case({ lib: 'Les notes saisies par les enseignants doivent être validées par le directeur', nom: 'validation', coche: !!sc.validation, attrs: { 'data-change': 'notes-validation-option' } })}
+            ${F.choix({ lib: 'Évaluation en cours (tableau de bord, rappels)', nom: 'evalCourante', val: sc.evalCourante || 1, options: [1, 2, 3, 4].map((n) => [n, C.EV_GEN[n - 1]]), attrs: { 'data-change': 'notes-eval-courante' } })}</div>`)}
+          ${ui.carte('Ouverture de la saisie', etat, { sous: 'Cliquez pour fermer, rouvrir ou fixer une date limite' })}
+        </div></div>`;
+  }
+
+  /* ---------- Fin d'année ---------- */
+  function rendreFin(p) {
+    const c = classeDe(p);
+    if (!c) return ui.vide('Aucune classe', '');
+    const x = X(), e = x.echelle(c), suiv = AK.notes.anneeSuivante();
+    const L = x.actifsDe(c).map((s) => ({ s, m: x.mga(s) })).sort((a, b) => (b.m ?? -1) - (a.m ?? -1) || x.parNom(a.s, b.s));
+    const cnt = (d) => x.actifs().filter((s) => x.decision(s) === d).length;
+    const modif = peut('decision.modifier');
+    return html`${ui.pageTete('Fin d’année', `Décisions d’après la MGA (seuil ${x.info(c).seuil}/${e} en ${c}), puis passage à l’année ${suiv || 'suivante'}.`, html`<button type="button" class="btn" data-action="doc-classe" data-modele="decisions" data-classe="${c}">${ic('print')}Imprimer les décisions</button>${peut('annee.passer') ? html`<button type="button" class="btn btn-pri" data-action="annee-passer">${ic('flag')}Passer à ${suiv || 'l’année suivante'}</button>` : ''}`)}
+      <div class="grille g4 mb">${ui.kpi({ icone: 'checkCircle', lib: 'Admis', val: cnt('Admis'), sous: 'toute l’école', ton: 'ok' })}${ui.kpi({ icone: 'rotate', lib: 'Redoublants', val: cnt('Redoublant'), sous: 'toute l’école' })}${ui.kpi({ icone: 'warn', lib: 'MGA incomplète', val: x.actifs().filter((s) => !x.decision(s)).length, sous: 'évaluations manquantes', ton: 'avert' })}${ui.kpi({ icone: 'flag', lib: 'Départs', val: S().students.filter((s) => s.statut !== 'Inscrit').length, sous: 'abandons, exclusions, transferts' })}</div>
+      <div class="barre-outils">${pilulesClasses(c, 'notes/fin')}</div>
+      <div class="tab-cadre"><table class="tab"><thead><tr><th>Élève</th>${[1, 2, 3, 4].map((n) => html`<th class="droite">${C.evCourt(n)}</th>`)}<th class="droite">MGA / ${e}</th><th>Proposition</th><th>Décision</th></tr></thead><tbody>
+        ${L.length ? L.map(({ s, m }) => html`<tr><td>${ui.quiEleve(s)}</td>${[1, 2, 3, 4].map((n) => html`<td class="droite num">${x.estAbsent(s.id, n) ? 'Abs.' : u.fmtNote(x.moyEval(s, n))}</td>`)}<td class="droite num"><b>${u.fmtNote(m)}</b></td><td>${ui.tagDecision(x.decisionProposee(s))}</td>
+          <td>${modif ? html`<select class="inp inp-sm" data-change="decision" data-id="${s.id}" aria-label="Décision pour ${x.nomComplet(s)}">${ui.options(C.DECISIONS, x.decision(s), '—')}</select>${s.decision && s.decision !== x.decisionProposee(s) ? html` ${ui.tag('modifiée', 'acc')}` : ''}` : ui.tagDecision(x.decision(s))}</td></tr>`) : html`<tr><td colspan="8">${ui.vide('Aucun élève inscrit', '')}</td></tr>`}
+      </tbody></table></div>`;
+  }
+
+  AK.ecrans.def('notes/saisie', { rendu: rendreSaisie, droit: 'notes.saisir', apres: recalculer });
+  AK.ecrans.def('notes/resultats', { rendu: rendreResultats, droit: 'resultats.voir' });
+  AK.ecrans.def('notes/validation', { rendu: rendreValidation, droit: 'notes.valider', compteOnglet: () => Object.keys(S().attente || {}).length || null });
+  AK.ecrans.def('notes/fin', { rendu: rendreFin, droit: 'resultats.voir' });
+
+  /* ---------- Bulletins (aussi utilisés par la fiche élève et les documents) ---------- */
+  AK.docsUi = AK.docsUi || {};
+  AK.docsUi.bulletins = function (eleves, per) {
+    const p = per || S().school.evalCourante || 1;
+    const L = eleves.slice().sort(X().parClasse);
+    if (p === 'A') return AK.docs.ouvrir('bulletin-annuel', L.map((s) => ({ eleve: s })), { nomFichier: 'bulletins-annuels' });
+    return AK.docs.ouvrir('bulletin', L.map((s) => ({ eleve: s, periode: Number(p) })), { nomFichier: `bulletins-${C.evCourt(p)}` });
+  };
+
+  /* ---------- Actions ---------- */
+  const perDe = (v) => (v === 'A' ? 'A' : Number(v));
+  AK.actions.def({
+    'notes-classe': (el) => AK.shell.aller(el.dataset.route, { ...AK.shell.params(), classe: el.dataset.v }),
+    bulletin(el) {
+      const s = AK.eleves.trouver(el.dataset.id);
+      if (s) AK.docsUi.bulletins([s], perDe(el.dataset.per));
+    },
+    'bulletins-classe': (el) => AK.docsUi.bulletins(X().actifsDe(el.dataset.classe), perDe(el.dataset.per)),
+    'doc-classement': (el) => AK.docs.ouvrir('classement', [{ classe: el.dataset.classe, periode: perDe(el.dataset.per) }]),
+    'notes-valider'(el) {
+      const k = AK.notes.valider(el.dataset.classe, Number(el.dataset.ev));
+      ui.toast(`${u.pluriel(k, 'note validée', 'notes validées')} en ${el.dataset.classe}.`);
+    },
+    async 'notes-rejeter'(el) {
+      const ok = await ui.confirmer({ titre: 'Rejeter des notes', danger: true, ok: 'Rejeter', message: `Les notes en attente de ${el.dataset.classe} (${C.evCourt(el.dataset.ev)}) seront effacées ; l’enseignant devra les saisir de nouveau.` });
+      if (!ok) return;
+      const k = AK.notes.rejeter(el.dataset.classe, Number(el.dataset.ev));
+      ui.toast(`${u.pluriel(k, 'note rejetée', 'notes rejetées')}.`, { type: 'avert' });
+    },
+    'notes-periode'(el) {
+      const c = el.dataset.classe, n = Number(el.dataset.ev), o = AK.notes.saisieOuverte(c, n), sa = S().saisie[c + '|' + n] || {};
+      ui.menu(el, [
+        { icone: o ? 'lock' : 'unlock', lib: o ? 'Fermer la saisie' : (sa.fermee ? 'Rouvrir la saisie' : 'Rouvrir (retirer la date limite)'), f: () => (sa.fermee || o ? AK.notes.basculerSaisie(c, n) : AK.notes.dateLimite(c, n, '')) },
+        { icone: 'clock', lib: 'Fixer une date limite…', sous: sa.fin ? 'Actuelle : ' + u.fmtDate(sa.fin) : 'Aucune', f: () => ui.fenetre({
+          titre: `Date limite de saisie · ${c} · ${C.evCourt(n)}`, icone: 'clock', taille: 'sm', proteger: false,
+          corps: html`<div class="pile">${F.date({ lib: 'Dernier jour de saisie pour les enseignants', nom: 'fin', val: sa.fin })}<p class="mut petit mb0">Laissez vide pour ne fixer aucune date. Le directeur peut toujours saisir.</p></div>`,
+          surValider: (d) => AK.notes.dateLimite(c, n, d.fin)
+        }) }
+      ], `${c} · ${C.evCourt(n)}`);
+    },
+    'notes-matieres-cp'(el) {
+      const c = el.dataset.classe, n = Number(el.dataset.ev), act = X().matieres(c, n).map(([m]) => m);
+      const tout = [...C.CP_MATIERES, ...(S().cpExtra || [])];
+      ui.fenetre({
+        titre: `Matières de la composition · ${c} · ${X().evalLabel(c, n)}`, icone: 'list',
+        corps: html`<div class="pile">${F.cases({ lib: 'Matières évaluées', nom: 'liste', options: tout, valeurs: act })}
+          ${F.texte({ lib: 'Ajouter une matière', nom: 'nouvelle', attrs: { maxlength: 40, placeholder: 'Ex. : DESSIN' } })}
+          ${F.case({ lib: `Appliquer aussi au ${c === 'CP1' ? 'CP2' : 'CP1'}`, nom: 'aussi' })}
+          ${ui.encadre('Retirer une matière ne supprime pas les notes déjà saisies ; elles ne comptent simplement plus dans la moyenne.', 'info')}</div>`,
+        surValider: (d) => {
+          AK.notes.matieresCP(c, n, d.liste, d.nouvelle, d.aussi);
+          ui.toast('Matières de la composition enregistrées.');
+        }
+      });
+    },
+    async 'annee-passer'() {
+      AK.perm.exiger('annee.passer');
+      const R = AK.notes.bilanPassage(), suiv = AK.notes.anneeSuivante();
+      if (!suiv) throw new AK.ErreurMetier('Renseignez d’abord l’année scolaire en cours (Paramètres › École).');
+      const ok = await ui.confirmer({
+        titre: `Passer à l’année ${suiv}`, danger: true, ok: `Passer à ${suiv}`, saisie: 'PASSER',
+        message: html`<div class="pile-sm"><p class="mb0">Bilan du passage :</p><ul class="mb0"><li><b>${R.montent}</b> élève(s) admis passent au niveau supérieur ;</li><li><b>${R.restent}</b> restent dans leur classe (redoublants${R.sansDecision ? html`, dont <b>${R.sansDecision}</b> sans décision faute de MGA` : ''}) ;</li><li><b>${R.sortants + R.archives}</b> sont archivés (CM2 admis, départs${R.niveauNonOuvert.length ? ', admis vers un niveau non ouvert' : ''}).</li></ul>
+          ${R.niveauNonOuvert.length ? ui.encadre(html`Niveau suivant non ouvert dans l’école : ${R.niveauNonOuvert.slice(0, 5).join(' ; ')}${R.niveauNonOuvert.length > 5 ? '…' : ''}. Ces élèves seront archivés avec la mention « à transférer ».`, 'avert') : ''}
+          ${R.sansDecision ? ui.encadre(`${R.sansDecision} élève(s) sans MGA complète resteront dans leur classe. Fixez leur décision avant de continuer si nécessaire.`, 'avert') : ''}
+          <p class="mb0">Les notes, absences et appels de l’année sont archivés puis remis à zéro. <b>Une copie de sécurité est faite juste avant</b> (Données › Sauvegarde › Copies locales). Exportez aussi une sauvegarde sur clé USB.</p></div>`
+      });
+      if (!ok) return;
+      if (!(await AK.auth.confirmer('Passage à l’année suivante.', { forcer: true }))) return;
+      const r = await AK.notes.passerAnnee();
+      ui.toast(`Année ${suiv} ouverte : ${r.montent} élève(s) passent, ${r.restent} restent, ${r.archives} archivé(s).`, { duree: 10000 });
+      AK.shell.aller('accueil');
+    }
+  });
+  AK.actions.defChange({
+    'notes-ev': (el) => AK.shell.aller(el.dataset.route, { ...AK.shell.params(), ev: el.value }),
+    note: (el) => enregistrerNote(el),
+    async 'note-absent'(el) {
+      const n = Number($('#grille-notes').dataset.ev);
+      const voulu = el.checked;
+      try {
+        AK.notes.marquerAbsent(el.dataset.id, n, voulu);
+      } catch (err) {
+        if (!err.correction) throw err;
+        const ok = await ui.confirmer({ titre: voulu ? 'Absent(e) à l’évaluation' : 'Retirer l’absence', message: err.message, ok: 'Confirmer', danger: voulu });
+        if (!ok) {
+          el.checked = !voulu;
+          return;
+        }
+        AK.notes.marquerAbsent(el.dataset.id, n, voulu, { confirme: true });
+      }
+      AK.shell.redessiner();
+    },
+    decision(el) {
+      AK.notes.fixerDecision(el.dataset.id, el.value);
+    },
+    'notes-validation-option': (el) => AK.notes.basculerValidation(el.checked),
+    'notes-eval-courante'(el) {
+      AK.perm.exiger('notes.periode');
+      AK.store.modifier(`Évaluation en cours : ${C.EV_GEN[el.value - 1]}`, (s) => (s.school.evalCourante = Number(el.value)));
+    }
+  });
+  /* Entrée : élève suivant dans la même matière ; Maj+Entrée : élève précédent */
+  document.addEventListener('keydown', (e) => {
+    const el = e.target;
+    if (e.key !== 'Enter' || !el.classList || !el.classList.contains('note-in')) return;
+    e.preventDefault();
+    const champs = $$(`#grille-notes .note-in[data-j="${el.dataset.j}"]:not(:disabled)`);
+    const i = champs.indexOf(el), suivant = champs[i + (e.shiftKey ? -1 : 1)];
+    if (suivant) {
+      suivant.focus();
+      suivant.select();
+    } else el.blur();
+  });
+})(window.AK);
+
+//# sourceURL=akwa/js/screens/notes.js
+</script>
+<script>
+/* =====================================================================================
+   Absences : appel du jour (Présent → Absent → Absent justifié) et demandes d'autorisation
+   d'absence (personnel et élèves), avec décision du directeur et impression de la demande.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u, { html, raw, $ } = u, ic = AK.ic, ui = AK.ui, C = AK.cfg, F = AK.ui.champ;
+  const S = () => AK.store.etat;
+  const X = () => AK.calc;
+  const peut = (a, ctx) => AK.perm.peut(a, ctx);
+  const LIB = { '': 'Présent', A: 'Absent', J: 'Absent justifié' };
+
+  /* ---------- Appel ---------- */
+  function rendreAppel(p) {
+    const classes = AK.session.classes();
+    const c = classes.includes(p.classe) ? p.classe : classes[0];
+    if (!c) return html`${ui.pageTete('Appel du jour')}${ui.vide('Aucune classe', 'Aucune classe ne vous est affectée.')}`;
+    const x = X(), auj = u.aujourdhui();
+    const date = u.estISO(p.date) && p.date <= auj ? p.date : auj;
+    const L = x.actifsDe(c).sort(x.parNom), d = S().att[date] || {}, fait = (S().appel[date] || {})[c];
+    const nA = L.filter((s) => d[s.id] === 'A').length, nJ = L.filter((s) => d[s.id] === 'J').length;
+    const ferie = S().conges.find((k) => date >= k.du && date <= (k.au || k.du));
+    const jourClasse = x.estJourClasse(date);
+    const lever = peut('appel.lever');
+    const pil = ui.pilules(classes.map((k) => [k, k, (S().appel[date] || {})[k] ? raw('<span class="pt" aria-label="appel fait"></span>') : '']), c, 'appel-classe');
+    return html`${ui.pageTete('Appel du jour', lever ? 'Un clic sur l’état fait défiler : Présent → Absent → Absent justifié.' : 'Touchez « Présent » pour marquer un élève absent. Une absence enregistrée ne peut être levée que par le directeur.',
+      html`<button type="button" class="btn" data-action="appel-tous" data-classe="${c}" data-date="${date}">${ic('check')}${lever ? 'Tout le monde présent' : 'Les autres sont présents'}</button><button type="button" class="btn btn-pri" data-action="appel-valider" data-classe="${c}" data-date="${date}">${ic('clip')}${fait ? 'Appel validé' : 'Valider l’appel'}</button>`)}
+      <div class="barre-outils">${pil}<input class="inp inp-sm" type="date" value="${date}" max="${auj}" data-change="appel-date" aria-label="Date de l’appel" style="width:auto"><span class="puce">${L.length - nA - nJ} présent(s) · ${nA} absent(s) · ${nJ} justifié(s)</span>${fait ? ui.tag('Appel fait', 'ok', 'check') : ''}</div>
+      ${!jourClasse ? ui.encadre(`${ferie ? ferie.lib + ' : ' : ''}ce jour n’est pas un jour de classe (lundi, mardi, jeudi et vendredi, hors congés). L’appel reste possible si nécessaire.`, 'avert', 'cal') : ''}
+      ${L.length ? html`<div class="tab-cadre"><table class="tab" aria-label="Appel ${c} du ${u.fmtDate(date)}"><thead><tr><th>Élève</th><th>Matricule</th><th>Présence</th><th class="droite">Absences de l’année</th></tr></thead><tbody>${L.map((s) => {
+        const v = d[s.id] || '', n = x.absencesDe(s.id).length;
+        return html`<tr><td>${ui.quiEleve(s)}</td><td class="mono">${x.matOf(s)}</td><td><button type="button" id="pr-${s.id}" class="presence ${v}" data-action="appel-basculer" data-id="${s.id}" data-classe="${c}" data-date="${date}" aria-label="${x.nomComplet(s)} : ${LIB[v]}. Changer.">${v ? ic(v === 'J' ? 'info' : 'x', 'i-sm') : ic('check', 'i-sm')}${LIB[v]}</button></td><td class="droite">${n ? ui.tag(String(n), n >= 5 ? 'avert' : '') : '—'}</td></tr>`;
+      })}</tbody></table></div>` : ui.vide('Aucun élève inscrit', `Aucun élève inscrit en ${c}.`)}`;
+  }
+
+  /* ---------- Autorisations ---------- */
+  function rendreAutorisations(p) {
+    const L = S().auth.filter(AK.absences.visible).filter((a) => (!p.statut || a.statut === p.statut) && (!p.qui || a.qui === p.qui)).slice().sort((a, b) => b.cree.localeCompare(a.cree) || b.ref.localeCompare(a.ref));
+    const dir = peut('autorisation.decider');
+    const filtres = html`<select class="inp inp-sm" data-change="auth-filtre" data-f="statut" aria-label="Statut">${ui.options(['En attente', 'Accordée', 'Refusée'], p.statut, 'Tous les statuts')}</select><select class="inp inp-sm" data-change="auth-filtre" data-f="qui" aria-label="Pour">${ui.options([['personnel', 'Personnel'], ['eleve', 'Élèves']], p.qui, 'Personnel et élèves')}</select>`;
+    const ton = (s) => (s === 'Accordée' ? 'ok' : s === 'Refusée' ? 'mauvais' : 'avert');
+    return html`${ui.pageTete('Autorisations d’absence', 'Demandes du personnel et des élèves. Une demande accordée pour un élève justifie automatiquement ses absences des jours de classe concernés.', peut('autorisation.demander') ? html`<button type="button" class="btn btn-pri" data-action="autorisation-nouvelle">${ic('plus')}Nouvelle demande</button>` : '')}
+      ${ui.tableau({
+        id: 'autorisations', lignes: L, filtres, recherche: (a) => a.ref + ' ' + a.nom + ' ' + a.motif + ' ' + a.precision, placeholder: 'Nom, référence, motif…', unite: 'demande', exporter: 'autorisations',
+        colonnes: [
+          { cle: 'ref', lib: 'Référence', tri: (a) => a.ref, rendu: (a) => html`<span class="mono">${a.ref}</span>` },
+          { cle: 'nom', lib: 'Pour', tri: (a) => a.nom, rendu: (a) => html`<b>${a.nom}</b><br><span class="mut petit">${a.qui === 'eleve' ? 'Élève' : 'Personnel'}</span>`, csv: (a) => a.nom },
+          { cle: 'per', lib: 'Période', tri: (a) => a.du, rendu: (a) => html`${u.fmtDate(a.du)}${a.au !== a.du ? html` → ${u.fmtDate(a.au)}` : ''}<br><span class="mut petit">${u.pluriel(AK.absences.joursDemande(a), 'jour')} de classe</span>`, csv: (a) => `${a.du} → ${a.au}` },
+          { cle: 'motif', lib: 'Motif', tri: (a) => a.motif, rendu: (a) => html`${a.motif}${a.precision ? html`<br><span class="mut petit">${a.precision}</span>` : ''}`, csv: (a) => a.motif + (a.precision ? ' – ' + a.precision : '') },
+          { cle: 'statut', lib: 'Statut', tri: (a) => a.statut, rendu: (a) => ui.tag(a.statut, ton(a.statut)), csv: (a) => a.statut },
+          { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (a) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap">${dir && a.statut === 'En attente' ? html`<button type="button" class="btn btn-sm btn-pri" data-action="auth-decider" data-id="${a.id}" data-accord="1">${ic('check')}Accorder</button><button type="button" class="btn btn-sm" data-action="auth-decider" data-id="${a.id}" data-accord="">${ic('x')}Refuser</button>` : ''}<button type="button" class="btn-ic" data-action="auth-imprimer" data-id="${a.id}" aria-label="Imprimer la demande ${a.ref}" data-bulle="Imprimer">${ic('print')}</button>${peut('autorisation.supprimer') ? html`<button type="button" class="btn-ic" data-action="auth-supprimer" data-id="${a.id}" aria-label="Supprimer la demande ${a.ref}" data-bulle="Supprimer">${ic('trash')}</button>` : ''}</div>` }
+        ],
+        vide: ui.vide('Aucune demande', p.statut || p.qui ? 'Aucune demande ne correspond à ces filtres.' : 'Les demandes d’autorisation d’absence apparaîtront ici.')
+      })}`;
+  }
+
+  function demande(qui, id) {
+    AK.perm.exiger('autorisation.demander');
+    const moi = AK.session.agent();
+    const eleves = X().actifs().filter((s) => AK.session.classes().includes(s.classe)).sort(X().parClasse);
+    const agents = AK.session.estDirecteur() ? S().teachers.filter((t) => t.actif !== false) : moi ? [moi] : [];
+    const q = qui || (agents.length ? 'personnel' : 'eleve');
+    ui.fenetre({
+      titre: 'Demande d’autorisation d’absence', icone: 'cal', ok: 'Enregistrer la demande',
+      corps: html`<div class="pile">
+        ${F.radios({ lib: 'Pour', nom: 'qui', val: q, options: [...(agents.length ? [['personnel', 'Un membre du personnel']] : []), ['eleve', 'Un élève']] })}
+        <div class="form-grille">
+          <div data-pour="personnel"${q === 'personnel' ? '' : raw(' hidden')}>${F.choix({ lib: 'Membre du personnel', nom: 'pid_personnel', val: q === 'personnel' ? id || (moi && moi.id) : '', options: agents.map((t) => [t.id, t.nom]), vide: 'Choisir…' })}</div>
+          <div data-pour="eleve"${q === 'eleve' ? '' : raw(' hidden')}>${F.choix({ lib: 'Élève', nom: 'pid_eleve', val: q === 'eleve' ? id : '', options: eleves.map((s) => [s.id, `${X().nomComplet(s)} (${s.classe})`]), vide: 'Choisir…' })}</div>
+          <span></span>
+          ${F.date({ lib: 'Du', nom: 'du', val: u.aujourdhui(), req: true })}
+          ${F.date({ lib: 'Au (inclus)', nom: 'au', val: u.aujourdhui(), req: true })}
+          ${F.choix({ lib: 'Motif', nom: 'motif', options: C.MOTIFS, vide: 'Choisir…', req: true })}
+          ${F.texte({ lib: 'Précision', nom: 'precision', attrs: { maxlength: 160, placeholder: 'Facultatif' } })}
+          <p class="mut petit mb0 plein" id="auth-jours"></p>
+        </div></div>`,
+      apres(racine) {
+        const f = $('form', racine);
+        const maj = () => {
+          const qv = (f.querySelector('[name=qui]:checked') || {}).value;
+          f.querySelector('[data-pour=personnel]').hidden = qv !== 'personnel';
+          f.querySelector('[data-pour=eleve]').hidden = qv !== 'eleve';
+          const n = f.elements.du.value && f.elements.au.value && f.elements.au.value >= f.elements.du.value ? X().joursClasse(f.elements.du.value, f.elements.au.value).length : 0;
+          $('#auth-jours', racine).textContent = `${u.pluriel(n, 'jour')} de classe concerné(s).`;
+        };
+        f.addEventListener('change', maj);
+        maj();
+      },
+      surValider(d) {
+        const a = AK.absences.demander({ qui: d.qui, pid: d.qui === 'eleve' ? d.pid_eleve : d.pid_personnel, du: d.du, au: d.au, motif: d.motif, precision: d.precision });
+        ui.toast(`Demande ${a.ref} enregistrée.`, { action: { lib: 'Imprimer', f: () => imprimerDemande(a) } });
+      }
+    });
+  }
+  function imprimerDemande(a) {
+    if (a.qui === 'eleve') {
+      const s = AK.eleves.trouver(a.pid);
+      if (!s) throw new AK.ErreurMetier('Élève introuvable.');
+      return AK.docs.ouvrir('demande-absence-eleve', [{ demande: a, eleve: s }]);
+    }
+    const t = AK.personnel.trouver(a.pid);
+    if (!t) throw new AK.ErreurMetier('Membre du personnel introuvable.');
+    return AK.docs.ouvrir('demande-absence-personnel', [{ demande: a, agent: t }]);
+  }
+
+  AK.ecrans.def('absences/appel', { rendu: rendreAppel, droit: 'appel.faire' });
+  AK.ecrans.def('absences/autorisations', { rendu: rendreAutorisations, droit: 'autorisation.demander', compteOnglet: () => (AK.session.estDirecteur() ? S().auth.filter((a) => a.statut === 'En attente').length || null : null) });
+  AK.ecransAbsences = { demande };
+
+  const demandeDe = (el) => {
+    const a = S().auth.find((x) => x.id === el.dataset.id);
+    if (!a) throw new AK.ErreurMetier('Demande introuvable.');
+    return a;
+  };
+  AK.actions.def({
+    'appel-classe': (el) => AK.shell.aller('absences/appel', { ...AK.shell.params(), classe: el.dataset.v }),
+    'appel-basculer'(el) {
+      const v = AK.absences.basculer(el.dataset.date, el.dataset.classe, el.dataset.id);
+      el.className = 'presence ' + v;
+      u.poser(el, html`${v ? ic(v === 'J' ? 'info' : 'x', 'i-sm') : ic('check', 'i-sm')}${LIB[v]}`);
+      AK.shell.redessiner();
+    },
+    'appel-tous'(el) {
+      AK.absences.tousPresents(el.dataset.date, el.dataset.classe);
+      ui.toast(`Appel ${el.dataset.classe} enregistré.`);
+    },
+    'appel-valider'(el) {
+      AK.absences.valider(el.dataset.date, el.dataset.classe);
+      ui.toast(`Appel ${el.dataset.classe} du ${u.fmtDate(el.dataset.date)} validé.`);
+    },
+    'autorisation-nouvelle': (el) => demande(el.dataset.qui, el.dataset.id),
+    'auth-decider'(el) {
+      const a = demandeDe(el), oui = !!el.dataset.accord;
+      const n = AK.absences.decider(a.id, oui);
+      ui.toast(`${a.ref} ${oui ? 'accordée' : 'refusée'}${oui && a.qui === 'eleve' ? ` : ${u.pluriel(n, 'absence justifiée')}` : ''}.`);
+    },
+    'auth-imprimer': (el) => imprimerDemande(demandeDe(el)),
+    async 'auth-supprimer'(el) {
+      const a = demandeDe(el);
+      if (!(await ui.confirmer({ titre: 'Supprimer une demande', danger: true, ok: 'Supprimer', message: `Supprimer la demande ${a.ref} (${a.nom}) ? Les absences déjà justifiées restent enregistrées.` }))) return;
+      AK.absences.supprimer(a.id);
+      ui.toast('Demande supprimée.');
+    }
+  });
+  AK.actions.defChange({
+    'appel-date': (el) => AK.shell.aller('absences/appel', { ...AK.shell.params(), date: el.value }),
+    'auth-filtre'(el) {
+      const p = { ...AK.shell.params(), [el.dataset.f]: el.value };
+      Object.keys(p).forEach((k) => !p[k] && delete p[k]);
+      AK.shell.aller('absences/autorisations', p);
+    }
+  });
+})(window.AK);
+
+//# sourceURL=akwa/js/screens/absences.js
+</script>
+<script>
+/* =====================================================================================
+   Personnel : fiches (affectation des classes, type de fonctionnement), comptes des
+   enseignants (mot de passe provisoire affiché une seule fois), messages du directeur.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u, { html, raw } = u, ic = AK.ic, ui = AK.ui, C = AK.cfg, F = AK.ui.champ, V = AK.valid;
+  const S = () => AK.store.etat;
+  const X = () => AK.calc;
+  const peut = (a, ctx) => AK.perm.peut(a, ctx);
+
+  /* ---------- Liste ---------- */
+  function rendreListe() {
+    const x = X(), L = S().teachers.slice().sort((a, b) => (a.actif === false) - (b.actif === false) || C.TOUS_NIVEAUX.indexOf(x.clsDe(a)[0] || 'ZZ') - C.TOUS_NIVEAUX.indexOf(x.clsDe(b)[0] || 'ZZ') || a.nom.localeCompare(b.nom, 'fr'));
+    return html`${ui.pageTete('Personnel', 'Enseignants et agents. Un niveau n’a qu’un enseignant ; une classe multigrade ou jumelée regroupe plusieurs niveaux.', html`<button type="button" class="btn" data-action="doc-ecole" data-modele="liste-personnel">${ic('print')}Liste du personnel</button>${peut('document.emettre') && L.length ? html`<button type="button" class="btn" data-action="agents-cartes">${ic('idCard')}Cartes professionnelles</button>` : ''}<button type="button" class="btn btn-pri" data-action="agent-nouveau">${ic('userPlus')}Ajouter un membre</button>`)}
+      ${ui.tableau({
+        id: 'personnel', lignes: L, unite: 'membre', exporter: 'personnel', recherche: (t) => t.nom + ' ' + t.matricule + ' ' + t.fonction, placeholder: 'Nom, matricule, fonction…', selection: peut('document.emettre'),
+        actionsSelection: () => html`<button type="button" class="btn btn-sm" data-action="agents-cartes" data-selection="1">${ic('idCard')}Cartes</button>`,
+        colonnes: [
+          { cle: 'nom', lib: 'Nom', tri: (t) => V.civ.sans(t.nom), csv: (t) => t.nom, rendu: (t) => html`<div class="qui">${ui.avatar(t)}<span class="tronque">${ui.nomAgent(t)}${t.actif === false ? html`<br>${ui.tag('Fiche désactivée', 'mauvais')}` : ''}</span></div>` },
+          { cle: 'mat', lib: 'Matricule', tri: (t) => t.matricule, rendu: (t) => html`<span class="mono">${t.matricule || '—'}</span>` },
+          { cle: 'fonction', lib: 'Fonction', tri: (t) => t.fonction },
+          { cle: 'grade', lib: 'Emploi / grade', tri: (t) => x.emploiGrade(t), rendu: (t) => x.emploiGrade(t) || '—' },
+          { cle: 'cl', lib: 'Classe(s)', tri: (t) => C.TOUS_NIVEAUX.indexOf(x.clsDe(t)[0] || 'ZZ'), csv: (t) => x.clsTxt(t), rendu: (t) => (x.clsDe(t).length ? html`${x.clsDe(t).map(ui.lienClasse)}${x.fonctTxt(t) ? html`<br><span class="mut petit">${x.fonctTxt(t)}</span>` : ''}` : ui.tag('—')) },
+          { cle: 'tel', lib: 'Téléphone', tri: (t) => t.tel, rendu: (t) => (t.tel ? html`<a href="tel:${t.tel}">${t.tel}</a>` : '—'), csv: (t) => t.tel },
+          { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (t) => html`<div class="ligne" style="justify-content:flex-end;flex-wrap:nowrap"><button type="button" class="btn-ic" data-action="agent-modifier" data-id="${t.id}" aria-label="Modifier ${t.nom}" data-bulle="Modifier">${ic('edit')}</button><button type="button" class="btn-ic" data-action="agent-plus" data-id="${t.id}" aria-label="Autres actions pour ${t.nom}" aria-haspopup="menu">${ic('more')}</button></div>` }
+        ],
+        vide: ui.vide('Aucun membre du personnel', 'Ajoutez les enseignants pour leur affecter une classe et leur créer un compte.', html`<button type="button" class="btn btn-pri" data-action="agent-nouveau">${ic('userPlus')}Ajouter un membre</button>`)
+      })}`;
+  }
+
+  function formulaire(t) {
+    t = t || {};
+    const x = X();
+    return html`<div class="pile">
+      <section class="section-form"><h3>${ic('user')}Identité</h3><div class="form-grille">
+        ${F.choix({ lib: 'Civilité', nom: 'civ', val: V.civ.de(t.nom), options: C.CIVS, vide: 'Choisir…', req: true })}
+        ${F.texte({ lib: 'Nom et prénoms', nom: 'nom', val: V.civ.sans(t.nom || ''), req: true, attrs: { 'data-input': 'maj-nom-complet', maxlength: 80, autocomplete: 'off', placeholder: 'Ex. : KOFFI Kouadio' } })}
+        ${F.texte({ lib: 'Matricule', nom: 'matricule', val: t.matricule, attrs: { maxlength: 12, autocapitalize: 'characters', placeholder: 'Ex. : 123456A' } })}
+        ${F.tel({ lib: 'Téléphone', nom: 'tel', val: t.tel })}
+        ${F.image({ lib: 'Photo', nom: 'photo', val: t.photo, bouton: 'Choisir une photo', max: 360 })}
+        ${F.date({ lib: 'Prise de service dans l’école', nom: 'dateEntree', val: t.dateEntree, attrs: { max: u.aujourdhui() } })}
+      </div></section>
+      <section class="section-form"><h3>${ic('brief')}Carrière</h3><div class="form-grille">
+        ${F.choix({ lib: 'Fonction', nom: 'fonction', val: t.fonction || 'Instituteur', options: C.FONCTIONS, req: true })}
+        ${F.choix({ lib: 'Emploi', nom: 'grade', val: t.grade || C.GRADES[0], options: C.GRADES })}
+        ${F.texte({ lib: 'Grade (ex. B3)', nom: 'echelon', val: t.echelon, attrs: { maxlength: 6, autocapitalize: 'characters' } })}
+        ${F.image({ lib: 'Avis d’affectation ou de mutation (photo)', nom: 'avis', val: t.avis, bouton: 'Photographier l’avis', max: 1400 })}
+      </div></section>
+      <section class="section-form"><h3>${ic('grid')}Classe(s) tenue(s)</h3><div class="pile">
+        ${F.cases({ lib: 'Niveaux (plusieurs pour une classe multigrade ou jumelée)', nom: 'classes', options: x.niveaux(), valeurs: x.clsDe(t) })}
+        <div class="form-grille">${F.choix({ lib: 'Type de fonctionnement de la classe', nom: 'fonct', val: t.fonct, options: C.FONCTS, vide: 'Choisir…', aide: 'Obligatoire dès qu’une classe est cochée.' })}
+        ${F.texte({ lib: 'Préciser (si « Autre »)', nom: 'fonctAutre', val: t.fonctAutre, attrs: { maxlength: 60, placeholder: 'Ex. : classe passerelle' } })}</div>
+        ${ui.encadre('Cocher un niveau déjà tenu par un collègue le lui retire.', 'info')}</div></section></div>`;
+  }
+  function ouvrirFormulaire(t) {
+    ui.fenetre({
+      titre: t ? `Modifier · ${t.nom}` : 'Ajouter un membre du personnel', icone: t ? 'edit' : 'userPlus', taille: 'lg', ok: t ? 'Enregistrer' : 'Ajouter',
+      corps: formulaire(t),
+      async surValider(d) {
+        try {
+          if (t) AK.personnel.modifier(t.id, d);
+          else AK.personnel.ajouter(d);
+        } catch (err) {
+          if (!err.doublons) throw err;
+          if (!(await ui.confirmer({ titre: 'Homonyme', message: `${err.message} S’agit-il d’une autre personne ?`, ok: 'Oui, une autre personne' }))) return false;
+          if (t) AK.personnel.modifier(t.id, { ...d, accepterDoublon: true });
+          else AK.personnel.ajouter({ ...d, accepterDoublon: true });
+        }
+        ui.toast(t ? 'Fiche mise à jour.' : 'Membre du personnel ajouté.');
+      }
+    });
+  }
+
+  function fiche(id) {
+    const t = AK.personnel.trouver(id);
+    if (!t || !peut('personnel.voir')) return null;
+    const x = X(), auths = S().auth.filter((a) => a.qui === 'personnel' && a.pid === t.id).slice().reverse();
+    const eff = x.actifs().filter((s) => x.clsDe(t).includes(s.classe)).length;
+    const docs = AK.registre.duSujet(t.id).slice(-5).reverse();
+    return html`<div class="pile">
+      <div class="fiche-hero">${ui.avatar(t, 'xl')}<div class="flex1"><h2>${t.nom}</h2><div class="mut">${t.fonction}${x.emploiGrade(t) ? ' · ' + x.emploiGrade(t) : ''}</div><div class="ligne mt0">${x.clsDe(t).length ? html`${x.clsDe(t).map(ui.lienClasse)}<span class="mut petit">${eff} élèves</span>` : ui.tag('Sans classe')}${t.actif === false ? ui.tag('Fiche désactivée', 'mauvais') : ''}</div></div></div>
+      <div class="ligne"><button type="button" class="btn btn-sm" data-action="agent-modifier" data-id="${t.id}">${ic('edit')}Modifier</button><button type="button" class="btn btn-sm" data-action="autorisation-nouvelle" data-qui="personnel" data-id="${t.id}">${ic('cal')}Demande d’absence</button><button type="button" class="btn btn-sm" data-action="agent-documents" data-id="${t.id}">${ic('file')}Documents</button></div>
+      ${ui.carte('Dossier', html`<dl class="kv"><dt>Matricule</dt><dd>${t.matricule || '—'}</dd><dt>Emploi / grade</dt><dd>${x.emploiGrade(t) || '—'}</dd><dt>Fonctionnement</dt><dd>${x.fonctTxt(t) || '—'}</dd><dt>Téléphone</dt><dd>${t.tel || '—'}</dd><dt>Prise de service</dt><dd>${u.fmtDate(t.dateEntree)}</dd><dt>Compte</dt><dd>${t.compte ? `${t.compte.login} · ${t.compte.actif ? 'actif' : 'désactivé'}` : 'Aucun'}</dd></dl>${t.avis ? html`<h3 class="mt petit">Avis d’affectation ou de mutation</h3><img src="${t.avis}" alt="Avis d’affectation" style="max-width:100%;border:1px solid var(--line);border-radius:8px">` : ''}`)}
+      ${ui.carte('Demandes d’autorisation', auths.length ? html`<div class="liste">${auths.map((a) => html`<a href="#absences/autorisations?qui=personnel"><span class="flex1"><b>${a.ref}</b> · ${a.motif}<br><span class="mut petit">${u.fmtDate(a.du)}${a.au !== a.du ? ' → ' + u.fmtDate(a.au) : ''} · ${u.pluriel(AK.absences.joursDemande(a), 'jour')}</span></span><span class="m">${ui.tag(a.statut, a.statut === 'Accordée' ? 'ok' : a.statut === 'Refusée' ? 'mauvais' : 'avert')}</span></a>`)}</div>` : html`<p class="mut mb0">Aucune demande.</p>`)}
+      ${docs.length ? ui.carte('Documents émis', html`<div class="liste">${docs.map((d) => html`<a href="#documents/registre?ref=${d.ref}"><span class="flex1"><b>${AK.registre.libelleType(d.type)}</b><br><span class="mono petit mut">${d.ref}</span></span><span class="m">${u.fmtDate(d.emisLe.slice(0, 10))}</span></a>`)}</div>`) : ''}
+    </div>`;
+  }
+  ui.defTiroir('agent', fiche);
+
+  /* ---------- Comptes ---------- */
+  function rendreComptes() {
+    const L = S().teachers.slice().sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    const local = AK.hote.authentificationLocale;
+    return html`${ui.pageTete('Comptes enseignants', 'Chaque enseignant se connecte avec son identifiant et ne voit que sa classe : notes, appel, résultats, demandes d’absence.')}
+      ${ui.encadre(local ? html`Le mot de passe provisoire n’est affiché <b>qu’une seule fois</b> : notez-le et remettez-le à l’enseignant, qui devra le changer à sa première connexion. Les mots de passe sont conservés sous forme d’empreintes (jamais en clair).` : 'Version bureau : les comptes sont gérés par l’application Windows.', 'info', 'shield')}
+      ${ui.tableau({
+        id: 'comptes', lignes: L, unite: 'membre', recherche: (t) => t.nom + ' ' + (t.compte ? t.compte.login : ''),
+        colonnes: [
+          { cle: 'nom', lib: 'Membre', tri: (t) => t.nom, rendu: (t) => html`<div class="qui">${ui.avatar(t)}<span>${ui.nomAgent(t)}<br><span class="mut petit">${X().clsTxt(t) || 'Sans classe'}</span></span></div>` },
+          { cle: 'login', lib: 'Identifiant', tri: (t) => (t.compte ? t.compte.login : ''), rendu: (t) => (t.compte ? html`<span class="mono">${t.compte.login}</span>` : html`<span class="mut">—</span>`) },
+          { cle: 'etat', lib: 'État', rendu: (t) => (!t.compte ? ui.tag('Pas de compte') : !t.compte.actif ? ui.tag('Désactivé', 'mauvais') : (S().securite.comptes[t.id] || {}).provisoire ? ui.tag('Mot de passe provisoire', 'avert') : ui.tag('Actif', 'ok')) },
+          { cle: 'act', lib: '', cls: 'droite', rendu: (t) => html`<div class="ligne" style="justify-content:flex-end">${!t.compte ? html`<button type="button" class="btn btn-sm btn-pri" data-action="compte-creer" data-id="${t.id}"${t.actif === false ? raw(' disabled') : ''}>${ic('key')}Créer le compte</button>` : html`<button type="button" class="btn btn-sm" data-action="compte-reinit" data-id="${t.id}">${ic('refresh')}Nouveau mot de passe</button><button type="button" class="btn btn-sm" data-action="compte-basculer" data-id="${t.id}">${ic(t.compte.actif ? 'lock' : 'unlock')}${t.compte.actif ? 'Désactiver' : 'Activer'}</button>`}</div>` }
+        ],
+        vide: ui.vide('Aucun membre du personnel', 'Ajoutez d’abord les enseignants dans l’onglet Personnel.')
+      })}`;
+  }
+  function montrerMdp(t, mdp) {
+    ui.fenetre({
+      titre: `Mot de passe provisoire · ${t.nom}`, icone: 'key', taille: 'sm', ok: 'J’ai noté le mot de passe', annuler: false, proteger: false,
+      corps: html`<div class="pile"><p class="mb0">Identifiant : <b class="mono">${t.compte.login}</b></p><div class="code-secours" style="font-size:22px">${mdp}</div>
+        ${ui.encadre('Ce mot de passe ne sera plus jamais affiché. L’enseignant devra le remplacer à sa première connexion.', 'avert')}</div>`
+    });
+  }
+
+  /* ---------- Messages ---------- */
+  function rendreMessages() {
+    const dir = AK.session.estDirecteur(), moi = AK.session.agent();
+    const L = dir ? S().messages : S().messages.filter((m) => moi && (!m.dest || m.dest === moi.id));
+    const actifs = S().teachers.filter((t) => t.actif !== false);
+    return html`${ui.pageTete('Messages', dir ? 'Informations du directeur aux enseignants : elles s’affichent à leur connexion.' : 'Messages du directeur.', dir ? html`<button type="button" class="btn btn-pri" data-action="message-nouveau">${ic('send')}Nouveau message</button>` : moi && AK.personnel.nonLus(moi.id).length ? html`<button type="button" class="btn" data-action="lire-messages">${ic('check')}Tout marquer comme lu</button>` : '')}
+      ${L.length ? html`<div class="pile">${L.map((m) => {
+        const dest = m.dest ? AK.personnel.trouver(m.dest) : null;
+        const cibles = m.dest ? (dest ? [dest] : []) : actifs;
+        const lus = cibles.filter((t) => m.lus[t.id]).length;
+        const nonLu = !dir && moi && !m.lus[moi.id];
+        return ui.carte(m.titre, html`<p style="white-space:pre-wrap" class="mb0">${m.texte}</p>`, { sous: html`${new Date(m.t).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })} · ${m.dest ? 'À ' + (dest ? dest.nom : 'un membre retiré') : 'À tous les enseignants'}${dir ? html` · lu par ${lus}/${cibles.length}` : ''}`, actions: nonLu ? ui.tag('Nouveau', 'acc') : '' });
+      })}</div>` : ui.vide('Aucun message', dir ? 'Envoyez une information à tous les enseignants ou à l’un d’eux.' : 'Aucun message du directeur pour l’instant.')}`;
+  }
+
+  AK.ecrans.def('personnel/liste', { rendu: rendreListe, droit: 'personnel.voir' });
+  AK.ecrans.def('personnel/comptes', { rendu: rendreComptes, droit: 'comptes.gerer' });
+  AK.ecrans.def('personnel/messages', { rendu: rendreMessages, compteOnglet: () => {
+    const moi = AK.session.agent();
+    return moi ? AK.personnel.nonLus(moi.id).length || null : null;
+  } });
+
+  const agentDe = (el) => {
+    const t = AK.personnel.trouver(el.dataset.id);
+    if (!t) throw new AK.ErreurMetier('Membre du personnel introuvable.');
+    return t;
+  };
+  AK.actions.def({
+    'fiche-agent': (el) => (peut('personnel.voir') ? ui.ouvrirTiroir('agent', el.dataset.id) : null),
+    'agent-nouveau': () => {
+      AK.perm.exiger('personnel.gerer');
+      ouvrirFormulaire(null);
+    },
+    'agent-modifier': (el) => {
+      AK.perm.exiger('personnel.gerer');
+      ouvrirFormulaire(agentDe(el));
+    },
+    'agent-documents'(el) {
+      const t = agentDe(el);
+      const items = AK.modeles.liste().filter((d) => d.sujet === 'agent').filter((d) => !d.emission || peut('document.emettre')).map((d) => ({
+        icone: d.icone || 'file', lib: d.lib, f: () => (d.categorie === 'carte' ? AK.docsUi.cartes(d.id, [t.id]) : AK.docs.ouvrir(d.id, [{ agent: t }]))
+      }));
+      ui.menu(el, items.length ? items : [html`<p class="mut petit" style="padding:10px">Aucun document disponible pour votre profil.</p>`], t.nom);
+    },
+    'agent-plus'(el) {
+      const t = agentDe(el);
+      ui.menu(el, [
+        { icone: 'user', lib: 'Ouvrir la fiche', f: () => ui.ouvrirTiroir('agent', t.id) },
+        { icone: 'file', lib: 'Documents…', f: () => AK.actions.lancer('agent-documents', el) },
+        { icone: t.actif === false ? 'unlock' : 'lock', lib: t.actif === false ? 'Réactiver la fiche' : 'Désactiver la fiche (départ, mutation)', sous: t.actif === false ? '' : 'Le compte est bloqué ; l’historique est conservé', f: () => AK.personnel.basculerFiche(t.id) },
+        'sep',
+        { icone: 'trash', lib: 'Retirer (corbeille)', danger: true, f: async () => {
+          if (!(await ui.confirmer({ titre: 'Retirer un membre du personnel', danger: true, ok: 'Mettre à la corbeille', message: html`<p><b>${t.nom}</b> sera placé(e) dans la corbeille avec son compte. Ses classes deviennent sans enseignant.</p><p class="mb0">Pour un départ ou une mutation, préférez « Désactiver la fiche ».</p>` }))) return;
+          if (!(await AK.auth.confirmer(`Retirer ${t.nom} du personnel.`))) return;
+          AK.personnel.retirer(t.id);
+          ui.fermerTiroir();
+          ui.toast('Membre placé dans la corbeille.');
+        } }
+      ], t.nom);
+    },
+    'agents-cartes'(el) {
+      const ids = el.dataset.selection ? ui.tableauChoix('personnel') : S().teachers.filter((t) => t.actif !== false).map((t) => t.id);
+      AK.docsUi.cartes('carte-agent', ids);
+    },
+    async 'compte-creer'(el) {
+      const t = agentDe(el);
+      ui.fenetre({
+        titre: `Créer le compte de ${t.nom}`, icone: 'key', taille: 'sm', ok: 'Créer le compte', proteger: false,
+        corps: html`<div class="pile">${F.texte({ lib: 'Identifiant de connexion', nom: 'login', val: AK.auth.loginDe(t.nom), req: true, attrs: { maxlength: 24, autocomplete: 'off', autocapitalize: 'none' }, aide: '3 à 24 caractères : lettres minuscules, chiffres, point, tiret.' })}</div>`,
+        async surValider(d) {
+          const mdp = await AK.auth.creerCompte(t.id, d.login);
+          setTimeout(() => montrerMdp(t, mdp), 50);
+        }
+      });
+    },
+    async 'compte-reinit'(el) {
+      const t = agentDe(el);
+      if (!(await ui.confirmer({ titre: 'Nouveau mot de passe', message: `Créer un nouveau mot de passe provisoire pour ${t.nom} ? L’ancien ne fonctionnera plus.`, ok: 'Créer' }))) return;
+      if (!(await AK.auth.confirmer(`Réinitialiser le mot de passe de ${t.nom}.`))) return;
+      montrerMdp(t, await AK.auth.reinitCompte(t.id));
+    },
+    'compte-basculer': (el) => AK.personnel.basculerCompte(agentDe(el).id),
+    'message-nouveau'() {
+      AK.perm.exiger('messages.envoyer');
+      ui.fenetre({
+        titre: 'Nouveau message aux enseignants', icone: 'send', ok: 'Envoyer',
+        corps: html`<div class="pile">${F.choix({ lib: 'Destinataire', nom: 'dest', options: S().teachers.filter((t) => t.actif !== false && t.compte).map((t) => [t.id, t.nom]), vide: 'Tous les enseignants' })}
+          ${F.texte({ lib: 'Objet', nom: 'titre', req: true, attrs: { maxlength: 120 } })}${F.zone({ lib: 'Message', nom: 'texte', req: true, lignes: 6, attrs: { maxlength: 2000 } })}</div>`,
+        surValider(d) {
+          AK.personnel.envoyerMessage(d);
+          ui.toast('Message envoyé.');
+        }
+      });
+    }
+  });
+})(window.AK);
+
+//# sourceURL=akwa/js/screens/personnel.js
+</script>
+<script>
+/* =====================================================================================
+   Documents & cartes : catalogue des modèles, choix des élèves / membres concernés,
+   cartes d'identification (planche ou unité), registre des documents émis (copie,
+   duplicata, annulation, historique) et vérification (référence, QR scanné, photo).
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u, { html, raw, $, $$ } = u, ic = AK.ic, ui = AK.ui, C = AK.cfg, F = AK.ui.champ;
+  const S = () => AK.store.etat;
+  const X = () => AK.calc;
+  const peut = (a, ctx) => AK.perm.peut(a, ctx);
+  const R = () => AK.registre;
+
+  const CATEGORIES = [
+    ['eleve', 'Documents des élèves', 'Bulletins, certificats, attestations, fiches. Inscrits au registre, avec référence et QR code vérifiable.'],
+    ['carte', 'Cartes d’identification', 'Carte scolaire et carte professionnelle : format carte bancaire, planche A4 ou impression à l’unité.'],
+    ['personnel', 'Documents du personnel', 'Attestation de service.'],
+    ['liste', 'Listes et états', 'États de gestion paginés, datés, sans inscription au registre.'],
+    ['rapport', 'Rapports', 'Rapports officiels et générateur : ouverts depuis Rapports & statistiques.'],
+    ['autres', 'Documents liés à une opération', 'Produits depuis l’écran de l’opération : demande d’absence, convocation, reçu, emploi du temps…']
+  ];
+  const RENVOIS = { absence: 'absences/autorisations', vie: 'vie/discipline', finance: 'finances/paiements', rapport: 'rapports/officiels' };
+  const RENVOI_MODELE = { 'emploi-du-temps': 'vie/edt', 'cahier-textes': 'vie/cahier', 'convocation-parents': 'vie/discipline', recu: 'finances/paiements', 'journal-caisse': 'finances/paiements', 'rapport-perso': 'rapports/generateur', 'fiche-transmission': 'rapports/liaison', 'synthese-iepp': 'rapports/liaison', 'rapport-infrastructures': 'rapports/stats' };
+  const catDe = (d) => (['eleve', 'carte', 'personnel', 'liste', 'rapport'].includes(d.categorie) ? d.categorie : 'autres');
+  const accessibleModele = (d) => {
+    if (d.categorie === 'rapport') return peut('rapports.officiels');
+    if (d.categorie === 'liste') return d.sujet === 'classe' ? AK.session.classes().length > 0 : AK.session.estDirecteur() || peut('document.imprimerClasse', { classe: AK.session.classes()[0] });
+    if (d.emission) return peut('document.emettre') || (d.emission.politique === 'unique' && AK.session.classes().some((c) => peut('document.imprimerClasse', { classe: c })));
+    return true;
+  };
+
+  /* ---------- Catalogue ---------- */
+  function rendreCatalogue() {
+    const L = AK.modeles.liste().filter(accessibleModele);
+    const carte = (d) => {
+      const renvoi = RENVOI_MODELE[d.id] || (catDe(d) === 'autres' || d.categorie === 'rapport' ? RENVOIS[d.categorie] : null);
+      const perso = AK.modeles.estPersonnalise(d.id);
+      return html`<div class="modele-carte">${ic(d.icone || 'file')}<b>${d.lib}</b><small>${d.description || ''}</small>
+        <div class="ligne">${d.emission ? ui.tag(d.emission.politique === 'unique' ? 'Référence unique' : 'Registre + QR', 'pri', 'qr') : ''}${perso ? ui.tag('Personnalisé', 'acc') : ''}<span class="mut petit">v${d.version}${perso ? '.' + (AK.modeles.reglages(d.id).rev || 1) : ''}</span></div>
+        <div class="ligne mt0">${renvoi ? html`<a class="btn btn-sm" href="#${renvoi}">${ic('chev')}Ouvrir l’écran</a>` : d.categorie === 'carte' ? html`<a class="btn btn-sm btn-pri" href="#documents/cartes?modele=${d.id}">${ic('idCard')}Préparer les cartes</a>` : html`<button type="button" class="btn btn-sm btn-pri" data-action="doc-emettre" data-modele="${d.id}">${ic(d.emission ? 'filePlus' : 'print')}${d.emission ? 'Émettre' : 'Imprimer'}</button>`}
+        ${peut('modeles.gerer') ? html`<a class="btn btn-sm btn-ghost" href="#parametres/modeles?modele=${d.id}">${ic('sliders')}Personnaliser</a>` : ''}</div></div>`;
+    };
+    return html`${ui.pageTete('Émettre un document', 'Chaque document officiel reçoit une référence unique inscrite au registre et, si la clé de l’école est créée, un QR code signé électroniquement.', peut('document.registre') ? html`<a class="btn" href="#documents/registre">${ic('archive')}Registre des documents</a>` : '')}
+      ${peut('document.emettre') && !AK.cles.active() && AK.crypto.dispo() ? ui.encadre(html`<b>Signature électronique non configurée.</b> Les documents sont vérifiables par le registre de cet ordinateur seulement. ${peut('cles.gerer') ? html`<a href="#parametres/securite">Créer la clé de signature de l’école</a>.` : ''}`, 'avert', 'shield') : ''}
+      ${S().meta.demo ? ui.encadre('Mode démonstration : tous les documents portent le filigrane SPÉCIMEN et ne sont pas signés.', 'info') : ''}
+      <div class="pile-lg">${CATEGORIES.map(([k, titre, sous]) => {
+        const M = L.filter((d) => catDe(d) === k);
+        return M.length ? html`<section><div class="titre-section"><h2>${titre}</h2><span class="mut petit">${sous}</span></div><div class="catalogue">${M.map(carte)}</div></section>` : '';
+      })}</div>`;
+  }
+
+  /* ---------- Choix des sujets ---------- */
+  const PARAMS = { bulletin: 'periode', classement: 'periode' };
+  function choisirEleves({ titre, multiple = true, classe, periode, filtre }) {
+    return new Promise((resolve) => {
+      let res = null;
+      const classes = AK.session.classes();
+      const c0 = classes.includes(classe) ? classe : classes[0] || '';
+      const liste = (c, q) => X().actifs().filter((s) => classes.includes(s.classe) && (!c || s.classe === c) && (!q || u.norm(X().nomComplet(s) + s.mat + (s.matNat || '')).includes(u.norm(q))) && (!filtre || filtre(s))).sort(X().parClasse);
+      const lignes = (c, q) => {
+        const L = liste(c, q);
+        return L.length ? html`${L.map((s) => html`<label class="coche ligne-choix"><input type="${multiple ? 'checkbox' : 'radio'}" name="ids" value="${s.id}"${multiple ? raw(' data-multiple') : ''}> ${ui.avatar(s)}<span class="flex1">${X().nomComplet(s)} <span class="mut petit">· ${s.classe} · ${X().matOf(s)}</span></span>${!s.photo ? html`<span class="mut petit">sans photo</span>` : ''}</label>`)}` : html`<p class="mut">Aucun élève.</p>`;
+      };
+      ui.fenetre({
+        titre, icone: 'users', ok: 'Continuer', proteger: false,
+        corps: html`<div class="pile">
+          <div class="barre-outils">${F.choix({ lib: 'Classe', nom: 'classe', val: c0, options: classes, vide: 'Toutes les classes', attrs: { 'data-sujets': 'classe' } })}
+          ${periode ? F.choix({ lib: 'Période', nom: 'periode', val: periode === true ? S().school.evalCourante || 1 : periode, options: [...[1, 2, 3, 4].map((n) => [n, C.EV_GEN[n - 1]]), ['A', 'Annuel (MGA)']] }) : ''}
+          ${F.texte({ lib: 'Rechercher', nom: 'q', attrs: { type: 'search', placeholder: 'Nom ou matricule', 'data-sujets': 'q', autocomplete: 'off' } })}</div>
+          ${multiple ? html`<div class="ligne"><button type="button" class="btn btn-sm" data-tout="1">Tout cocher</button><button type="button" class="btn btn-sm btn-ghost" data-tout="0">Tout décocher</button><span class="mut petit" data-nb></span></div>` : ''}
+          <div class="liste-choix" data-liste>${lignes(c0, '')}</div></div>`,
+        apres(racine) {
+          const f = $('form', racine), zone = $('[data-liste]', racine);
+          const compter = () => {
+            const n = $$('[name=ids]:checked', f).length, el = $('[data-nb]', f);
+            if (el) el.textContent = `${n} sélectionné(s)`;
+          };
+          const maj = () => {
+            u.poser(zone, lignes(f.elements.classe.value, f.elements.q.value));
+            compter();
+          };
+          f.elements.classe.addEventListener('change', maj);
+          f.elements.q.addEventListener('input', maj);
+          f.addEventListener('change', compter);
+          racine.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-tout]');
+            if (!b) return;
+            $$('[name=ids]', f).forEach((x) => (x.checked = b.dataset.tout === '1'));
+            compter();
+          });
+          compter();
+        },
+        surValider(d) {
+          const ids = Array.isArray(d.ids) ? d.ids : d.ids ? [d.ids] : [];
+          if (!ids.length) throw new AK.ErreurMetier('Choisissez au moins un élève.');
+          res = { eleves: ids.map((id) => AK.eleves.trouver(id)).filter(Boolean), periode: d.periode === 'A' ? 'A' : Number(d.periode) || null };
+        },
+        surFermer: () => resolve(res)
+      });
+    });
+  }
+  function choisirAgents(titre) {
+    return new Promise((resolve) => {
+      let res = null;
+      const L = S().teachers.filter((t) => t.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+      ui.fenetre({
+        titre, icone: 'users', ok: 'Continuer', proteger: false,
+        corps: L.length ? html`<div class="liste-choix">${L.map((t) => html`<label class="coche ligne-choix"><input type="checkbox" name="ids" value="${t.id}" data-multiple> ${ui.avatar(t)}<span class="flex1">${t.nom} <span class="mut petit">· ${t.fonction}</span></span>${!t.photo ? html`<span class="mut petit">sans photo</span>` : ''}</label>`)}</div>` : ui.vide('Aucun membre du personnel', ''),
+        surValider(d) {
+          if (!d.ids || !d.ids.length) throw new AK.ErreurMetier('Choisissez au moins une personne.');
+          res = d.ids.map((id) => AK.personnel.trouver(id)).filter(Boolean);
+        },
+        surFermer: () => resolve(res)
+      });
+    });
+  }
+  function choisirClasse(titre, avecPeriode) {
+    return new Promise((resolve) => {
+      let res = null;
+      ui.fenetre({
+        titre, icone: 'grid', taille: 'sm', ok: 'Continuer', proteger: false,
+        corps: html`<div class="pile">${F.choix({ lib: 'Classe', nom: 'classe', options: AK.session.classes(), req: true })}${avecPeriode ? F.choix({ lib: 'Période', nom: 'periode', val: S().school.evalCourante || 1, options: [...[1, 2, 3, 4].map((n) => [n, C.EV_GEN[n - 1]]), ['A', 'Annuel (MGA)']] }) : ''}</div>`,
+        surValider(d) {
+          if (!d.classe) throw new AK.ErreurMetier('Choisissez la classe.', 'classe');
+          res = { classe: d.classe, periode: d.periode === 'A' ? 'A' : Number(d.periode) || null };
+        },
+        surFermer: () => resolve(res)
+      });
+    });
+  }
+
+  async function emettre(id) {
+    const d = AK.modeles.get(id);
+    if (!d) throw new AK.ErreurMetier('Modèle inconnu.');
+    if (d.sujet === 'eleve') {
+      const r = await choisirEleves({ titre: d.lib, periode: PARAMS[id] ? true : null, filtre: d.refuser ? (s) => !d.refuser({ eleve: s }) : null });
+      if (!r) return;
+      if (id === 'bulletin') return AK.docsUi.bulletins(r.eleves, r.periode || S().school.evalCourante || 1);
+      return AK.docs.ouvrir(id, r.eleves.map((s) => ({ eleve: s })));
+    }
+    if (d.sujet === 'agent') {
+      const L = await choisirAgents(d.lib);
+      if (L) AK.docs.ouvrir(id, L.map((t) => ({ agent: t })));
+      return;
+    }
+    if (d.sujet === 'classe') {
+      const r = await choisirClasse(d.lib, !!PARAMS[id]);
+      if (r) AK.docs.ouvrir(id, [{ classe: r.classe, periode: r.periode }]);
+      return;
+    }
+    return AK.docs.ouvrir(id, [{}]);
+  }
+
+  /* ---------- Cartes ---------- */
+  const OPTIONS_PLANCHE = () => {
+    let o = {};
+    try {
+      o = JSON.parse(localStorage.getItem('akwa2:planche') || '{}');
+    } catch (e) { /* préférence absente */ }
+    return { mode: o.mode === 'unitaire' ? 'unitaire' : 'planche', traits: o.traits !== false, verso: !!o.verso, debut: 0 };
+  };
+  function champsPlanche(idModele, o) {
+    const r = AK.modeles.reglages(idModele), f = AK.cartes.format(r);
+    const col = Math.max(1, Math.floor((210 - 16 + 2) / (f.l + 2))), lig = Math.max(1, Math.floor((297 - 16 - 6 + 2) / (f.h + 2)));
+    return html`<div class="pile">
+      <p class="mb0 petit">${ic('idCard')} Format du modèle : <b>${f.lib}</b>${f.cle === 'perso' ? ` (${f.l} × ${f.h} mm)` : ''} · ${peut('modeles.gerer') ? html`<a href="#parametres/modeles?modele=${idModele}">modifier le modèle</a>` : ''}</p>
+      ${F.radios({ lib: 'Impression', nom: 'mode', val: o.mode, options: [['planche', `Planche A4 (${col * lig} cartes par feuille, traits de coupe)`], ['unitaire', 'À l’unité (imprimante à cartes, une carte par page)']] })}
+      <div class="form-grille">
+        ${F.case({ lib: 'Traits de coupe', nom: 'traits', coche: o.traits })}
+        ${F.case({ lib: r.carte && r.carte.verso ? 'Imprimer aussi les versos (recto-verso)' : 'Verso désactivé dans le modèle', nom: 'verso', coche: o.verso && r.carte && r.carte.verso, attrs: { disabled: !(r.carte && r.carte.verso) } })}
+        ${F.nombre({ lib: 'Commencer à l’emplacement n°', nom: 'debut', val: 1, attrs: { min: 1, max: col * lig, step: 1 }, aide: `Pour réutiliser une feuille entamée (1 à ${col * lig}, de gauche à droite puis de haut en bas).` })}
+      </div>
+      ${ui.encadre('Imprimez à 100 % (« Taille réelle », sans « Ajuster à la page ») pour obtenir les dimensions exactes. Pour le recto-verso, faites d’abord un essai sur papier ordinaire.', 'info', 'print')}</div>`;
+  }
+  const lirePlanche = (d) => {
+    const o = { mode: d.mode === 'unitaire' ? 'unitaire' : 'planche', traits: !!d.traits, verso: !!d.verso, debut: Math.max(0, (parseInt(d.debut, 10) || 1) - 1) };
+    try {
+      localStorage.setItem('akwa2:planche', JSON.stringify({ mode: o.mode, traits: o.traits, verso: o.verso }));
+    } catch (e) { /* préférence non conservée */ }
+    return o;
+  };
+  /** Cartes pour une liste d'identifiants (élèves ou personnel) : options de planche puis aperçu. */
+  function cartes(idModele, ids, options = {}) {
+    AK.perm.exiger('document.emettre');
+    const d = AK.modeles.get(idModele);
+    const eleve = d.sujet === 'eleve';
+    const sujets = ids.map((id) => (eleve ? AK.eleves.trouver(id) : AK.personnel.trouver(id))).filter(Boolean);
+    if (!sujets.length) throw new AK.ErreurMetier(eleve ? 'Choisissez au moins un élève.' : 'Choisissez au moins un membre du personnel.');
+    const sansPhoto = sujets.filter((x) => !x.photo).length;
+    ui.fenetre({
+      titre: `${d.lib} · ${u.pluriel(sujets.length, eleve ? 'élève' : 'personne')}`, icone: 'idCard', ok: 'Aperçu avant impression', proteger: false,
+      corps: html`<div class="pile">${options.duplicataDe ? ui.encadre(html`Duplicata de la carte <b class="mono">${options.duplicataDe}</b> : à l’impression, la carte d’origine sera marquée <b>REMPLACÉE</b> au registre et refusée à la vérification.`, 'avert') : ''}
+        ${sansPhoto ? ui.encadre(`${u.pluriel(sansPhoto, 'carte sera imprimée', 'cartes seront imprimées')} sans photo (cadre « PHOTO » vide).`, 'avert', 'image') : ''}${champsPlanche(idModele, OPTIONS_PLANCHE())}</div>`,
+      surValider(dd) {
+        const planche = lirePlanche(dd);
+        setTimeout(() => AK.docs.ouvrir(idModele, sujets.map((x) => (eleve ? { eleve: x } : { agent: x })), {
+          planche, duplicataDe: options.duplicataDe, titre: options.duplicataDe ? `Duplicata · ${d.lib}` : undefined,
+          surEmission: options.duplicataDe ? (g) => g.docs[0] && R().remplacer(options.duplicataDe, g.docs[0].ref) : undefined
+        }).catch(ui.erreur), 30);
+      }
+    });
+  }
+  function rendreCartes(p) {
+    const idModele = p.modele === 'carte-agent' ? 'carte-agent' : 'carte-eleve';
+    const eleve = idModele === 'carte-eleve';
+    const classes = AK.session.classes();
+    const c = classes.includes(p.classe) ? p.classe : '';
+    const L = eleve ? X().actifs().filter((s) => classes.includes(s.classe) && (!c || s.classe === c)).sort(X().parClasse) : S().teachers.filter((t) => t.actif !== false).sort((a, b) => a.nom.localeCompare(b.nom, 'fr'));
+    const r = AK.modeles.reglages(idModele), f = AK.cartes.format(r);
+    const dernieres = new Map();
+    (S().docs.items || []).filter((d) => d.type === (eleve ? 'CEL' : 'CPE') && d.statut === 'valide' && d.sujet).forEach((d) => dernieres.set(d.sujet.id, d));
+    return html`${ui.pageTete('Cartes d’identification', `${f.lib}. Photo, nom, matricule et QR code de vérification (référence, nom et matricule seulement : jamais de téléphone, de santé ni d’acte de naissance).`, html`${peut('modeles.gerer') ? html`<a class="btn" href="#parametres/modeles?modele=${idModele}">${ic('sliders')}Modèle de la carte</a>` : ''}<button type="button" class="btn" data-action="carte-specimen" data-modele="${idModele}">${ic('eye')}Spécimen</button>`)}
+      <div class="barre-outils">${ui.pilules([['carte-eleve', 'Élèves'], ['carte-agent', 'Personnel']], idModele, 'cartes-type')}${eleve ? html`<select class="inp inp-sm" data-change="cartes-classe" aria-label="Classe">${ui.options(classes, c, 'Toutes les classes')}</select>` : ''}</div>
+      ${ui.tableau({
+        id: 'cartes-' + idModele, lignes: L, selection: true, unite: eleve ? 'élève' : 'membre', parPage: 100, recherche: (x) => (eleve ? X().nomComplet(x) + x.mat + (x.matNat || '') : x.nom + x.matricule),
+        actionsSelection: (ids) => html`<button type="button" class="btn btn-sm btn-pri" data-action="cartes-imprimer" data-modele="${idModele}">${ic('print')}Préparer ${u.pluriel(ids.length, 'carte')}</button>`,
+        colonnes: [
+          { cle: 'nom', lib: eleve ? 'Élève' : 'Membre', tri: (x) => (eleve ? X().nomComplet(x) : x.nom), rendu: (x) => (eleve ? ui.quiEleve(x) : html`<div class="qui">${ui.avatar(x)}${ui.nomAgent(x)}</div>`) },
+          eleve ? { cle: 'c', lib: 'Classe', tri: (x) => C.TOUS_NIVEAUX.indexOf(x.classe), rendu: (x) => x.classe } : { cle: 'f', lib: 'Fonction', tri: (x) => x.fonction, rendu: (x) => x.fonction },
+          { cle: 'photo', lib: 'Photo', tri: (x) => (x.photo ? 1 : 0), rendu: (x) => (x.photo ? ui.tag('Oui', 'ok') : ui.tag('Manquante', 'avert')) },
+          { cle: 'carte', lib: 'Carte en vigueur', tri: (x) => (dernieres.get(x.id) ? dernieres.get(x.id).emisLe : ''), rendu: (x) => {
+            const d = dernieres.get(x.id);
+            return d ? html`<a class="mono petit" href="#documents/registre?ref=${d.ref}">${d.ref}</a><br><span class="mut petit">${u.fmtDate(d.emisLe.slice(0, 10))}${d.expire ? ' · jusqu’au ' + u.fmtDate(d.expire) : ''}</span>` : html`<span class="mut">—</span>`;
+          } }
+        ],
+        vide: ui.vide(eleve ? 'Aucun élève inscrit' : 'Aucun membre du personnel', '')
+      })}`;
+  }
+
+  /* ---------- Registre ---------- */
+  const STATUTS_DOC = { valide: ['En vigueur', 'ok'], annule: ['Annulé', 'mauvais'], remplace: ['Remplacé', 'mauvais'], expire: ['Expiré', 'avert'] };
+  function rendreRegistre(p) {
+    const items = (S().docs.items || []).slice().reverse();
+    const L = items.filter((d) => (!p.type || d.type === p.type) && (!p.statut || R().statutEffectif(d) === p.statut) && (!p.annee || d.annee === p.annee));
+    const st = ui.tableauEtat('registre');
+    if (p.ref && st.q !== p.ref && !st._refApplique) {
+      st.q = p.ref;
+      st._refApplique = p.ref;
+    }
+    const annees = [...new Set(items.map((d) => d.annee).filter(Boolean))];
+    const filtres = html`<select class="inp inp-sm" data-change="registre-filtre" data-f="type" aria-label="Type">${ui.options(Object.entries(R().TYPES), p.type, 'Tous les types')}</select><select class="inp inp-sm" data-change="registre-filtre" data-f="statut" aria-label="Statut">${ui.options(Object.entries(STATUTS_DOC).map(([k, [l]]) => [k, l]), p.statut, 'Tous les statuts')}</select>${annees.length > 1 ? html`<select class="inp inp-sm" data-change="registre-filtre" data-f="annee" aria-label="Année">${ui.options(annees, p.annee, 'Toutes les années')}</select>` : ''}`;
+    const nb = (k) => items.filter((d) => R().statutEffectif(d) === k).length;
+    return html`${ui.pageTete('Registre des documents', 'Tous les documents émis, avec leur statut. Rien n’est jamais effacé : un document annulé reste inscrit avec son motif.', html`<button type="button" class="btn" data-action="verificateur-exporter">${ic('down')}Outil de vérification autonome</button>`)}
+      <div class="grille g4 mb">${ui.kpi({ icone: 'archive', lib: 'Documents émis', val: items.length, sous: `${items.filter((d) => d.signe).length} signé(s) électroniquement` })}${ui.kpi({ icone: 'checkCircle', lib: 'En vigueur', val: nb('valide'), ton: 'ok' })}${ui.kpi({ icone: 'ban', lib: 'Annulés ou remplacés', val: nb('annule') + nb('remplace'), ton: nb('annule') + nb('remplace') ? 'avert' : '' })}${ui.kpi({ icone: 'clock', lib: 'Expirés', val: nb('expire') })}</div>
+      ${ui.tableau({
+        id: 'registre', lignes: L, cleId: (d) => d.ref, filtres, unite: 'document', parPage: 50, exporter: 'registre-documents', placeholder: 'Référence, nom, type…',
+        recherche: (d) => d.ref + ' ' + R().libelleType(d.type) + ' ' + (d.sujet ? d.sujet.libelle : '') + ' ' + (d.emisPar || ''),
+        colonnes: [
+          { cle: 'ref', lib: 'Référence', tri: (d) => d.ref, rendu: (d) => html`<button type="button" class="lien mono" data-action="doc-details" data-ref="${d.ref}">${d.ref}</button>${d.demo ? html`<br>${ui.tag('Démonstration')}` : ''}`, csv: (d) => d.ref },
+          { cle: 'type', lib: 'Document', tri: (d) => R().libelleType(d.type), rendu: (d) => html`${R().libelleType(d.type)}${(d.versions || []).length ? html`<br><span class="mut petit">${u.pluriel(d.versions.length + 1, 'version')}</span>` : ''}`, csv: (d) => R().libelleType(d.type) },
+          { cle: 'sujet', lib: 'Concerne', tri: (d) => (d.sujet ? d.sujet.libelle : ''), rendu: (d) => (d.sujet ? d.sujet.libelle : '—'), csv: (d) => (d.sujet ? d.sujet.libelle : '') },
+          { cle: 'emis', lib: 'Émis le', tri: (d) => d.emisLe, rendu: (d) => html`${u.fmtDate(d.emisLe.slice(0, 10))}<br><span class="mut petit">${d.emisPar || ''}</span>`, csv: (d) => d.emisLe.slice(0, 10) },
+          { cle: 'statut', lib: 'Statut', tri: (d) => R().statutEffectif(d), rendu: (d) => { const [l, t] = STATUTS_DOC[R().statutEffectif(d)] || ['?', '']; return html`${ui.tag(l, t)}${d.signe ? html` <span data-bulle="Signé électroniquement (clé ${d.kid})">${ic('shieldCheck', 'i-sm')}</span>` : ''}`; }, csv: (d) => (STATUTS_DOC[R().statutEffectif(d)] || ['?'])[0] },
+          { cle: 'imp', lib: 'Impr.', cls: 'droite num', tri: (d) => (d.impressions || []).length, rendu: (d) => (d.impressions || []).length },
+          { cle: 'act', lib: '', cls: 'droite', csv: false, rendu: (d) => html`<button type="button" class="btn-ic" data-action="doc-actions" data-ref="${d.ref}" aria-label="Actions pour ${d.ref}" aria-haspopup="menu">${ic('more')}</button>` }
+        ],
+        vide: ui.vide('Aucun document émis', items.length ? 'Aucun document ne correspond aux filtres.' : 'Les documents émis (certificats, cartes, bulletins…) apparaîtront ici.')
+      })}`;
+  }
+  function details(d) {
+    const st = R().statutEffectif(d), [l, t] = STATUTS_DOC[st] || ['?', ''];
+    const cle = d.kid ? AK.cles.liste().find((k) => k.id === d.kid) : null;
+    ui.fenetre({
+      titre: `${R().libelleType(d.type)} · ${d.ref}`, icone: 'file', taille: 'lg', ok: 'Fermer', annuler: false, proteger: false,
+      corps: html`<div class="grille g-2-1"><div class="pile">
+        <dl class="kv"><dt>Statut</dt><dd>${ui.tag(l, t)}</dd><dt>Concerne</dt><dd>${d.sujet ? d.sujet.libelle : '—'}</dd><dt>Émis le</dt><dd>${new Date(d.emisLe).toLocaleString('fr-FR')} par ${d.emisPar || '—'}</dd><dt>Année scolaire</dt><dd>${d.annee || '—'}</dd><dt>Validité</dt><dd>${d.expire ? 'jusqu’au ' + u.fmtDate(d.expire) : 'sans date de fin'}</dd>
+          <dt>Signature</dt><dd>${d.signe ? `Clé ${d.kid}${cle ? ' · ' + cle.empreinte + ' · ' + cle.statut : ''}` : 'Non signé (vérification par le registre)'}</dd><dt>Empreinte</dt><dd class="mono">${d.H || '—'}</dd><dt>Modèle</dt><dd>${(AK.modeles.get(d.modele) || {}).lib || d.modele} (version ${d.modeleVersion || '?'})</dd>
+          ${d.duplicataDe ? html`<dt>Duplicata de</dt><dd class="mono">${d.duplicataDe}</dd>` : ''}${d.remplacePar ? html`<dt>Remplacé par</dt><dd class="mono">${d.remplacePar}</dd>` : ''}
+          ${d.annulation ? html`<dt>${st === 'remplace' ? 'Remplacement' : 'Annulation'}</dt><dd>${new Date(d.annulation.le).toLocaleString('fr-FR')} par ${d.annulation.par || '—'} : ${d.annulation.motif}</dd>` : ''}</dl>
+        <h3 class="petit">Historique des impressions</h3><div class="liste">${(d.impressions || []).slice().reverse().map((i) => html`<div><span class="flex1">${{ original: 'Original', copie: 'Copie', reimpression: 'Réimpression', duplicata: 'Duplicata' }[i.type] || i.type}</span><span class="m">${new Date(i.t).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })} · ${i.par || ''}</span></div>`)}</div>
+        ${(d.versions || []).length ? html`<h3 class="petit">Versions antérieures</h3><div class="liste">${d.versions.map((v) => html`<div><span class="flex1 mono petit">${v.H}</span><span class="m">${u.fmtDate(String(v.le).slice(0, 10))}</span></div>`)}</div>` : ''}
+      </div><div class="pile">${d.qr ? html`<div style="max-width:220px">${AK.qr.svg(d.qr, { titre: 'QR code du document ' + d.ref })}</div><p class="mut petit mb0">Contenu du QR : ${d.qr.length} caractères (${d.qrIdentite ? 'référence, nom et matricule' : 'référence et empreinte seulement'}).</p>` : html`<p class="mut">Document sans QR code.</p>`}</div></div>`
+    });
+  }
+  async function copie(d) {
+    AK.perm.exiger('document.registre');
+    const c = await AK.docs.conforme(d);
+    if (!c.ok) {
+      const nouveau = c.ctx && peut('document.emettre');
+      const ok = await ui.confirmer({ titre: 'Copie impossible', icone: 'warn', message: c.motif, ok: nouveau ? 'Émettre un nouveau document' : 'Fermer', annuler: nouveau ? 'Annuler' : false });
+      if (ok && nouveau) AK.docs.ouvrir(d.modele, [c.ctx]);
+      return;
+    }
+    const m = AK.modeles.get(d.modele);
+    return AK.docs.ouvrir(d.modele, [c.ctx], { copie: true, reutiliser: [d], titre: `Copie · ${d.ref}`, planche: m && m.categorie === 'carte' ? OPTIONS_PLANCHE() : undefined });
+  }
+  async function annuler(d) {
+    AK.perm.exiger('document.annuler');
+    ui.fenetre({
+      titre: `Annuler ${d.ref}`, icone: 'ban', taille: 'sm', danger: true, ok: 'Annuler le document', okStyle: 'dng', annuler: 'Retour',
+      corps: html`<div class="pile"><p class="mb0">${R().libelleType(d.type)}${d.sujet ? ' · ' + d.sujet.libelle : ''}</p>
+        ${F.zone({ lib: 'Motif de l’annulation', nom: 'motif', req: true, lignes: 2, attrs: { maxlength: 300, placeholder: 'Ex. : erreur sur la date de naissance ; document remplacé' } })}
+        ${ui.encadre('Le document reste au registre. Toute vérification (QR code ou référence) le signalera comme ANNULÉ. Les outils de vérification autonomes déjà distribués ne le sauront qu’après mise à jour.', 'avert')}</div>`,
+      async surValider(dd) {
+        if (String(dd.motif || '').trim().length < 3) throw new AK.ErreurMetier('Indiquez le motif de l’annulation.', 'motif');
+        if (!(await AK.auth.confirmer(`Annuler le document ${d.ref}.`))) return false;
+        R().annuler(d.ref, dd.motif);
+        ui.toast(`Document ${d.ref} annulé.`);
+      }
+    });
+  }
+  function duplicata(d) {
+    AK.perm.exiger('document.emettre');
+    const m = AK.modeles.get(d.modele);
+    if (!m) throw new AK.ErreurMetier('Modèle de document introuvable.');
+    const ctx = AK.docs.contexteDe(d);
+    if (m.categorie === 'carte') return cartes(d.modele, [d.sujet.id], { duplicataDe: d.ref });
+    return AK.docs.ouvrir(d.modele, [ctx], { duplicataDe: d.ref, titre: `Duplicata · ${m.lib}`, surEmission: (g) => g.docs[0] && R().remplacer(d.ref, g.docs[0].ref) });
+  }
+
+  /* ---------- Vérification ---------- */
+  const entreeRegistre = (d, avecNom) => (d ? { e: d.emisLe.slice(0, 10), n: avecNom && d.sujet ? d.sujet.libelle : '', h: d.H, v: (d.versions || []).map((v) => v.H), s: d.statut, a: d.annulation ? d.annulation.le.slice(0, 10) : null, motif: d.annulation ? d.annulation.motif : '', remplacePar: d.remplacePar || '', x: d.expire || null, demo: !!d.demo } : null);
+  const sourceLocale = () => ({ cles: AK.cles.publiques().map((c) => ({ ...c, ecole: c.ecole || S().school.name })), trouver: (ref) => entreeRegistre(R().trouver(ref), true), aujourdhui: u.aujourdhui() });
+  let dernierResultat = null, camera = null;
+
+  async function verifierTexte(t) {
+    if (!String(t || '').trim()) throw new AK.ErreurMetier('Saisissez une référence ou collez le contenu du QR code.', 'texte');
+    dernierResultat = await AK.verif.verifier(t, sourceLocale());
+    AK.store.journaliser(`Vérification : ${dernierResultat.ref || 'contenu non reconnu'} → ${dernierResultat.verdict}`, 'verification');
+    const z = $('#verif-resultat');
+    if (z) u.poser(z, resultatHtml(dernierResultat));
+    else AK.shell.redessiner();
+  }
+  const resultatHtml = (Rr) => html`${AK.verif.rendu(Rr)}${Rr.ref && R().trouver(Rr.ref) && peut('document.registre') ? html`<div class="ligne mt"><button type="button" class="btn btn-sm" data-action="doc-details" data-ref="${Rr.ref}">${ic('file')}Détails au registre</button></div>` : ''}
+    <p class="mut petit mt">Rappel : la signature prouve que le contenu du QR n’a pas été modifié et qui l’a émis. Le statut (annulé, remplacé) n’est connu que par le registre à jour. Comparez toujours le nom et la photo avec le document présenté.</p>`;
+  function rendreVerifier(p) {
+    if (p.ref && (!dernierResultat || dernierResultat.ref !== AK.valid.normRef(p.ref))) setTimeout(() => verifierTexte(p.ref).catch(ui.erreur), 0);
+    const sc = S().school;
+    return html`${ui.pageTete('Vérifier un document', 'Scannez le QR code d’un document ou d’une carte, importez-en une photo, ou saisissez sa référence.')}
+      <div class="grille g2">
+        <div class="pile">
+          ${ui.carte('Référence ou contenu du QR', html`<form data-submit="verif-texte" class="pile" autocomplete="off">${F.texte({ lib: 'Référence (AK-XXX-AAAA-NNNNNN-C) ou texte lu par une douchette', nom: 'texte', id: 'verif-texte', val: p.ref || '', attrs: { autofocus: true, spellcheck: 'false', placeholder: 'AK-CSC-2026-000012-7' } })}<div class="ligne"><button type="submit" class="btn btn-pri">${ic('shieldCheck')}Vérifier</button></div></form>`)}
+          ${ui.carte('Caméra ou photo', html`<div class="pile">
+            <div class="camera" id="camera" hidden><video playsinline muted></video><div class="viseur"></div></div>
+            <div class="ligne"><button type="button" class="btn" data-action="verif-camera" id="btn-camera">${ic('cam')}Scanner avec la caméra</button><label class="btn">${ic('image')}Importer une photo du QR<input type="file" accept="image/*" hidden data-change="verif-photo"></label></div>
+            <p class="mut petit mb0">Le QR code est lu sur cet appareil, hors ligne. La caméra nécessite l’autorisation du navigateur (ou de l’application).</p></div>`)}
+        </div>
+        <div id="verif-resultat">${dernierResultat ? resultatHtml(dernierResultat) : ui.carte('', ui.vide('En attente d’un document', 'Le résultat détaille séparément : l’intégrité (signature), l’émetteur (clé), l’inscription au registre et le statut (annulé, remplacé, expiré).'))}</div>
+      </div>
+      ${peut('document.registre') ? ui.carte('Vérification par d’autres personnes', html`<p>L’<b>outil de vérification autonome</b> est un fichier HTML à remettre à l’IEPP, à un autre établissement ou à un parent. Il contient les clés <b>publiques</b> de ${sc.name || 'l’école'} et une copie datée du registre (références et statuts ; noms en option). Il ne contient aucune clé privée ni mot de passe et fonctionne hors ligne.</p>
+        <p class="mb0 mut petit">Limite : un document annulé après la date de la copie apparaîtra encore « en vigueur » dans un outil ancien. Redistribuez l’outil après chaque annulation importante.</p>`, { actions: html`<button type="button" class="btn btn-pri" data-action="verificateur-exporter">${ic('down')}Créer l’outil</button>` }) : ''}`;
+  }
+  async function demarrerCamera() {
+    const zone = $('#camera'), video = zone && $('video', zone);
+    if (!video) return;
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new AK.ErreurMetier('Caméra non disponible dans ce navigateur. Importez une photo du QR code.');
+    let flux;
+    try {
+      flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+    } catch (e) {
+      throw new AK.ErreurMetier(e && e.name === 'NotAllowedError' ? 'Accès à la caméra refusé. Autorisez-le dans le navigateur, ou importez une photo.' : 'Caméra indisponible. Importez une photo du QR code.');
+    }
+    zone.hidden = false;
+    video.srcObject = flux;
+    await video.play().catch(() => {});
+    camera = { flux, actif: true };
+    $('#btn-camera').lastChild.textContent = 'Arrêter la caméra';
+    const boucle = async () => {
+      if (!camera || !camera.actif || !document.body.contains(video)) return arreterCamera();
+      if (video.readyState >= 2) {
+        let t = null;
+        try {
+          t = await AK.qrdecode.lireSource(video, { rapide: true });
+        } catch (e) { /* image suivante */ }
+        if (t) {
+          arreterCamera();
+          if (navigator.vibrate) navigator.vibrate(80);
+          const inp = $('#verif-texte');
+          if (inp) inp.value = t.length > 120 ? t.slice(0, 117) + '…' : t;
+          return verifierTexte(t).catch(ui.erreur);
+        }
+      }
+      setTimeout(boucle, 220);
+    };
+    boucle();
+  }
+  function arreterCamera() {
+    if (camera) {
+      camera.actif = false;
+      camera.flux.getTracks().forEach((t) => t.stop());
+      camera = null;
+    }
+    const zone = $('#camera');
+    if (zone) zone.hidden = true;
+    const b = $('#btn-camera');
+    if (b) b.lastChild.textContent = 'Scanner avec la caméra';
+  }
+  addEventListener('hashchange', arreterCamera);
+
+  /* Outil de vérification autonome : modèle intégré + clés publiques + copie du registre. */
+  function exporterVerificateur() {
+    AK.perm.exiger('document.registre');
+    if (!AK.gabaritVerificateur) throw new AK.ErreurMetier('Modèle de l’outil de vérification absent de cette version.');
+    ui.fenetre({
+      titre: 'Outil de vérification autonome', icone: 'shieldCheck', ok: 'Créer le fichier', proteger: false,
+      corps: html`<div class="pile"><p class="mb0">Fichier HTML hors ligne, à ouvrir dans un navigateur ou une application. Contenu :</p>
+        <ul class="mb0"><li>clés <b>publiques</b> de signature (${u.pluriel(AK.cles.liste().length, 'clé')}) avec leur statut ;</li><li>copie du registre au ${u.fmtDate(u.aujourdhui())} : ${u.pluriel((S().docs.items || []).filter((d) => !d.demo).length, 'référence')}, empreintes et statuts.</li></ul>
+        ${F.case({ lib: 'Inclure les noms des titulaires (aide à la comparaison ; à ne remettre qu’à des destinataires de confiance)', nom: 'noms' })}
+        ${ui.encadre('Aucune clé privée, aucun mot de passe, aucune donnée de santé ni téléphone ne sont inclus.', 'ok', 'shield')}</div>`,
+      async surValider(d) {
+        const donnees = {
+          format: 'akwa-verification', version: 1, cree: new Date().toISOString(), registreDate: u.aujourdhui(),
+          ecole: { nom: S().school.name, iepp: S().school.iepp, drenaet: S().school.drenaet },
+          cles: AK.cles.publiques(), registre: R().exportVerification({ avecNoms: !!d.noms })
+        };
+        const json = JSON.stringify(donnees).replace(/</g, '\\u003c');
+        const page = AK.gabaritVerificateur.replace('/*@DONNEES*/null', () => json);
+        const nom = `AKWA_verification_${u.sansAccents(S().school.name || 'ecole').replace(/[^A-Za-z0-9]+/g, '_').slice(0, 40)}_${u.aujourdhui()}.html`;
+        await AK.hote.fichier(nom, page, 'text/html');
+        AK.store.journaliser(`Outil de vérification exporté (${donnees.registre.length} références${d.noms ? ', avec noms' : ''})`, 'documents');
+        ui.toast('Outil de vérification enregistré : ' + nom);
+      }
+    });
+  }
+
+  AK.ecrans.def('documents/emettre', { rendu: rendreCatalogue });
+  AK.ecrans.def('documents/cartes', { rendu: rendreCartes, droit: 'document.emettre' });
+  AK.ecrans.def('documents/registre', { rendu: rendreRegistre, droit: 'document.registre' });
+  AK.ecrans.def('documents/verifier', { rendu: rendreVerifier, droit: 'verification.utiliser', apres: () => { const i = $('#verif-texte'); if (i && !i.value) i.focus(); } });
+
+  AK.docsUi = Object.assign(AK.docsUi || {}, { cartes, choisirEleves, choisirAgents, choisirClasse, emettre, copie, sourceLocale });
+
+  const docDe = (el) => {
+    const d = R().trouver(el.dataset.ref);
+    if (!d) throw new AK.ErreurMetier('Document introuvable au registre.');
+    return d;
+  };
+  AK.actions.def({
+    'doc-emettre': (el) => emettre(el.dataset.modele),
+    'cartes-type': (el) => AK.shell.aller('documents/cartes', { modele: el.dataset.v }),
+    'cartes-imprimer': (el) => cartes(el.dataset.modele, ui.tableauChoix('cartes-' + el.dataset.modele)),
+    'carte-specimen'(el) {
+      const id = el.dataset.modele, d = AK.modeles.get(id);
+      const ex = d.sujet === 'eleve' ? X().actifs()[0] : S().teachers[0];
+      const ctx = d.sujet === 'eleve' ? { eleve: ex || { id: 'x', nom: 'NOM', prenoms: 'Prénoms', classe: 'CE1', mat: 'AK-26001', sexe: 'Féminin', naissance: '2017-03-12', statut: 'Inscrit' } } : { agent: ex || { id: 'x', nom: 'M. NOM Prénoms', fonction: 'Instituteur', matricule: '000000A', classes: [] } };
+      AK.docs.ouvrir(id, [ctx], { apercu: true, titre: `Spécimen · ${d.lib}`, planche: { mode: 'unitaire' } });
+    },
+    'doc-details': (el) => details(docDe(el)),
+    'doc-actions'(el) {
+      const d = docDe(el), st = R().statutEffectif(d), m = AK.modeles.get(d.modele);
+      const items = [{ icone: 'file', lib: 'Détails et historique', f: () => details(d) }, { icone: 'shieldCheck', lib: 'Vérifier', f: () => AK.shell.aller('documents/verifier', { ref: d.ref }) }];
+      if (m && d.sujet) items.push({ icone: 'copy', lib: st === 'valide' ? 'Imprimer une copie' : 'Réimprimer (mention ANNULÉ)', sous: 'Même référence, mention COPIE', f: () => copie(d) });
+      if (m && d.sujet && d.politique !== 'unique' && st === 'valide' && peut('document.emettre')) items.push({ icone: 'refresh', lib: 'Duplicata (perte, détérioration)', sous: 'Nouvelle référence ; l’original devient « remplacé »', f: () => duplicata(d) });
+      if (d.statut === 'valide' && peut('document.annuler')) items.push('sep', { icone: 'ban', lib: 'Annuler le document', danger: true, f: () => annuler(d) });
+      ui.menu(el, items, d.ref);
+    },
+    'verif-camera': () => (camera ? arreterCamera() : demarrerCamera()),
+    'verificateur-exporter': () => exporterVerificateur()
+  });
+  AK.actions.defEnvoi({
+    'verif-texte': (f) => verifierTexte(f.elements.texte.value)
+  });
+  AK.actions.defChange({
+    'cartes-classe': (el) => AK.shell.aller('documents/cartes', { ...AK.shell.params(), classe: el.value }),
+    'registre-filtre'(el) {
+      const p = { ...AK.shell.params(), [el.dataset.f]: el.value };
+      delete p.ref;
+      Object.keys(p).forEach((k) => !p[k] && delete p[k]);
+      AK.shell.aller('documents/registre', p);
+    },
+    async 'verif-photo'(el) {
+      const f = el.files && el.files[0];
+      el.value = '';
+      if (!f) return;
+      const t0 = ui.toast('Lecture du QR code…', { type: 'attente', duree: 0 });
+      let t;
+      try {
+        t = await AK.qrdecode.lireFichier(f);
+      } finally {
+        t0.fermer();
+      }
+      if (!t) throw new AK.ErreurMetier('Aucun QR code lisible sur cette image. Recadrez la photo sur le QR code, bien éclairé et net.');
+      const inp = $('#verif-texte');
+      if (inp) inp.value = t.length > 120 ? t.slice(0, 117) + '…' : t;
+      await verifierTexte(t);
+    }
+  });
+})(window.AK);
+
+//# sourceURL=akwa/js/screens/documents.js
 </script>
 <script>
 (function (AK) { AK.gabaritVerificateur = ""; })(window.AK);

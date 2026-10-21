@@ -33,12 +33,19 @@
   const pied = (ctx, r, o) => html`<div style="display:grid;grid-template-columns:${ctx.qrTexte ? 'auto 1fr' : '1fr'};gap:6mm;align-items:end;margin-top:auto">${ctx.qrTexte ? AK.mise.verification(ctx.qrTexte, ctx.doc, r.qr.taille) : ''}<div>${o.signatures(r, ctx)}</div></div>`;
   const colonne = (contenu) => html`<div style="display:flex;flex-direction:column;height:100%">${contenu}</div>`;
   const anneeCle = () => S().school.year || '';
+  /* Empreinte du contenu variable d'un document (notes, rang, dossier) : si elle change, le registre
+     enregistre une nouvelle version et signale les exemplaires antérieurs comme dépassés. */
+  const resumeNotes = (s, n) => {
+    const x = X(), cl = x.classement(s.classe, n).w.find((z) => z.s.id === s.id);
+    return [x.matieres(s.classe, n).map(([m]) => x.note(s.id, n, m) ?? '').join(','), x.estAbsent(s.id, n) ? 'ABS' : '', cl ? cl.rank : ''].join('/');
+  };
+  const resumeDossier = (s) => u.empreinte(JSON.stringify([s.nom, s.prenoms, s.sexe, s.naissance, s.lieu, s.nationalite, s.classe, s.matNat, s.mat, s.pere, s.mere, s.parent, s.tel, s.acte, s.sang, s.allergies, s.entree, s.statut, s.motifDepart, s.parcours, !!s.photo]));
 
   /* ---------- Bulletin de composition ---------- */
   def({
     id: 'bulletin', version: 1, lib: 'Bulletin de notes (composition)', categorie: 'eleve', sujet: 'eleve', icone: 'award',
     description: 'Notes par discipline, moyenne, rang, mention, absences. Une référence par élève et par composition.',
-    emission: { type: 'BUL', politique: 'unique', cleUnique: (c) => `BUL|${c.eleve.id}|${anneeCle()}|${c.periode}` },
+    emission: { type: 'BUL', politique: 'unique', cleUnique: (c) => `BUL|${c.eleve.id}|${anneeCle()}|${c.periode}`, extra: (c) => u.empreinte(resumeNotes(c.eleve, c.periode)) },
     champsOptionnels: [['photo', 'Photo de l’élève', true], ['naissance', 'Date et lieu de naissance', true], ['enseignant', 'Nom de l’enseignant(e)', true], ['moyClasse', 'Moyenne de la classe par discipline', true], ['appreciation', 'Appréciation par discipline', true], ['absences', 'Absences', true], ['observations', 'Zone d’observations', true]],
     defauts: {
       titre: 'BULLETIN DE NOTES',
@@ -77,7 +84,7 @@
   def({
     id: 'bulletin-annuel', version: 1, lib: 'Bulletin annuel (MGA et décision)', categorie: 'eleve', sujet: 'eleve', icone: 'award',
     description: 'Moyennes des quatre évaluations, MGA, rang, décision de fin d’année.',
-    emission: { type: 'BUA', politique: 'unique', cleUnique: (c) => `BUA|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'BUA', politique: 'unique', cleUnique: (c) => `BUA|${c.eleve.id}|${anneeCle()}`, extra: (c) => u.empreinte([1, 2, 3, 4].map((n) => resumeNotes(c.eleve, n)).join(';') + '|' + X().decision(c.eleve)) },
     champsOptionnels: [['photo', 'Photo de l’élève', true], ['naissance', 'Date et lieu de naissance', true], ['enseignant', 'Nom de l’enseignant(e)', true], ['observations', 'Zone d’observations', true]],
     defauts: {
       titre: 'BULLETIN ANNUEL', champs: { photo: true, naissance: true, enseignant: true, observations: true },
@@ -106,7 +113,7 @@
   def({
     id: 'fiche-scolaire', version: 2, lib: 'Fiche scolaire (modèle officiel)', categorie: 'eleve', sujet: 'eleve', icone: 'file',
     description: 'Identité, parents, tuteur, parcours scolaire sur 8 ans. QR code minimal (plus aucune donnée personnelle dedans).',
-    emission: { type: 'FIS', politique: 'unique', cleUnique: (c) => `FIS|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'FIS', politique: 'unique', cleUnique: (c) => `FIS|${c.eleve.id}|${anneeCle()}`, extra: (c) => resumeDossier(c.eleve) },
     champsOptionnels: [['photo', 'Photo de l’élève', true], ['sante', 'Groupe sanguin et allergies', true], ['parents', 'Parents et tuteur', true]],
     defauts: {
       titre: 'FICHE SCOLAIRE', champs: { photo: true, sante: true, parents: true }, lieuDate: false,
@@ -154,6 +161,7 @@
     id: 'certificat-scolarite', version: 1, lib: 'Certificat de scolarité', categorie: 'eleve', sujet: 'eleve', icone: 'fileCheck',
     description: 'Atteste l’inscription régulière de l’élève pour l’année en cours. Référence unique et QR code vérifiable.',
     emission: { type: 'CSC', politique: 'registre' },
+    refuser: (ctx) => (ctx.eleve.statut !== 'Inscrit' ? `${X().nomComplet(ctx.eleve)} n’est plus inscrit(e) (${ctx.eleve.statut}) : délivrez une attestation de fréquentation ou un certificat de transfert.` : null),
     champsOptionnels: [['photo', 'Photo de l’élève', false]],
     defauts: {
       titre: 'CERTIFICAT DE SCOLARITÉ',
@@ -162,7 +170,6 @@
     },
     rendu(ctx, r, o) {
       const s = ctx.eleve;
-      if (s.statut !== 'Inscrit') return { contenu: html`${o.entete(r)}${o.titre(r.titre)}<p class="doc-texte">Cet élève n’est plus inscrit (${s.statut}) : délivrez une attestation de fréquentation ou un certificat de transfert.</p>`, avertissement: `${X().nomComplet(s)} n’est plus inscrit(e) : un certificat de scolarité ne convient pas.` };
       return {
         contenu: colonne(html`${o.entete(r)}${o.titre(r.titre, r.sousTitre)}${r.champs.photo ? html`<div style="display:flex;justify-content:flex-end">${photoBloc(s, r)}</div>` : ''}<div class="doc-texte">${o.rediger(r.texte, ctx)}</div>
           <div style="margin-top:auto">${o.signatures(r, ctx)}<div style="margin-top:6mm">${AK.mise.verification(ctx.qrTexte, ctx.doc, r.qr.taille)}</div></div>`)
@@ -219,7 +226,7 @@
   def({
     id: 'fiche-individuelle', version: 1, lib: 'Fiche individuelle de l’élève', categorie: 'eleve', sujet: 'eleve', icone: 'user',
     description: 'Dossier complet de l’élève pour le classeur de l’école : identité, extrait, parents, santé. Document interne.',
-    emission: { type: 'FII', politique: 'unique', cleUnique: (c) => `FII|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'FII', politique: 'unique', cleUnique: (c) => `FII|${c.eleve.id}|${anneeCle()}`, extra: (c) => resumeDossier(c.eleve) },
     champsOptionnels: [['photo', 'Photo', true], ['sante', 'Santé (groupe sanguin, allergies)', true], ['contacts', 'Téléphones des parents', true], ['resultats', 'Résultats de l’année', true]],
     defauts: {
       titre: 'FICHE INDIVIDUELLE DE L’ÉLÈVE', sousTitre: 'Document interne · données personnelles à protéger',
@@ -244,7 +251,7 @@
   def({
     id: 'fiche-inscription', version: 1, lib: 'Fiche d’inscription', categorie: 'eleve', sujet: 'eleve', icone: 'filePlus',
     description: 'Fiche remplie à l’inscription, avec engagement et signature du parent, et liste des pièces fournies.',
-    emission: { type: 'FIN', politique: 'unique', cleUnique: (c) => `FIN|${c.eleve.id}|${anneeCle()}` },
+    emission: { type: 'FIN', politique: 'unique', cleUnique: (c) => `FIN|${c.eleve.id}|${anneeCle()}`, extra: (c) => resumeDossier(c.eleve) },
     champsOptionnels: [['photo', 'Photo', true], ['pieces', 'Liste des pièces à fournir', true], ['engagement', 'Engagement du parent', true]],
     defauts: {
       titre: 'FICHE D’INSCRIPTION', champs: { photo: true, pieces: true, engagement: true },

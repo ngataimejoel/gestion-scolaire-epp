@@ -40,6 +40,7 @@
   /** Bloc de vérification : QR + référence + état de la signature électronique. */
   function verification(qrTexte, doc, taille = 22) {
     if (!qrTexte) return '';
+    if (qrTexte === AK.qr.BROUILLON) return html`<div class="doc-verif"><div class="qr" style="width:${taille}mm;height:${taille}mm">${AK.qr.svg(qrTexte)}</div><div class="txt"><b>Document vérifiable</b><br>Référence et QR code attribués<br>au moment de l’impression.</div></div>`;
     const cle = doc && doc.kid ? AK.cles.liste().find((c) => c.id === doc.kid) : null;
     return html`<div class="doc-verif"><div class="qr" style="width:${taille}mm;height:${taille}mm">${AK.qr.svg(qrTexte, { titre: 'QR code de vérification ' + (doc ? doc.ref : '') })}</div><div class="txt"><b>Document vérifiable</b><br>Réf. <span class="ref">${doc ? doc.ref : ''}</span><br>${cle ? html`Signé électroniquement (clé ${cle.id} · ${cle.empreinte})` : 'Contrôle par le registre de l’école'}<br>AKWA SCHOOL › Vérifier un document</div></div>`;
   }

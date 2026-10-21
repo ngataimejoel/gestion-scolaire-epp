@@ -17,6 +17,13 @@ const RACINE = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = join(RACINE, 'src');
 const DIST = join(RACINE, 'dist');
 const manifeste = JSON.parse(readFileSync(join(SRC, 'manifest.json'), 'utf8'));
+/* Options de développement :
+     --ajouter js/screens/x.js   ajoute un script (avant l'outil de vérification) sans toucher au manifeste
+     --sortie chemin.html        écrit l'application ailleurs que dans dist/ (constructions en parallèle) */
+const argv = process.argv.slice(2);
+const optionsDe = (nom) => argv.flatMap((a, i) => (a === nom && argv[i + 1] ? [argv[i + 1]] : []));
+for (const p of optionsDe('--ajouter')) if (!manifeste.js.includes(p)) manifeste.js.splice(manifeste.js.indexOf('@verificateur'), 0, p);
+const SORTIE = optionsDe('--sortie')[0];
 const lire = (p) => readFileSync(join(SRC, p), 'utf8');
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.webp': 'image/webp' };
 const enDataUrl = (p) => `data:${MIME[extname(p)]};base64,${readFileSync(join(SRC, p)).toString('base64')}`;
@@ -78,10 +85,10 @@ if (process.argv.includes('--verifier')) {
   console.log(`Syntaxe correcte : ${manifeste.js.length} scripts, ${manifeste.css.length} feuilles de style.`);
   process.exit(0);
 }
-mkdirSync(DIST, { recursive: true });
-const sortie = join(DIST, 'AKWA_SCHOOL.html');
+const sortie = SORTIE ? SORTIE : join(DIST, 'AKWA_SCHOOL.html');
+mkdirSync(dirname(sortie), { recursive: true });
 writeFileSync(sortie, page);
-if (verif) writeFileSync(join(DIST, 'AKWA_SCHOOL_verification_modele.html'), verif);
+if (verif && !SORTIE) writeFileSync(join(DIST, 'AKWA_SCHOOL_verification_modele.html'), verif);
 const ko = (f) => (statSync(f).size / 1024).toFixed(0) + ' Ko';
 console.log(`AKWA SCHOOL ${manifeste.version} construit : ${basename(sortie)} (${ko(sortie)})`);
-if (verif) console.log(`Outil de vérification (modèle sans clé) : AKWA_SCHOOL_verification_modele.html (${ko(join(DIST, 'AKWA_SCHOOL_verification_modele.html'))})`);
+if (verif && !SORTIE) console.log(`Outil de vérification (modèle sans clé) : AKWA_SCHOOL_verification_modele.html (${ko(join(DIST, 'AKWA_SCHOOL_verification_modele.html'))})`);

@@ -33,7 +33,8 @@
 
   /**
    * Génère les feuilles d'un modèle pour une liste de contextes.
-   * options : { reglages (brouillon d'éditeur), apercu (sans émission, SPÉCIMEN), copie, duplicataDe, statutForce }
+   * options : { reglages (brouillon d'éditeur), apercu (sans émission, SPÉCIMEN), brouillon (aperçu avant
+   *             émission : référence et QR réservés), copie, reutiliser, duplicataDe, statutForce }
    * Renvoie { feuilles, cartes, docs, avertissements }.
    */
   async function generer(idModele, contextes, options = {}) {
@@ -43,16 +44,24 @@
     const feuilles = [], cartes = [], docs = [], avertissements = [];
     for (const [i, ctx0] of contextes.entries()) {
       const ctx = { ...ctx0 };
+      const refus = d.refuser ? d.refuser(ctx, r) : null;
+      if (refus) {
+        avertissements.push(refus);
+        continue;
+      }
+      if (d.emission && d.emission.extra) ctx.cleExtra = d.emission.extra(ctx);
       let statut = options.statutForce || (S().meta.demo ? 'specimen' : null);
       let qrTexte = '', doc = null;
-      if (d.emission && options.reutiliser && options.reutiliser[i]) {
+      const idSujet = ctx.eleve ? ctx.eleve.id : ctx.agent ? ctx.agent.id : null;
+      const deja = options.reutiliser ? (idSujet ? options.reutiliser.find((x) => x.sujet && x.sujet.id === idSujet) : options.reutiliser[i]) : null;
+      if (d.emission && deja) {
         // réimpression d'un document déjà émis (copie, ou exemplaire d'archive d'un document annulé)
-        const res = AK.registre.reimprimer(options.reutiliser[i].ref, options.copie ? 'copie' : 'reimpression');
+        const res = AK.registre.reimprimer(deja.ref, options.copie ? 'copie' : 'reimpression');
         doc = res.doc;
         qrTexte = doc.qr || '';
         statut = options.statutForce || res.statutFiligrane || statut;
         docs.push(doc);
-      } else if (d.emission && !options.apercu) {
+      } else if (d.emission && !options.apercu && !options.brouillon) {
         const res = await AK.registre.emettre({
           type: d.emission.type, modele: d.id, version: d.version, politique: d.emission.politique || 'registre',
           cleUnique: d.emission.cleUnique ? d.emission.cleUnique(ctx) : null,
@@ -63,6 +72,9 @@
         qrTexte = res.qrTexte;
         statut = options.statutForce || res.statutFiligrane || statut;
         docs.push(doc);
+      } else if (d.emission && options.brouillon) {
+        doc = { ref: 'attribuée à l’impression', kid: null, brouillon: true, expire: d.emission.expire ? d.emission.expire(ctx, r) : null };
+        qrTexte = AK.qr.BROUILLON;
       } else if (d.emission && options.apercu) {
         const ref = AK.valid.reference(d.emission.type, new Date().getFullYear(), 0);
         doc = { ref, kid: null, emisLe: new Date().toISOString(), expire: d.emission.expire ? d.emission.expire(ctx, r) : null };
@@ -98,26 +110,49 @@
     return { feuilles, cartes, docs, avertissements, reglages: r, modele: d };
   }
 
-  /** Génère puis ouvre l'aperçu. */
+  /**
+   * Génère puis ouvre l'aperçu. Pour un document inscrit au registre, l'aperçu est un brouillon :
+   * la référence, la signature et le QR code ne sont créés qu'au moment d'imprimer ou d'exporter
+   * (fermer l'aperçu n'inscrit donc rien au registre).
+   */
   async function ouvrir(idModele, contextes, options = {}) {
     const d = AK.modeles.get(idModele);
+    if (!d) throw new AK.ErreurMetier('Modèle de document inconnu.');
     if (!contextes.length) throw new AK.ErreurMetier('Aucun document à produire.');
+    const differer = !!d.emission && !options.apercu && !options.reutiliser;
+    if (differer && !AK.perm.peut('document.emettre') && !(d.emission.politique === 'unique' && contextes.every((c) => AK.perm.peut('document.imprimerClasse', { classe: c.eleve ? c.eleve.classe : c.classe }))))
+      throw new AK.ErreurDroits('L’émission de ce document est réservée au directeur.');
     const attente = contextes.length > 8 ? AK.ui.toast(`Préparation de ${contextes.length} documents…`, { type: 'attente', duree: 0 }) : null;
+    const feuillesDe = (g) => (g.cartes.length ? AK.cartes.planches(g.cartes, options.planche || {}) : g.feuilles);
+    const resumeDe = (g) => (g.docs.length ? `${u.pluriel(g.docs.length, 'document')} inscrit(s) au registre${g.docs.some((x) => x.signe) ? ', signé(s) électroniquement' : ''}${g.docs.length === 1 ? ' · ' + g.docs[0].ref : ''}` : '');
     try {
-      const g = await generer(idModele, contextes, options);
-      let feuilles = g.feuilles;
-      if (g.cartes.length) feuilles = AK.cartes.planches(g.cartes, options.planche || {});
+      const g = await generer(idModele, contextes, differer ? { ...options, brouillon: true } : options);
+      if (!g.feuilles.length && !g.cartes.length) throw new AK.ErreurMetier([...new Set(g.avertissements)].join(' ') || 'Aucun document à produire.');
       const r = g.reglages;
+      let final = differer ? null : g;
+      const preparer = async () => {
+        if (!final) {
+          final = await generer(idModele, contextes, options);
+          if (options.surEmission) options.surEmission(final);
+          if (AK.shell && AK.session.ouverte()) AK.shell.redessiner(); // registre, fiches : à jour sous l'aperçu
+        }
+        return { feuilles: feuillesDe(final), resume: resumeDe(final) };
+      };
       AK.impression.apercu({
         titre: options.titre || (contextes.length > 1 ? `${d.lib} · ${contextes.length} documents` : d.lib),
-        feuilles,
-        format: g.cartes.length ? (options.planche && options.planche.mode === 'unitaire' ? 'cartes à l’unité' : 'planche A4') : `A4 ${r.page.orientation === 'paysage' ? 'paysage' : 'portrait'}`,
-        resume: g.docs.length ? `${u.pluriel(g.docs.length, 'document')} inscrit(s) au registre${g.docs.some((x) => x.signe) ? ', signé(s) électroniquement' : ''}` : '',
+        feuilles: feuillesDe(g),
+        format: g.cartes.length ? (options.planche && options.planche.mode === 'unitaire' ? 'cartes à l’unité' : 'planche A4') : `${r.page.papier || 'A4'} ${r.page.orientation === 'paysage' ? 'paysage' : 'portrait'}`,
+        papier: r.page.papier || 'A4',
+        resume: differer ? 'Aperçu : la référence et le QR code seront attribués à l’impression' : resumeDe(g),
         avertissement: [...new Set(g.avertissements)].join(' ') || null,
         exporter: options.exporter,
-        copie: d.emission && g.docs.length === contextes.length && AK.perm.peut('document.registre') && !options.copie ? async () => {
-          const c = await generer(idModele, contextes, { ...options, copie: true, apercu: false, reutiliser: g.docs });
-          return c.cartes.length ? AK.cartes.planches(c.cartes, options.planche || {}) : c.feuilles;
+        nomFichier: options.nomFichier,
+        preparer: differer ? preparer : null,
+        copie: d.emission && AK.perm.peut('document.registre') && !options.copie ? async () => {
+          await preparer();
+          if (!final.docs.length) return null;
+          const c = await generer(idModele, contextes, { ...options, copie: true, apercu: false, reutiliser: final.docs });
+          return feuillesDe(c);
         } : null
       });
       return g;
@@ -126,5 +161,32 @@
     }
   }
 
-  AK.docs = { generer, ouvrir, canonDe };
+  /** Contexte de génération d'un document du registre (pour une copie ou un duplicata). */
+  function contexteDe(doc) {
+    const ctx = {};
+    if (doc.sujet && doc.sujet.type === 'eleve') {
+      ctx.eleve = AK.eleves.trouver(doc.sujet.id);
+      if (!ctx.eleve) throw new AK.ErreurMetier('L’élève de ce document n’est plus dans le registre des élèves (supprimé ou archivé).');
+    } else if (doc.sujet && doc.sujet.type === 'agent') {
+      ctx.agent = AK.personnel.trouver(doc.sujet.id);
+      if (!ctx.agent) throw new AK.ErreurMetier('Le membre du personnel de ce document n’est plus enregistré.');
+    }
+    if (doc.type === 'BUL' && doc.cleUnique) ctx.periode = Number(String(doc.cleUnique).split('|')[3]) || 1;
+    return ctx;
+  }
+  /**
+   * Une copie conforme n'est possible que si les données du document n'ont pas changé depuis
+   * l'émission (même empreinte). Sinon il faut émettre un nouveau document (ou une nouvelle version).
+   */
+  async function conforme(doc) {
+    const d = AK.modeles.get(doc.modele);
+    if (!d) return { ok: false, motif: 'Modèle de document introuvable.' };
+    const ctx = contexteDe(doc);
+    if (d.emission && d.emission.extra) ctx.cleExtra = d.emission.extra(ctx);
+    if (S().school.year !== doc.annee) return { ok: false, ctx, motif: `Document de l’année ${doc.annee || '?'} : les données de l’année ont changé, une copie fidèle n’est plus possible.` };
+    const H = await AK.qr.empreinteTitulaire({ ...canonDe(ctx), type: doc.type, ref: doc.ref });
+    return H === doc.H ? { ok: true, ctx } : { ok: false, ctx, motif: 'Les données de ce document ont changé depuis son émission (dossier modifié, note corrigée…). Une copie ne serait pas fidèle à l’original : émettez un nouveau document.' };
+  }
+
+  AK.docs = { generer, ouvrir, canonDe, contexteDe, conforme };
 })(window.AK);

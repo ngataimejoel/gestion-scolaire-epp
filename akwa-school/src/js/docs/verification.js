@@ -76,9 +76,9 @@
         }
       }
     } else if (q) {
-      point('integrite', 'av', 'Intégrité', 'QR code non signé : seule la comparaison avec le registre de l’école est possible.');
+      point('integrite', 'info', 'Intégrité', 'QR code non signé : l’authenticité repose uniquement sur la comparaison avec le registre de l’école (empreinte ci-dessous).');
     } else {
-      point('integrite', 'av', 'Intégrité', 'Référence saisie à la main : pas de contrôle de signature.');
+      point('integrite', 'info', 'Intégrité', 'Référence saisie à la main : pas de signature à contrôler. Comparez le document présenté avec les informations du registre.');
     }
 
     /* 3 et 4. Registre et statut */
@@ -123,7 +123,8 @@
     else if (registreOk && statutOk && (sigOk || !q || !q.signature)) R.verdict = av ? 'douteux' : 'valide';
     else R.verdict = 'douteux';
     const libType = AK.registre ? AK.registre.libelleType(R.type) : R.type;
-    R.titre = { valide: 'Document authentique et en vigueur', douteux: 'Vérification incomplète : prudence', invalide: 'Document NON valable', inconnu: 'Document inconnu' }[R.verdict];
+    const titreValide = sigOk ? 'Document authentique et en vigueur' : R.format === 'reference' ? 'Référence inscrite au registre et en vigueur' : 'Inscrit au registre et en vigueur (document non signé)';
+    R.titre = { valide: titreValide, douteux: 'Vérification incomplète : prudence', invalide: 'Document NON valable', inconnu: 'Document inconnu' }[R.verdict];
     R.resume = `${libType || 'Document'} · ${ref}`;
     return R;
   }

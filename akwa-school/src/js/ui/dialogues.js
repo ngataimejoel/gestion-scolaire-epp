@@ -331,7 +331,7 @@
   };
   document.addEventListener('mouseover', (e) => {
     const t = e.target.closest('[data-bulle]');
-    if (!t) {
+    if (!t || !t.dataset.bulle) {
       if (bulle) bulle.hidden = true;
       return;
     }
@@ -342,7 +342,7 @@
   });
   document.addEventListener('focusin', (e) => {
     const t = e.target.closest && e.target.closest('[data-bulle]');
-    if (!t) {
+    if (!t || !t.dataset.bulle) {
       if (bulle) bulle.hidden = true;
       return;
     }

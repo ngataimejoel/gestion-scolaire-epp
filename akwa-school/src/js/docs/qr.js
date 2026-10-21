@@ -61,8 +61,13 @@
     return { champs, message: message(sansSig), signature: champs.S || null };
   }
 
+  /** Emplacement réservé dans un aperçu : le vrai QR (référence, signature) est créé à l'impression. */
+  const BROUILLON = '@brouillon';
+  const SVG_BROUILLON = u.raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="QR code créé à l’impression"><rect x="1" y="1" width="38" height="38" rx="2" fill="#fff" stroke="#8a94a6" stroke-width=".8" stroke-dasharray="2 1.6"/><path d="M6 6h9v9H6zM25 6h9v9h-9zM6 25h9v9H6z" fill="none" stroke="#8a94a6" stroke-width="1.4"/><text x="20" y="22" font-size="4.2" text-anchor="middle" fill="#5c687a" font-family="sans-serif">QR</text><text x="27" y="31" font-size="3.2" text-anchor="middle" fill="#5c687a" font-family="sans-serif">à l’impression</text></svg>');
+
   /** Matrice → SVG vectoriel (zone de silence de 4 modules), net à toutes les tailles. */
   function svg(texteQR, { niveau = 'M', titre = 'QR code' } = {}) {
+    if (texteQR === BROUILLON) return SVG_BROUILLON;
     const m = AK.vendor.qr.matrix(texteQR, niveau);
     const n = m.size;
     let d = '';
@@ -81,5 +86,5 @@
     return u.raw(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" shape-rendering="crispEdges" role="img" aria-label="${u.esc(titre)}"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`);
   }
 
-  AK.qr = { PREFIXE, propre, empreinteTitulaire, message, texte, lire, svg };
+  AK.qr = { PREFIXE, BROUILLON, propre, empreinteTitulaire, message, texte, lire, svg };
 })(window.AK);
