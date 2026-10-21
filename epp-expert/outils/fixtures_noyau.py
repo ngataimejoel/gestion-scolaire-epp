@@ -84,6 +84,24 @@ def preparer(dossier: Path) -> None:
         pub, machine, str(int(maintenant.timestamp() * 1000)),
         lic1, sig1, lic_vie, sig_vie, lic_echue, sig_echue, lic_autre, sig_autre, falsifiee, sig1,
     ]) + "\n", encoding="utf-8")
+    # ------------------------------------------------------------------ activation sans Internet (même clé de test)
+    from epp.core import hors_ligne as HL
+    graine = cle.private_bytes(serialization.Encoding.Raw, serialization.PrivateFormat.Raw,
+                               serialization.NoEncryption())
+
+    def code_hl(empreinte: str, type_: str, expire: date | None, serie: int) -> str:
+        d15 = HL.nettoyer(HL.demande(empreinte))[:15]
+        charge = HL.charge_utile(type_, expire, serie)
+        return HL.grouper(HL.coder(charge + cle.sign(HL.message(d15, charge))))
+
+    (dossier / "hors_ligne.txt").write_text("\n".join([
+        pub, machine, str(int(maintenant.timestamp() * 1000)), HL.demande(machine), graine.hex(),
+        code_hl(machine, "1an", date(2027, 10, 15), 42), code_hl(machine, "ensvie", None, 7),
+        code_hl(_empreinte("autre"), "vie", None, 8),
+        HL.ecrire_cles_courtes({1: HL.secret_court(graine, 1)}, masquees=True),
+        HL.coder_court(HL.secret_court(graine, 1), 1, HL.demande(machine), "1an", date(2026, 10, 15)),
+        HL.coder_court(HL.secret_court(graine, 1), 1, HL.demande(_empreinte("autre")), "vie", date(2026, 10, 15)),
+    ]) + "\n", encoding="utf-8")
     # ------------------------------------------------------------------ classeur Excel du téléphone
     (dossier / "classeur.json").write_text(json.dumps({"feuilles": [
         {"nom": "ELEVES", "style": "national", "colonnes": [{"titre": c} for c in COLONNES_ELEVES],
@@ -129,8 +147,25 @@ def verifier(dossier: Path) -> None:
                     break
         else:
             print(f"ok {f} : {len(attendu)} lignes identiques")
-    erreurs += _verifier_classeur(dossier) + _verifier_synchro(dossier)
+    erreurs += _verifier_classeur(dossier) + _verifier_synchro(dossier) + _verifier_hors_ligne(dossier)
     sys.exit(1 if erreurs else 0)
+
+
+def _verifier_hors_ligne(dossier: Path) -> int:
+    """Code signé par le générateur Android (Java), vérifié par l'application Windows (Python)."""
+    from epp.core import hors_ligne as HL
+    lignes = (dossier / "hors_ligne.txt").read_text(encoding="utf-8").split("\n")
+    c = HL.verifier((dossier / "hors_ligne.java.txt").read_text(encoding="utf-8").strip(), lignes[1], [lignes[0]])
+    if c != {"type": "vie", "expire_le": None, "code": "HL-123456"}:
+        print(f"ÉCHEC code hors ligne signé par le téléphone : {c}")
+        return 1
+    court = (dossier / "hors_ligne_court.java.txt").read_text(encoding="utf-8").strip()
+    c = HL.verifier_court(court, lignes[1], HL.lire_cles_courtes(lignes[8], masquees=True))
+    if not c or c["type"] != "ensvie" or len(court) != 29:
+        print(f"ÉCHEC code court du générateur Android : {court} → {c}")
+        return 1
+    print("ok codes hors ligne du téléphone (long et court) acceptés par l'ordinateur")
+    return 0
 
 
 def _verifier_classeur(dossier: Path) -> int:

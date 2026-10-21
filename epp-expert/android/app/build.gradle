@@ -6,6 +6,21 @@ plugins {
 def versionWindows = (file("../../epp/__init__.py").text =~ /__version__ = "([0-9.]+)"/)[0][1]
 def parties = versionWindows.tokenize(".").collect { it as int } + [0, 0, 0]
 
+// Codes hors ligne courts (25 caractères) : secret GitHub AKWA_CLES_CODES_COURTS (« 1:base64 », donné par le générateur
+// du fournisseur), injecté masqué dans BuildConfig.AC ; jamais dans le dépôt public. Sans lui, ces codes sont refusés.
+def masquerCles = { String texte ->
+    (texte ?: "").split("[,;]").findAll { it.contains(":") }.collect { String p ->
+        def (n, v) = p.trim().split(":", 2) as List
+        byte[] brut = v.trim().decodeBase64()
+        byte[] m = java.security.MessageDigest.getInstance("SHA-256").digest(("AKWA-AC|" + n.trim()).getBytes("US-ASCII"))
+        byte[] r = new byte[brut.length]
+        for (int i = 0; i < brut.length; i++) {
+            r[i] = (byte) (brut[i] ^ m[i % m.length])
+        }
+        n.trim() + ":" + r.encodeBase64().toString()
+    }.join(",")
+}
+
 android {
     namespace "com.akwaschool.mobile"
     compileSdk 35
@@ -21,6 +36,7 @@ android {
         targetSdk 35
         versionCode parties[0] * 10000 + parties[1] * 100 + parties[2]
         versionName versionWindows
+        buildConfigField "String", "AC", "\"${masquerCles(System.getenv("AKWA_CLES_CODES_COURTS"))}\""
     }
 
     // Signature : clé privée gardée hors du dépôt, fournie par les secrets GitHub (ANDROID_KEYSTORE_B64 décodé dans

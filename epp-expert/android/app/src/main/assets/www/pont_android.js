@@ -177,7 +177,7 @@
   // la licence (activation, date d'expiration) ne regarde que le directeur, ou l'enseignant seul pour son espace
   if(session&&session.role==='ens'&&!session.solo){const f=ecran('<p>L’application n’est pas utilisable pour le moment. Adressez-vous au directeur.</p><button class="btn pri">Retour</button>',()=>connexion());return f}
   const msg=e.utilisable?'Ce téléphone a une licence enseignant : l’espace du directeur demande un code école.':e.message||'Licence à activer.';
-  const f=ecran(`<p>${esc(msg)}</p><input name="c" placeholder="EPP-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters"><button class="btn pri">Activer (Internet nécessaire)</button>`,(f,err)=>{
+  const f=ecran(`<p>${esc(msg)}</p><input name="c" placeholder="Code de licence" autocomplete="off" autocapitalize="characters"><button class="btn pri">Activer</button><p class="sub">Code EPP-… : Internet nécessaire. Sans Internet : donnez au fournisseur le code de demande <b>${esc((()=>{try{return JSON.parse(N.infos()).demande||""}catch(e){return ""}})())}</b> et saisissez le code de licence qu’il vous remet (25 caractères, 5 groupes de 5).</p>`,(f,err)=>{
    const b=document.querySelector('#akwaVerrou .btn');b.disabled=true;err('Activation en cours…');
    attendre(id=>N.activerEspace(id,f.get('c').trim().toUpperCase(),S.school.name||'',espace())).then(r=>{b.disabled=false;if(!r.ok)return err(r.message||'Activation impossible.');entrer()});
   });

@@ -188,3 +188,38 @@ def test_application_installee_ignore_cle_de_remplacement(monkeypatch):
     monkeypatch.setenv("EPP_LICENCE_CLE_PUBLIQUE", "AAAA")
     monkeypatch.setenv("EPP_ACTIVATION_URL", "http://127.0.0.1:9")
     assert licence._config() == {"url": licence.URL_OFFICIELLE, "cle_publique": licence.CLE_OFFICIELLE}
+
+
+def test_code_hors_ligne_controle_en_ligne(service, tmp_path, monkeypatch):
+    """Code pirate (absent du registre) refusé au contrôle en ligne ; code émis et envoyé : accepté ; annulé : refusé."""
+    from datetime import date
+    from epp.core import hors_ligne
+    s = importlib.util.spec_from_file_location("ghl", RACINE / "outils" / "generateur_hors_ligne.py")
+    ghl = importlib.util.module_from_spec(s)
+    s.loader.exec_module(ghl)
+    monkeypatch.setenv("AKWA_CODES_DOSSIER", str(tmp_path / "ghl"))
+    graine = bytes(range(32))
+    monkeypatch.setenv("EPP_CLES_COURTES", ghl.cle_github(graine, 1))
+    jeton = gen.lire_config()["jeton"]
+    g = ghl.generer(graine, licence.demande_hors_ligne(), "vie", date.today())
+    licence.activer(g["code"])
+    assert licence.controle_hors_ligne() == "inconnu" and licence.etat().statut == "active"   # délai d'envoi
+    plus_tard = datetime.now(timezone.utc) + timedelta(days=31)
+    assert licence.controle_hors_ligne(maintenant=plus_tard) == "inconnu"
+    e = licence.etat()
+    assert e.statut == "expiree" and "non reconnu" in e.message and not e.utilisable
+    licence.activer(g["code"])                                   # même code saisi à nouveau : contrôlé de nouveau
+    ghl.noter(g, "EPP TEST")
+    assert ghl.envoyer_registre(service, jeton) == {"recus": 1, "nouveaux": 1}
+    assert licence.controle_hors_ligne(maintenant=plus_tard) == "connu" and licence.etat().statut == "active"
+    assert licence.controle_hors_ligne() is None                  # contrôlé il y a moins de 7 jours
+    with pytest.raises(ghl.Erreur, match="Jeton"):
+        ghl.envoyer_registre(service, "mauvais-" + "x" * 40)
+    import json as _json
+    import urllib.request
+    urllib.request.urlopen(urllib.request.Request(service + "/api/admin/hors-ligne-revoquer", method="POST",
+                           data=_json.dumps({"code": g["code"]}).encode(),
+                           headers={"Authorization": f"Bearer {jeton}", "Content-Type": "application/json"}))
+    plus_tard = plus_tard + timedelta(days=8)
+    assert licence.controle_hors_ligne(maintenant=plus_tard) == "revoque" and "annulé" in licence.etat().message
+    assert hors_ligne.est_code_court(g["code"])

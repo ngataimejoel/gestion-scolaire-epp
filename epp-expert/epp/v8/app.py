@@ -78,6 +78,7 @@ def run(argv: list[str]) -> int:
     from epp.ui.main import appliquer_theme
     from epp.v8.connexion import ouvrir_session
     from epp.v8.fenetre import Fenetre
+    licence.controler_en_arriere_plan()          # code hors ligne : contrôle a posteriori dès qu'Internet est là
     from epp.v8.stockage import Stockage
     app.setWindowIcon(logo_app.icone())
     appliquer_theme(app)

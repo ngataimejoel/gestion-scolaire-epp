@@ -16,6 +16,7 @@ import android.webkit.WebView;
 import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
 import com.akwaschool.mobile.noyau.Comptes;
+import com.akwaschool.mobile.noyau.HorsLigne;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
 import com.akwaschool.mobile.synchro.Client;
@@ -55,7 +56,9 @@ public class Pont {
     static final int CHOISIR = 41;
     static final int ENREGISTRER = 42;
     /** Clés gardées quand on efface les données : licence et période d'essai du téléphone. */
-    private static final String[] CLES_LICENCE = {"licence", "signature", "essai_debut", "derniere_vue"};
+    private static final String[] CLES_LICENCE = {"licence", "signature", "essai_debut", "derniere_vue",
+            "hl_enregistre_le", "hl_controle_le", "hl_rejete"};
+    private volatile boolean controleEnCours;
     private static final String[] CLES_ASSOCIATION = {"adresse", "appareil_id", "cle", "serveur_id", "seq", "seq_recu"};
     static final String XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -76,6 +79,7 @@ public class Pont {
         this.activite = activite;
         this.web = web;
         this.prefs = activite.getSharedPreferences("akwa", Context.MODE_PRIVATE);
+        HorsLigne.clesCourtes = HorsLigne.lireClesCourtes(BuildConfig.AC, true);
     }
 
     void fermer() {
@@ -183,6 +187,7 @@ public class Pont {
                     .put("pin", prefs.contains("pin"))
                     .put("admin", prefs.contains("admin"))
                     .put("essai", prefs.contains("essai_debut"))
+                    .put("demande", HorsLigne.demande(machine()))
                     .toString();
         } catch (JSONException e) {
             return "{}";
@@ -812,6 +817,14 @@ public class Pont {
     public String licence() {
         long now = System.currentTimeMillis();
         long vue = prefs.getLong("derniere_vue", 0);
+        String lic = prefs.getString("licence", null);
+        if (lic != null && lic.startsWith(Licence.PREFIXE_HL)) {
+            String rejete = prefs.getString("hl_rejete", null);
+            if (rejete != null) {
+                return Licence.refus(rejete);
+            }
+            controlerHorsLigne(lic.substring(Licence.PREFIXE_HL.length()), now);
+        }
         String etat = Licence.etat(prefs.getString("licence", null), prefs.getString("signature", null),
                 Licence.CLE_PUBLIQUE, machine(), prefs.getLong("essai_debut", now), vue, now);
         if (now > vue) {
@@ -828,6 +841,10 @@ public class Pont {
     /** {@code espace} : « enseignant » pour l'espace enseignant seul (codes enseignant acceptés), sinon « ecole ». */
     @JavascriptInterface
     public void activerEspace(String id, String code, String ecole, String espace) {
+        if (HorsLigne.estCode(code)) {
+            activerHorsLigne(id, code, "enseignant".equals(espace));
+            return;
+        }
         reseau.execute(() -> {
             try {
                 String version = "?";
@@ -847,6 +864,48 @@ public class Pont {
                 rendre(id, erreur(0, "Activation impossible : " + e.getMessage(), null));
             }
         });
+    }
+
+    /** Contrôle a posteriori du code hors ligne (tous les 7 jours, en arrière-plan, sans effet hors connexion). */
+    private void controlerHorsLigne(String code, long now) {
+        if (now - prefs.getLong("hl_controle_le", 0) < Licence.CONTROLE_MS || controleEnCours) {
+            return;
+        }
+        controleEnCours = true;
+        reseau.execute(() -> {
+            try {
+                String statut = Licence.controlerHorsLigne(Licence.URL_ACTIVATION, code, machine(), Licence.CLE_PUBLIQUE);
+                if (statut == null || !(Licence.PREFIXE_HL + code).equals(prefs.getString("licence", null))) {
+                    return;
+                }
+                SharedPreferences.Editor e = prefs.edit().putLong("hl_controle_le", now);
+                if ("revoque".equals(statut) || ("inconnu".equals(statut)
+                        && now - prefs.getLong("hl_enregistre_le", now) > Licence.DELAI_REGISTRE_MS)) {
+                    e.putString("hl_rejete", statut);
+                }
+                e.commit();
+            } finally {
+                controleEnCours = false;
+            }
+        });
+    }
+
+    /** Activation sans Internet : code de licence remis par le générateur hors ligne pour ce téléphone. */
+    private void activerHorsLigne(String id, String code, boolean enseignant) {
+        String c = HorsLigne.verifierEnregistre(code, machine(), Licence.CLE_PUBLIQUE);
+        String type = c == null ? null : Protocole.champTexte(c, "type");
+        if (c == null) {
+            rendre(id, erreur(0, "Code de licence non valable pour ce téléphone : vérifiez la saisie et le code de "
+                    + "demande donné au fournisseur.", null));
+        } else if (type.startsWith("ens") && !enseignant) {
+            rendre(id, erreur(0, "Ce code est réservé à l'espace enseignant seul.", null));
+        } else {
+            prefs.edit().putString("licence", Licence.PREFIXE_HL + HorsLigne.nettoyer(code))
+                    .putLong("hl_enregistre_le", System.currentTimeMillis()).remove("hl_controle_le")
+                    .remove("hl_rejete")
+                    .putString("signature", "hl").commit();
+            rendre(id, "{\"ok\":true,\"licence\":" + licence() + "}");
+        }
     }
 
     // ------------------------------------------------------------------ fichiers échangés avec l'extérieur

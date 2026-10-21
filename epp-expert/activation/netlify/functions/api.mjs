@@ -23,4 +23,4 @@ export default async (req) =>
     jetonAdmin: process.env.EPP_ADMIN_TOKEN,
   });
 
-export const config = { path: ["/api/activer", "/api/sante", "/api/admin/*"] };
+export const config = { path: ["/api/activer", "/api/sante", "/api/hors-ligne/controle", "/api/admin/*"] };

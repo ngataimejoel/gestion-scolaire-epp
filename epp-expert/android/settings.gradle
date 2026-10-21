@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "AkwaSchool"
-include ":app"
+include ":app", ":generateur"

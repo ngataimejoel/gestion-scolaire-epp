@@ -504,6 +504,7 @@ def run(argv: list[str]) -> int:
     app.setOrganizationName("GestionScolaireEPP")
     app.setQuitOnLastWindowClosed(False)          # la fenêtre principale décide (verrouillage, déconnexion)
     appliquer_theme(app)
+    licence.controler_en_arriere_plan()
     from epp.ui import animations
     app._survol = animations.installer(app)
     try:

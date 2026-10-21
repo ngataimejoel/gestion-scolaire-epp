@@ -6,8 +6,9 @@ import java.security.NoSuchAlgorithmException;
 
 /**
  * Vérification de signatures Ed25519 (RFC 8032), en Java pur : Android ne la propose qu'à partir de la
- * version 13 et l'application fonctionne dès Android 8. Seule la vérification est utile (licences signées par
- * le service d'activation) ; elle n'a pas besoin d'être en temps constant (aucun secret n'est manipulé).
+ * version 13 et l'application fonctionne dès Android 8. L'application ne fait que vérifier (licences signées par
+ * le service d'activation), sans secret. La signature (clePublique, signer) ne sert qu'au générateur hors ligne du
+ * fournisseur, sur son propre appareil ; elle n'est pas en temps constant.
  */
 public final class Ed25519 {
     private static final BigInteger P = BigInteger.ONE.shiftLeft(255).subtract(BigInteger.valueOf(19));
@@ -122,5 +123,63 @@ public final class Ed25519 {
         }
         BigInteger k = petitBoutiste(h, 0, 64).mod(L);
         return egaux(multiplier(s, B), ajouter(r, multiplier(k, a)));
+    }
+
+    // ------------------------------------------------------------------ signature (générateur hors ligne du fournisseur)
+    private static byte[] petitBoutisteOctets(BigInteger n, int longueur) {
+        byte[] g = n.toByteArray(), o = new byte[longueur];
+        for (int i = 0; i < longueur && i < g.length; i++) {
+            o[i] = g[g.length - 1 - i];
+        }
+        return o;
+    }
+
+    private static byte[] encoder(BigInteger[] p) {
+        BigInteger zi = p[2].modInverse(P);
+        BigInteger x = p[0].multiply(zi).mod(P), y = p[1].multiply(zi).mod(P);
+        byte[] o = petitBoutisteOctets(y, 32);
+        if (x.testBit(0)) {
+            o[31] |= (byte) 0x80;
+        }
+        return o;
+    }
+
+    private static byte[] sha512(byte[]... parties) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-512");
+            for (byte[] x : parties) {
+                md.update(x);
+            }
+            return md.digest();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private static BigInteger scalaire(byte[] h) {
+        byte[] a = java.util.Arrays.copyOf(h, 32);
+        a[0] &= (byte) 248;
+        a[31] &= 127;
+        a[31] |= 64;
+        return petitBoutiste(a, 0, 32);
+    }
+
+    /** Clé publique (32 octets) d'une graine privée de 32 octets (RFC 8032). */
+    public static byte[] clePublique(byte[] graine) {
+        return encoder(multiplier(scalaire(sha512(graine)), B));
+    }
+
+    /** Signature (64 octets) du message avec la graine privée de 32 octets (RFC 8032). */
+    public static byte[] signer(byte[] graine, byte[] message) {
+        byte[] h = sha512(graine);
+        BigInteger a = scalaire(h);
+        byte[] pub = encoder(multiplier(a, B));
+        BigInteger r = petitBoutiste(sha512(java.util.Arrays.copyOfRange(h, 32, 64), message), 0, 64).mod(L);
+        byte[] rr = encoder(multiplier(r, B));
+        BigInteger k = petitBoutiste(sha512(rr, pub, message), 0, 64).mod(L);
+        byte[] sig = new byte[64];
+        System.arraycopy(rr, 0, sig, 0, 32);
+        System.arraycopy(petitBoutisteOctets(r.add(k.multiply(a)).mod(L), 32), 0, sig, 32, 32);
+        return sig;
     }
 }

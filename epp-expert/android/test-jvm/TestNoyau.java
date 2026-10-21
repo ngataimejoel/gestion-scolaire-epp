@@ -2,6 +2,7 @@ import com.akwaschool.mobile.noyau.Classeur;
 import com.akwaschool.mobile.noyau.Coffre;
 import com.akwaschool.mobile.noyau.Comptes;
 import com.akwaschool.mobile.noyau.Ed25519;
+import com.akwaschool.mobile.noyau.HorsLigne;
 import com.akwaschool.mobile.noyau.Licence;
 import com.akwaschool.mobile.noyau.Tableur;
 import com.akwaschool.mobile.synchro.FichierSynchro;
@@ -89,6 +90,48 @@ public final class TestNoyau {
                 .equals("essai_termine"), "essai terminé au 7e jour");
         verifie(statut(Licence.etat(l.get(5), l.get(6), pub, machine, 0, maintenant + 3 * jour, maintenant))
                 .equals("horloge"), "horloge reculée refusée");
+
+        // ------------------------------------------------------------ signature (générateur hors ligne) : RFC 8032
+        byte[] graine1 = hex("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+        verifie(java.util.Arrays.equals(Ed25519.clePublique(graine1), pk1), "RFC 8032 test 1 : clé publique");
+        verifie(java.util.Arrays.equals(Ed25519.signer(graine1, new byte[0]), sg1), "RFC 8032 test 1 : signature");
+
+        // ------------------------------------------------------------ activation sans Internet
+        List<String> h = Files.readAllLines(dossier.resolve("hors_ligne.txt"), StandardCharsets.UTF_8);
+        String hp = h.get(0), hm = h.get(1);
+        long hn = Long.parseLong(h.get(2));
+        verifie(HorsLigne.demande(hm).equals(h.get(3)), "code de demande identique à Python : " + h.get(3));
+        String a1 = Licence.etat(Licence.PREFIXE_HL + h.get(5), "hl", hp, hm, 0, 0, hn);
+        verifie(statut(a1).equals("active") && a1.contains("\"type\":\"1an\"") && a1.contains("15/10/2027"),
+                "code hors ligne 1 an signé par Python : " + a1);
+        String a2 = HorsLigne.verifier(h.get(6).toLowerCase().replace("-", " "), hm, HorsLigne.cles(hp));
+        verifie(a2 != null && a2.contains("\"ensvie\"") && a2.contains("\"expire_le\":null") && a2.contains("HL-000007"),
+                "code hors ligne enseignant à vie : " + a2);
+        verifie(Licence.verifier(Licence.PREFIXE_HL + h.get(7), "hl", hp, hm) == null, "code d'un autre appareil refusé");
+        verifie(Licence.verifier(Licence.PREFIXE_HL + h.get(5), "hl", Licence.CLE_PUBLIQUE, hm) == null,
+                "code signé par une clé inconnue refusé");
+        String hAbime = h.get(5).substring(0, 20) + (h.get(5).charAt(20) == '2' ? '3' : '2') + h.get(5).substring(21);
+        verifie(HorsLigne.verifier(hAbime, hm, HorsLigne.cles(hp)) == null, "code hors ligne modifié refusé");
+        byte[] hg = hex(h.get(4));
+        verifie(Ed25519.clePublique(hg).length == 32 && java.util.Base64.getEncoder().encodeToString(Ed25519.clePublique(hg))
+                .equals(hp), "clé publique du générateur identique à Python");
+        String parJava = HorsLigne.signer(hg, h.get(3), "vie", 0, 123456);
+        verifie(HorsLigne.verifier(parJava, hm, HorsLigne.cles(hp)) != null, "code signé par le générateur Android");
+        Files.write(dossier.resolve("hors_ligne.java.txt"), parJava.getBytes(StandardCharsets.UTF_8));
+        HorsLigne.clesCourtes = HorsLigne.lireClesCourtes(h.get(8), true);
+        verifie(java.util.Arrays.equals(HorsLigne.clesCourtes.get(1), HorsLigne.secretCourt(hg, 1)),
+                "secret des codes courts : démasqué comme en Python");
+        String c1 = Licence.etat(Licence.PREFIXE_HL + HorsLigne.nettoyer(h.get(9)), "hl", hp, hm, 0, 0, hn);
+        verifie(statut(c1).equals("active") && c1.contains("\"type\":\"1an\"") && c1.contains("15/10/2027"),
+                "code court 1 an fait par Python : " + h.get(9) + " → " + c1);
+        verifie(Licence.verifier(Licence.PREFIXE_HL + h.get(10), "hl", hp, hm) == null, "code court d'un autre appareil refusé");
+        String c9 = h.get(9), cAbime = c9.substring(0, 7) + (c9.charAt(7) == '2' ? '3' : '2') + c9.substring(8);
+        verifie(HorsLigne.verifierCourt(cAbime, hm, HorsLigne.clesCourtes) == null, "code court modifié refusé");
+        verifie(HorsLigne.verifierCourt(h.get(9), hm, HorsLigne.lireClesCourtes("2:" + h.get(8).substring(2), true)) == null,
+                "code court d'un numéro de clé retiré refusé");
+        String court = HorsLigne.coderCourt(HorsLigne.secretCourt(hg, 1), 1, h.get(3), "ensvie", 300);
+        verifie(court.length() == 29 && HorsLigne.estCode(court.toLowerCase()), "code court du générateur Android : " + court);
+        Files.write(dossier.resolve("hors_ligne_court.java.txt"), court.getBytes(StandardCharsets.UTF_8));
 
         // ------------------------------------------------------------ sauvegarde chiffrée
         byte[] donnees = "{\"ecole\":\"EPP « ESSAI »\"}".getBytes(StandardCharsets.UTF_8);
