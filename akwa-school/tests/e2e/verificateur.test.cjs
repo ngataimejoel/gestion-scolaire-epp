@@ -143,7 +143,7 @@ async function y4mQR(page, texte) {
   const cheminOutil = fichier('outil-rempli.html');
   await telechargement.saveAs(cheminOutil);
   const outil = fs.readFileSync(cheminOutil, 'utf8');
-  ok('outil créé par l’application (nom de fichier)', /^AKWA_verification_EPP_Sainte_Therese_d_Anyama_\d{4}-\d{2}-\d{2}\.html$/.test(telechargement.suggestedFilename()), telechargement.suggestedFilename());
+  ok('outil créé par l’application (nom de fichier)', /^AKWA_verification_EPP_SAINTE_THERESE_D_ANYAMA_\d{4}-\d{2}-\d{2}\.html$/.test(telechargement.suggestedFilename()), telechargement.suggestedFilename());
   ok('outil : données intégrées, marqueur remplacé', !outil.includes('/*@DONNEES*/null') && outil.includes('"format":"akwa-verification"'));
   ok('outil : aucune clé privée ni secret', !/"prive"|"d":"|"mdp"|"pwd"|"sel"/.test(outil));
   ok('outil : aucune ressource externe', !/(src|href)=["']https?:|@import|url\(\s*["']?https?:/i.test(outil));
@@ -183,7 +183,7 @@ async function y4mQR(page, texte) {
   await p.goto('file://' + cheminOutil);
   await p.waitForFunction(() => document.documentElement.dataset.pret === '1');
   const tete = await p.evaluate(() => ({ h1: document.querySelector('h1').textContent, infos: document.querySelector('.vf-infos').textContent, titre: document.title, lien: !!document.querySelector('a[href^="http"]') }));
-  ok('en-tête : nom de l’école (accents, apostrophe)', tete.h1 === 'EPP Sainte-Thérèse d’Anyama' && /Sainte-Thérèse/.test(tete.titre), tete.h1);
+  ok('en-tête : nom de l’école (accents, apostrophe)', tete.h1 === 'EPP SAINTE-THÉRÈSE D’ANYAMA' && /SAINTE-THÉRÈSE/.test(tete.titre), tete.h1);
   ok('en-tête : date de la copie et nombre de références', tete.infos.includes(new Date().toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })) && /4 références/.test(tete.infos), tete.infos);
   ok('en-tête : empreinte de la clé recalculée et conforme', tete.infos.includes(cle.empreinte) && /Active/.test(tete.infos) && !(await p.$('.encadre.erreur')), tete.infos);
 
@@ -207,7 +207,7 @@ async function y4mQR(page, texte) {
 
   r = await verifier(p, B.qr);
   ok('QR signé valide (B) : authentique et en vigueur', r.verdict === 'valide' && r.titre === 'Document authentique et en vigueur' && pt(r, 'Intégrité').etat === 'ok' && pt(r, 'Émetteur').etat === 'ok', JSON.stringify(r.points));
-  ok('QR signé : émetteur = école et empreinte de la clé', pt(r, 'Émetteur').detail.includes('EPP Sainte-Thérèse d’Anyama') && pt(r, 'Émetteur').detail.includes(cle.empreinte), pt(r, 'Émetteur').detail);
+  ok('QR signé : émetteur = école et empreinte de la clé', pt(r, 'Émetteur').detail.includes('EPP SAINTE-THÉRÈSE D’ANYAMA') && pt(r, 'Émetteur').detail.includes(cle.empreinte), pt(r, 'Émetteur').detail);
 
   r = await verifier(p, B.qr.replace(/E=\d{4}-\d{2}-\d{2}/, 'E=2020-01-01'));
   ok('QR falsifié (date modifiée) : refusé', r.verdict === 'invalide' && pt(r, 'Intégrité').etat === 'ko' && /Ne vous fiez pas/.test(r.texte), JSON.stringify(r.points));

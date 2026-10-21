@@ -111,7 +111,7 @@
   function valider(id, r) {
     const d = defs.get(id);
     const E = (m, c) => new AK.ErreurMetier(m, c);
-    const o = fusion(fusion(DEFAUT_COMMUN, d.defauts || {}), r);
+    const o = u.clone(fusion(fusion(DEFAUT_COMMUN, d.defauts || {}), r)); // copie : DEFAUT_COMMUN jamais modifié
     o.titre = String(o.titre || '').trim().slice(0, 90);
     o.sousTitre = String(o.sousTitre || '').trim().slice(0, 140);
     o.texte = String(o.texte || '').slice(0, 4000);

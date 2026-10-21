@@ -99,6 +99,7 @@
     let cacheImages = new Map();
     return {
       nom: 'IndexedDB',
+      copies: true,
       async charger() {
         const tx = db.transaction(['kv', 'images'], 'readonly');
         const texte = await req(tx.objectStore('kv').get('etat'));
@@ -196,6 +197,7 @@
   function adaptateurLS() {
     return {
       nom: 'localStorage (capacité limitée)',
+      copies: false,
       async charger() {
         const t = localStorage.getItem(CLE_LS);
         return t ? { S: JSON.parse(t), manquantes: [] } : null;
@@ -233,6 +235,7 @@
     let memo = null;
     return {
       nom: 'mémoire seule (rien n’est conservé à la fermeture)',
+      copies: false,
       ephemere: true,
       async charger() {
         return memo ? { S: JSON.parse(memo), manquantes: [] } : null;
@@ -299,6 +302,7 @@
     };
     return {
       nom: 'Fichiers de l’application Android',
+      copies: true,
       async charger() {
         const texte = N.lire(ETAT);
         return texte ? reconstituer(texte, image) : null;
@@ -395,6 +399,8 @@
       return actif;
     },
     description: () => (actif ? actif.nom : 'non initialisé'),
+    /** Le stockage actif sait-il faire des copies de sécurité locales ? */
+    copiesDisponibles: () => !!(actif && actif.copies),
     /** Données d'AKWA SCHOOL 1.x laissées par l'ancienne version dans ce navigateur (lecture seule). */
     ancienneVersion() {
       // application installée : fichier de données de l'ancienne version (ex. Android 1.x : etat_v8.json)

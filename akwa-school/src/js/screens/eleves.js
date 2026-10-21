@@ -107,7 +107,7 @@
       ${F.texte({ lib: 'Allergies / handicap', nom: 'allergies', val: s.allergies, attrs: { maxlength: 120, placeholder: 'Aucun' }, aide: 'Donnée de santé : visible par la direction et l’enseignant de la classe, jamais dans un QR code.' })}
     </div>`;
     return html`${ui.ongletsForm([['id', 'Identité', identite], ['nais', 'Naissance', naissance], ['par', 'Parents & tuteur', parents], ['sco', 'Scolarité & santé', scolarite]])}
-      ${listeDonnees('dl-nat', AK.ref.NATIONALITES.map((n) => n[1]))}${listeDonnees('dl-sp', AK.ref.SOUS_PREFECTURES)}${listeDonnees('dl-prof-pere', C.PROF_P)}${listeDonnees('dl-prof-mere', C.PROF_M)}`;
+      ${listeDonnees('dl-nat', AK.ref.NATIONALITES.map((n) => n[1]))}${listeDonnees('dl-sp', AK.ref.SOUS_PREFECTURES.map((z) => z[1]))}${listeDonnees('dl-prof-pere', C.PROF_P)}${listeDonnees('dl-prof-mere', C.PROF_M)}`;
   }
 
   function ouvrirFormulaire(s, classeDefaut) {
@@ -142,7 +142,7 @@
   /* ---------- Fiche élève (tiroir) ---------- */
   function fiche(id) {
     const s = AK.eleves.trouver(id);
-    if (!s || !AK.session.classes().includes(s.classe)) return null;
+    if (!s || (!AK.session.estDirecteur() && !AK.session.classes().includes(s.classe))) return null;
     const x = X(), a = s.acte || {}, dir = AK.session.estDirecteur();
     const kv = (L) => html`<dl class="kv">${L.filter(Boolean).map(([k, v]) => html`<dt>${k}</dt><dd>${v || '—'}</dd>`)}</dl>`;
     const par = (lib, p) => (p && (p.nom || p.prenoms) ? html`<div><b>${lib} :</b> ${[p.nom, p.prenoms].filter(Boolean).join(' ')}${p.profession ? html` <span class="mut">· ${p.profession}</span>` : ''}${p.tel ? html`<br><a href="tel:${p.tel}">${p.tel}</a>` : ''}${p.domicile ? html` <span class="mut">· ${p.domicile}</span>` : ''}</div>` : '');

@@ -30,18 +30,6 @@
   const somme = (L) => L.reduce((a, o) => a + (+o.montant || 0), 0);
   const totalDepenses = () => somme(P().depenses);
 
-  /* Contournement d'un défaut de domain/pro.js (signalé) : la méthode « depense(d) » (enregistrer une
-     dépense) porte le même nom que le total « depense() » et le masque. Le modèle « journal-caisse »
-     appelle AK.pro.depense() SANS argument pour obtenir le total : sans argument, on renvoie le total ;
-     avec un argument, la méthode d'origine (droits et validation compris) est appelée telle quelle. */
-  if (AK.pro && typeof AK.pro.depense === 'function' && AK.pro.depense.length === 1 && !AK.pro.depense.totalSansArgument) {
-    const enregistrer = AK.pro.depense;
-    const depense = function (d) {
-      return d === undefined ? totalDepenses() : enregistrer.call(this, d);
-    };
-    depense.totalSansArgument = true;
-    AK.pro.depense = depense;
-  }
   const resteDe = (s) => Math.max(0, AK.pro.duDe(s) - AK.pro.payeDe(s));
   const tagEtat = (e) => ui.tag(e, TON_ETAT[e] || '', ICONE_ETAT[e]);
   const eleveDe = (sid) => AK.eleves.trouver(sid) || null;
@@ -564,7 +552,7 @@
         const double = P().depenses.find((x) => u.norm(x.libelle) === lib && +x.montant === montant && x.date === d.date);
         if (double && !(await ui.confirmer({ titre: 'Dépense déjà enregistrée ?', icone: 'warn', ok: 'Enregistrer quand même', annuler: 'Revenir à la saisie',
           message: html`<p class="mb0">Une dépense identique existe déjà : « <b>${double.libelle}</b> », ${u.fcfa(double.montant)} le ${u.fmtDate(double.date)}. S’agit-il d’une autre dépense ?</p>` }))) return false;
-        AK.pro.depense({ ...d, montant });
+        AK.pro.ajouterDepense({ ...d, montant });
         ui.toast(`Dépense enregistrée : ${u.fcfa(montant)}.`);
       }
     });
@@ -581,7 +569,7 @@
     const copie = { libelle: d.libelle, cat: d.cat, montant: d.montant, date: d.date, fournisseur: d.fournisseur, justif: d.justif };
     AK.pro.supprimerDepense(d.id);
     ui.toast('Dépense supprimée.', { action: { lib: 'Rétablir', f: appel(() => {
-      AK.pro.depense(copie);
+      AK.pro.ajouterDepense(copie);
       ui.toast('Dépense rétablie.');
     }) } });
   }

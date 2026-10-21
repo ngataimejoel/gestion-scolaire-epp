@@ -15,7 +15,11 @@
     "styles/04-ecrans.css",
     "styles/05-documents.css",
     "styles/06-cartes.css",
-    "styles/07-impression.css"
+    "styles/07-impression.css",
+    "styles/screens/vie.css",
+    "styles/screens/finances.css",
+    "styles/screens/donnees.css",
+    "styles/screens/parametres-modeles-securite.css"
   ],
   "js": [
     "js/core/ns.js",
@@ -71,6 +75,14 @@
     "js/screens/absences.js",
     "js/screens/personnel.js",
     "js/screens/documents.js",
+    "js/screens/vie.js",
+    "js/screens/finances.js",
+    "js/screens/services.js",
+    "js/screens/rapports.js",
+    "js/screens/donnees.js",
+    "js/screens/parametres.js",
+    "js/screens/parametres-modeles.js",
+    "js/screens/parametres-securite.js",
     "@verificateur",
     "js/ui/app.js"
   ],

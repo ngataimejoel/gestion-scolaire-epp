@@ -93,6 +93,8 @@
       if (S.pro.journal.length > MAX_JOURNAL) S.pro.journal.length = MAX_JOURNAL;
       S.log.unshift({ t: e.t, m: e.m });
       if (S.log.length > 40) S.log.length = 40;
+      sale = true;
+      programmer(); // une entrée seule (export, refus de mot de passe) doit aussi être enregistrée
     },
     /** Enregistre immédiatement (fermeture, avant une opération à risque). */
     async maintenant() {

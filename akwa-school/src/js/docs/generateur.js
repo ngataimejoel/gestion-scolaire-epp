@@ -150,7 +150,7 @@
         exporter: options.exporter,
         nomFichier: options.nomFichier,
         preparer: differer ? preparer : null,
-        copie: d.emission && AK.perm.peut('document.registre') && !options.copie ? async () => {
+        copie: d.emission && !options.apercu && AK.perm.peut('document.registre') && !options.copie ? async () => {
           await preparer();
           if (!final.docs.length) return null;
           const c = await generer(idModele, contextes, { ...options, copie: true, apercu: false, reutiliser: final.docs });

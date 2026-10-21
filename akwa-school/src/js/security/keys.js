@@ -102,6 +102,9 @@
       AK.perm.exiger('cles.gerer');
       const c = S().cles.liste.find((x) => x.id === id);
       if (!c) throw new AK.ErreurMetier('Clé introuvable.');
+      if (c.statut === 'compromise') throw new AK.ErreurMetier('Cette clé est déjà déclarée compromise.');
+      const m = String(motif || '').trim();
+      if (m.length < 5) throw new AK.ErreurMetier('Indiquez le motif (5 caractères au moins) : vol de l’ordinateur, mot de passe divulgué…', 'motif');
       AK.store.modifier(`Clé ${id} déclarée compromise`, (s) => {
         c.statut = 'compromise';
         c.compromiseLe = new Date().toISOString();

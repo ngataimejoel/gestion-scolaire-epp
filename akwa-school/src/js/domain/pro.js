@@ -14,9 +14,10 @@
     if (!AK.perm.peut('eleve.voir', { classe: s.classe })) throw E('Cet élève n’est pas dans votre classe.', 'sid');
     return s;
   };
+  /** Texte libre contrôlé ; o.champ : nom du champ où afficher l'erreur. */
   const txt = (v, lib, o) => {
     const e = V.texte(v, lib, o);
-    if (e) throw E(e);
+    if (e) throw E(e, o && o.champ);
     return String(v || '').trim();
   };
 
@@ -61,7 +62,7 @@
       const e = V.date(d.date, 'Date', { requise: true });
       if (e) throw E(e, 'date');
       if (!d.mat) throw E('Choisissez la discipline.', 'mat');
-      const x = { classe: d.classe, date: d.date, mat: String(d.mat), contenu: txt(d.contenu, 'Contenu de la séance', { requis: true, max: 1000 }), travail: txt(d.travail, 'Travail à faire', { max: 300 }) };
+      const x = { classe: d.classe, date: d.date, mat: String(d.mat), contenu: txt(d.contenu, 'Contenu de la séance', { champ: 'contenu',  requis: true, max: 1000 }), travail: txt(d.travail, 'Travail à faire', { champ: 'travail',  max: 300 }) };
       if (id) {
         const o = P().cahier.find((c) => c.id === id);
         if (!o) throw E('Séance introuvable.');
@@ -83,7 +84,7 @@
       if (!C.SANCTIONS.includes(d.sanction)) throw E('Choisissez la sanction.', 'sanction');
       const pts = /Bagarre|Insolence|Dégradation|Tricherie|dangereux/.test(d.fait) ? 3 : 1;
       AK.store.modifier('Discipline : ' + X.nomComplet(s) + ' · ' + d.fait, () =>
-        P().incidents.push({ id: u.uid(), sid: s.id, date: d.date, fait: d.fait, detail: txt(d.detail, 'Précision', { max: 200 }), sanction: d.sanction, statut: d.statut === 'Traité' ? 'Traité' : 'En cours', pts }));
+        P().incidents.push({ id: u.uid(), sid: s.id, date: d.date, fait: d.fait, detail: txt(d.detail, 'Précision', { champ: 'detail',  max: 200 }), sanction: d.sanction, statut: d.statut === 'Traité' ? 'Traité' : 'En cours', pts }));
     },
     clore(id) {
       const x = P().incidents.find((o) => o.id === id);
@@ -102,7 +103,7 @@
       if (e) throw E(e, 'date');
       if (!C.MAUX.includes(d.motif)) throw E('Choisissez le motif.', 'motif');
       AK.store.modifier('Infirmerie : passage enregistré (' + s.classe + ')', () =>
-        P().soins.push({ id: u.uid(), sid: s.id, date: d.date, heure: /^\d\d:\d\d$/.test(d.heure || '') ? d.heure : '', motif: d.motif, suite: C.SUITES_SOIN.includes(d.suite) ? d.suite : C.SUITES_SOIN[0], soin: txt(d.soin, 'Soins donnés', { max: 200 }) }));
+        P().soins.push({ id: u.uid(), sid: s.id, date: d.date, heure: /^\d\d:\d\d$/.test(d.heure || '') ? d.heure : '', motif: d.motif, suite: C.SUITES_SOIN.includes(d.suite) ? d.suite : C.SUITES_SOIN[0], soin: txt(d.soin, 'Soins donnés', { champ: 'soin',  max: 200 }) }));
     },
     supprimerSoin(id) {
       AK.perm.exiger('vie.supprimer');
@@ -113,7 +114,7 @@
       AK.perm.exiger('vie.utiliser');
       const e = V.date(d.date, 'Date', { requise: true });
       if (e) throw E(e, 'date');
-      const titre = txt(d.titre, 'Intitulé', { requis: true, max: 100 });
+      const titre = txt(d.titre, 'Intitulé', { champ: 'titre',  requis: true, max: 100 });
       AK.store.modifier('Événement : ' + titre, () => P().events.push({ id: u.uid(), date: d.date, type: ['acc', 'w', 'g', 'b'].includes(d.type) ? d.type : 'acc', titre }));
     },
     supprimerEvenement(id) {
@@ -143,7 +144,7 @@
       if (e) throw E(e, 'montant');
       if ((e = V.date(d.date, 'Date', { requise: true, max: u.aujourdhui() }))) throw E(e, 'date');
       if (!C.MODES_PAIE.includes(d.mode)) throw E('Choisissez le mode de paiement.', 'mode');
-      const p = { id: u.uid(), ref: `REC-${X.anneeRentree()}-${u.pad(P().seq.rec, 5)}`, sid: s.id, montant: Math.round(+d.montant), mode: d.mode, objet: C.OBJETS_PAIE.includes(d.objet) ? d.objet : 'Autre', date: d.date, payeur: txt(d.payeur, 'Versé par', { max: 80 }), cree: Date.now() };
+      const p = { id: u.uid(), ref: `REC-${X.anneeRentree()}-${u.pad(P().seq.rec, 5)}`, sid: s.id, montant: Math.round(+d.montant), mode: d.mode, objet: C.OBJETS_PAIE.includes(d.objet) ? d.objet : 'Autre', date: d.date, payeur: txt(d.payeur, 'Versé par', { champ: 'payeur',  max: 80 }), cree: Date.now() };
       AK.store.modifier(`Versement ${p.ref} : ${u.fcfa(p.montant)}`, () => {
         P().seq.rec++;
         P().paiements.push(p);
@@ -156,17 +157,18 @@
       const p = P().paiements.find((x) => x.id === id);
       if (!p) throw E('Reçu introuvable.');
       if (p.annule) throw E('Ce reçu est déjà annulé.');
-      const m = txt(motif, 'Motif d’annulation', { requis: true, max: 160 });
+      const m = txt(motif, 'Motif d’annulation', { champ: 'motif', requis: true, max: 160 });
       AK.store.modifier(`Reçu annulé : ${p.ref} (${m})`, () => (p.annule = { le: new Date().toISOString(), motif: m, par: AK.session.libelle() }), { categorie: 'finances' });
     },
-    depense(d) {
+    /** Enregistre une dépense (depense() sans argument = total des dépenses). */
+    ajouterDepense(d) {
       AK.perm.exiger('finances.gerer');
-      const libelle = txt(d.libelle, 'Libellé', { requis: true, max: 120 });
+      const libelle = txt(d.libelle, 'Libellé', { champ: 'libelle',  requis: true, max: 120 });
       let e = V.montant(d.montant, 'Montant', { min: 1, max: 100000000 });
       if (e) throw E(e, 'montant');
       if ((e = V.date(d.date, 'Date', { requise: true, max: u.aujourdhui() }))) throw E(e, 'date');
       AK.store.modifier('Dépense : ' + libelle + ' · ' + u.fcfa(+d.montant), () =>
-        P().depenses.push({ id: u.uid(), libelle, cat: C.CAT_DEP.includes(d.cat) ? d.cat : 'Autre', montant: Math.round(+d.montant), date: d.date, fournisseur: txt(d.fournisseur, 'Fournisseur', { max: 80 }), justif: txt(d.justif, 'Justificatif', { max: 60 }) }), { categorie: 'finances' });
+        P().depenses.push({ id: u.uid(), libelle, cat: C.CAT_DEP.includes(d.cat) ? d.cat : 'Autre', montant: Math.round(+d.montant), date: d.date, fournisseur: txt(d.fournisseur, 'Fournisseur', { champ: 'fournisseur',  max: 80 }), justif: txt(d.justif, 'Justificatif', { champ: 'justif',  max: 60 }) }), { categorie: 'finances' });
     },
     supprimerDepense(id) {
       AK.perm.exiger('finances.gerer');
@@ -209,13 +211,13 @@
     /* ---------- Bibliothèque ---------- */
     ouvrage(d) {
       AK.perm.exiger('services.utiliser');
-      const titre = txt(d.titre, 'Titre', { requis: true, max: 120 });
+      const titre = txt(d.titre, 'Titre', { champ: 'titre',  requis: true, max: 120 });
       const ex = Math.round(Number(d.ex));
       if (!(ex >= 1 && ex <= 9999)) throw E('Nombre d’exemplaires : de 1 à 9999.', 'ex');
       const g = C.GENRES.includes(d.genre) ? d.genre : 'Manuel';
-      const cote = txt(d.cote, 'Cote', { max: 20 }) || u.norm(g).slice(0, 3).toUpperCase() + '-' + (100 + P().livres.length * 7);
+      const cote = txt(d.cote, 'Cote', { champ: 'cote',  max: 20 }) || u.norm(g).slice(0, 3).toUpperCase() + '-' + (100 + P().livres.length * 7);
       if (P().livres.some((b) => b.cote === cote)) throw E('Cette cote est déjà utilisée.', 'cote');
-      AK.store.modifier('Ouvrage ajouté : ' + titre, () => P().livres.push({ id: u.uid(), titre, auteur: txt(d.auteur, 'Auteur', { max: 80 }), genre: g, ex, cote }));
+      AK.store.modifier('Ouvrage ajouté : ' + titre, () => P().livres.push({ id: u.uid(), titre, auteur: txt(d.auteur, 'Auteur', { champ: 'auteur',  max: 80 }), genre: g, ex, cote }));
     },
     retirerOuvrage(id) {
       AK.perm.exiger('services.utiliser');
@@ -261,8 +263,8 @@
     },
     annonce(d) {
       AK.perm.exiger('services.utiliser');
-      const titre = txt(d.titre, 'Titre', { requis: true, max: 100 });
-      const corps = txt(d.corps, 'Texte', { requis: true, max: 1500 });
+      const titre = txt(d.titre, 'Titre', { champ: 'titre',  requis: true, max: 100 });
+      const corps = txt(d.corps, 'Texte', { champ: 'corps',  requis: true, max: 1500 });
       AK.store.modifier('Annonce publiée : ' + titre, () => P().annonces.push({ id: u.uid(), titre, cible: ['Parents', 'Enseignants', 'Élèves', 'Tous'].includes(d.cible) ? d.cible : 'Tous', date: d.date || u.aujourdhui(), corps }));
     },
     retirerAnnonce(id) {

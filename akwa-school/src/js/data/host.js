@@ -60,6 +60,7 @@
         });
         await AK.stockage.initialiser({
           nom: 'Base SQLite de l’application Windows',
+          copies: false,
           async enregistrer() {
             return 0;
           },

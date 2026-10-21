@@ -18,7 +18,7 @@
   function entete(r = {}) {
     const sc = S().school, e = r.entete || {};
     if (e.officiel === false) {
-      return html`<div class="doc-entete${e.compact ? ' compact' : ''}"><div class="ge"><span class="ecole">${sc.name}</span>${sc.adresse || sc.telephone ? html`<span style="font-weight:400;text-transform:none">${[sc.adresse, sc.telephone].filter(Boolean).join(' · ')}</span>` : ''}</div><div class="dr"><span class="annee">Année scolaire ${sc.year || '…'}</span></div></div>`;
+      return html`<div class="doc-entete${e.compact ? ' compact' : ''}"><div class="ge"><span class="ecole">${sc.name}</span>${sc.adresse || sc.telephone ? html`<span style="font-weight:400;text-transform:none">${[sc.adresse, sc.telephone].filter(Boolean).join(' · ')}</span>` : ''}</div><div class="dr"><span class="annee">Année scolaire ${sc.year || '…'}</span></div></div>${e.ligneSup ? html`<div class="doc-entete-x">${e.ligneSup}</div>` : ''}`;
     }
     const logos = e.logos === false ? [] : [sc.logoIepp, sc.logoEcole].filter((x) => x && u.IMG_OK.test(x));
     const sep = raw('<span class="sep"></span>');

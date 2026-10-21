@@ -119,8 +119,8 @@
       const cols = cfg.colonnes.filter((c) => c.csv !== false);
       const txt = (v) => (v instanceof u.Html ? new DOMParser().parseFromString(String(v), 'text/html').body.textContent : v);
       const lignes = [cols.map((c) => c.lib), ...L.map((o) => cols.map((c) => (typeof c.csv === 'function' ? c.csv(o) : c.tri ? c.tri(o) : txt(c.rendu ? c.rendu(o) : o[c.cle]))))];
-      await AK.sauvegarde.csv(`${cfg.exporter}-${u.aujourdhui()}.csv`, lignes, cfg.exporter);
-      ui.toast('Fichier Excel (CSV) enregistré');
+      const nom = await AK.sauvegarde.csv(`${cfg.exporter}-${u.aujourdhui()}.csv`, lignes, cfg.libelleExport || cfg.legende || cfg.exporter);
+      if (nom) ui.toast('Fichier Excel (CSV) enregistré');
     }
   });
   AK.actions.defChange({

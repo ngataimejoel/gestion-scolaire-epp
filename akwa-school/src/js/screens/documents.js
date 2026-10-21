@@ -36,7 +36,7 @@
       const renvoi = RENVOI_MODELE[d.id] || (catDe(d) === 'autres' || d.categorie === 'rapport' ? RENVOIS[d.categorie] : null);
       const perso = AK.modeles.estPersonnalise(d.id);
       return html`<div class="modele-carte">${ic(d.icone || 'file')}<b>${d.lib}</b><small>${d.description || ''}</small>
-        <div class="ligne">${d.emission ? ui.tag(d.emission.politique === 'unique' ? 'Référence unique' : 'Registre + QR', 'pri', 'qr') : ''}${perso ? ui.tag('Personnalisé', 'acc') : ''}<span class="mut petit">v${d.version}${perso ? '.' + (AK.modeles.reglages(d.id).rev || 1) : ''}</span></div>
+        <div class="ligne">${d.emission ? ui.tag(d.emission.politique === 'unique' ? 'Référence unique' : 'Registre + QR', 'pri', 'qr') : ''}${perso ? ui.tag('Personnalisé', 'acc') : ''}<span class="mut petit">v${d.version}${perso ? '.' + ((S().modeles[d.id] || {}).rev || 1) : ''}</span></div>
         <div class="ligne mt0">${renvoi ? html`<a class="btn btn-sm" href="#${renvoi}">${ic('chev')}Ouvrir l’écran</a>` : d.categorie === 'carte' ? html`<a class="btn btn-sm btn-pri" href="#documents/cartes?modele=${d.id}">${ic('idCard')}Préparer les cartes</a>` : html`<button type="button" class="btn btn-sm btn-pri" data-action="doc-emettre" data-modele="${d.id}">${ic(d.emission ? 'filePlus' : 'print')}${d.emission ? 'Émettre' : 'Imprimer'}</button>`}
         ${peut('modeles.gerer') ? html`<a class="btn btn-sm btn-ghost" href="#parametres/modeles?modele=${d.id}">${ic('sliders')}Personnaliser</a>` : ''}</div></div>`;
     };

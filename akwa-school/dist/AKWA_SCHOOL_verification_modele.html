@@ -1,0 +1,3975 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="generator" content="AKWA SCHOOL 2.0.0">
+<meta name="referrer" content="no-referrer">
+<!-- Aucune ressource externe : tout est intégré. La politique de sécurité interdit en plus toute connexion réseau. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; media-src blob: mediastream:; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="description" content="Outil de vérification hors ligne des documents émis par une école avec AKWA SCHOOL : référence, QR code signé, statut au registre.">
+<link rel="icon" href="data:,">
+<title>Vérification des documents · AKWA SCHOOL</title>
+<style>
+/* =====================================================================================
+   AKWA SCHOOL 2 — jetons de design
+   Identité : structure bleu nuit, surfaces blanc cassé, gris chauds pour les zones secondaires,
+   un bleu d'action franc et un accent ambre (la toque du logo) employé avec parcimonie.
+   Contrastes vérifiés : texte courant ≥ 7:1, texte secondaire ≥ 4.5:1 (WCAG AA).
+   ===================================================================================== */
+:root {
+  /* Structure */
+  --nuit-950: #0a1422;
+  --nuit-900: #0f1c2f;
+  --nuit-850: #13233a;
+  --nuit-800: #182b45;
+  --nuit-700: #223754;
+  --nuit-600: #2f4766;
+  --nuit-txt: #e7edf6;
+  --nuit-mut: #a3b1c4;
+
+  /* Surfaces */
+  --bg: #f4f2ed;
+  --surface: #ffffff;
+  --surface-2: #fbfaf7;
+  --sunk: #efece5;
+  --sunk-2: #e7e3da;
+
+  /* Encre */
+  --ink: #152033;
+  --ink-2: #364357;
+  --mut: #5c687a;
+  --faint: #8b94a2;
+
+  /* Lignes */
+  --line: #e4e0d7;
+  --line-2: #d3cec3;
+
+  /* Action principale */
+  --pri: #1f4e8c;
+  --pri-h: #173e72;
+  --pri-soft: #e8eef7;
+  --pri-ring: rgba(31, 78, 140, 0.28);
+  --on-pri: #ffffff;
+
+  /* Accent de marque (parcimonie) */
+  --acc: #c7782f;
+  --acc-ink: #8a4c12;
+  --acc-soft: #f8ecde;
+
+  /* États (toujours accompagnés d'un texte ou d'une icône) */
+  --ok: #1d774c;
+  --ok-soft: #e4f2ea;
+  --warn: #965803;
+  --warn-soft: #fbf0dc;
+  --bad: #b2352c;
+  --bad-soft: #fbe8e6;
+  --info: #2b5d9c;
+  --info-soft: #e7eef8;
+
+  /* Graphiques garçons / filles */
+  --cg: #2f5e9e;
+  --cf: #c7782f;
+
+  /* Formes */
+  --r-xs: 6px;
+  --r-sm: 8px;
+  --r: 10px;
+  --r-md: 12px;
+  --r-lg: 14px;
+  --r-xl: 18px;
+
+  /* Ombres légères et fonctionnelles */
+  --sh-1: 0 1px 2px rgba(15, 28, 47, 0.06);
+  --sh-2: 0 4px 14px rgba(15, 28, 47, 0.08), 0 1px 3px rgba(15, 28, 47, 0.05);
+  --sh-3: 0 20px 50px rgba(10, 20, 34, 0.24), 0 4px 12px rgba(10, 20, 34, 0.08);
+
+  /* Espacements (grille de 4 px) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s7: 32px;
+  --s8: 40px;
+
+  /* Typographie (polices du système : aucune police téléchargée) */
+  --font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
+  --font-titre: "Segoe UI Variable Display", "Segoe UI Semibold", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono: "Cascadia Mono", Consolas, "SF Mono", Menlo, "Liberation Mono", monospace;
+  --fs-xs: 11.5px;
+  --fs-sm: 12.5px;
+  --fs: 14px;
+  --fs-md: 15px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+
+  /* Gabarits */
+  --ctl-h: 38px;
+  --ctl-h-sm: 30px;
+  --side-w: 258px;
+  --side-wc: 72px;
+  --top-h: 60px;
+  --contenu-max: 1440px;
+
+  /* Mouvement (rapide et discret) */
+  --t-fast: 120ms ease;
+  --t: 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  color-scheme: light;
+}
+
+/* Couleur d'action choisie par l'école (la structure reste bleu nuit) */
+:root[data-accent="green"] { --pri: #1c6b4a; --pri-h: #155539; --pri-soft: #e5f1ea; --pri-ring: rgba(28, 107, 74, 0.28); }
+:root[data-accent="amber"] { --pri: #9a5212; --pri-h: #7d420e; --pri-soft: #f7ece0; --pri-ring: rgba(154, 82, 18, 0.28); }
+:root[data-accent="plum"] { --pri: #5e3a8c; --pri-h: #4b2e70; --pri-soft: #efe9f6; --pri-ring: rgba(94, 58, 140, 0.28); }
+
+/* Thème sombre : automatique, ou forcé dans Paramètres */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c1420;
+    --surface: #121d2c;
+    --surface-2: #15212f;
+    --sunk: #192636;
+    --sunk-2: #1f2e41;
+    --ink: #e7edf5;
+    --ink-2: #c3cedb;
+    --mut: #9aa8b9;
+    --faint: #6f7d8f;
+    --line: #233246;
+    --line-2: #2f4057;
+    --pri: #6f9fe2;
+    --pri-h: #8db4ec;
+    --pri-soft: #1a2b42;
+    --pri-ring: rgba(111, 159, 226, 0.35);
+    --on-pri: #08121f;
+    --acc: #e09a52;
+    --acc-ink: #f0b277;
+    --acc-soft: #2c2215;
+    --ok: #4fbf87; --ok-soft: #142b21;
+    --warn: #e2a54a; --warn-soft: #2d2313;
+    --bad: #ef7a70; --bad-soft: #321a19;
+    --info: #79a8e6; --info-soft: #172a42;
+    --cg: #6f9fe2;
+    --cf: #e09a52;
+    --sh-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --sh-2: 0 6px 18px rgba(0, 0, 0, 0.4);
+    --sh-3: 0 24px 60px rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0c1420;
+  --surface: #121d2c;
+  --surface-2: #15212f;
+  --sunk: #192636;
+  --sunk-2: #1f2e41;
+  --ink: #e7edf5;
+  --ink-2: #c3cedb;
+  --mut: #9aa8b9;
+  --faint: #6f7d8f;
+  --line: #233246;
+  --line-2: #2f4057;
+  --pri: #6f9fe2;
+  --pri-h: #8db4ec;
+  --pri-soft: #1a2b42;
+  --pri-ring: rgba(111, 159, 226, 0.35);
+  --on-pri: #08121f;
+  --acc: #e09a52;
+  --acc-ink: #f0b277;
+  --acc-soft: #2c2215;
+  --ok: #4fbf87; --ok-soft: #142b21;
+  --warn: #e2a54a; --warn-soft: #2d2313;
+  --bad: #ef7a70; --bad-soft: #321a19;
+  --info: #79a8e6; --info-soft: #172a42;
+  --cg: #6f9fe2;
+  --cf: #e09a52;
+  --sh-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sh-2: 0 6px 18px rgba(0, 0, 0, 0.4);
+  --sh-3: 0 24px 60px rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+/* =====================================================================================
+   Outil de vérification autonome : feuille de style propre (seuls les jetons de
+   styles/00-tokens.css sont embarqués avec elle). Les règles de base, de boutons, de champs
+   et d'encadrés reprennent celles de l'application pour une apparence identique ;
+   .verif-* habille le résultat produit par AK.verif.rendu (docs/verification.js).
+   Thème sombre : automatique (préférence du système) ou forcé par le bouton de l'en-tête.
+   ===================================================================================== */
+
+/* ---------- Base ---------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; background: var(--bg); }
+body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+  font: var(--fs)/1.5 var(--font); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+h1, h2, h3 { font-family: var(--font-titre); color: var(--ink); margin: 0; font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
+p { margin: 0 0 var(--s3); }
+button, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+code, .mono { font-family: var(--mono); font-size: 0.92em; }
+::selection { background: color-mix(in srgb, var(--acc) 30%, transparent); }
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; border-radius: 4px; }
+.sr { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+[hidden] { display: none !important; }
+.lien-evitement { position: fixed; left: 12px; top: -60px; z-index: 50; background: var(--pri); color: var(--on-pri); padding: 8px 14px; border-radius: var(--r-sm); font-weight: 600; text-decoration: none; transition: top var(--t-fast); }
+.lien-evitement:focus { top: 12px; }
+.i { width: 18px; height: 18px; flex: none; vertical-align: -3px; }
+.mut { color: var(--mut); }
+.petit { font-size: var(--fs-sm); }
+.mb0 { margin-bottom: 0 !important; }
+.ligne { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.pile { display: grid; gap: var(--s3); min-width: 0; }
+.pile-sm { display: grid; gap: var(--s2); min-width: 0; }
+.vf-noscript, .vf-chargement { padding: 24px; margin: 0; }
+
+/* ---------- Boutons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 38px; padding: 6px 14px; border-radius: 9px;
+  border: 1px solid var(--line-2); background: var(--surface); color: var(--ink);
+  font-weight: 600; font-size: 13.5px; line-height: 1.2; box-shadow: var(--sh-1); text-decoration: none; text-align: center;
+  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
+}
+.btn:hover { border-color: color-mix(in srgb, var(--pri) 45%, var(--line-2)); color: var(--pri); }
+.btn:active { transform: translateY(1px); }
+.btn .i { width: 16px; height: 16px; }
+.btn-pri { background: var(--pri); border-color: var(--pri); color: var(--on-pri); }
+.btn-pri:hover { background: var(--pri-h); border-color: var(--pri-h); color: var(--on-pri); }
+.btn-ghost { background: transparent; border-color: transparent; box-shadow: none; color: var(--ink-2); }
+.btn-ghost:hover { background: var(--sunk); border-color: transparent; color: var(--ink); }
+.btn-sm { min-height: 32px; padding: 4px 10px; font-size: 12.5px; border-radius: 8px; }
+.btn-ic { width: 40px; height: 40px; min-height: 40px; padding: 0; }
+.btn.occupe { pointer-events: none; opacity: 0.8; }
+.btn.occupe::after { content: ""; width: 13px; height: 13px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: vf-tourne 0.7s linear infinite; }
+@keyframes vf-tourne { to { transform: rotate(360deg); } }
+.vf-fichier { position: relative; cursor: pointer; }
+.vf-fichier:focus-within { outline: 2px solid var(--pri); outline-offset: 2px; }
+
+/* ---------- Champs ---------- */
+.champ { display: grid; gap: 5px; min-width: 0; }
+.champ > label { font-size: 12.5px; font-weight: 650; color: var(--ink-2); }
+.champ:focus-within > label { color: var(--pri); }
+.champ .aide { font-size: 12px; color: var(--mut); }
+.erreur-champ { font-size: 12.5px; color: var(--bad); font-weight: 600; display: flex; gap: 6px; align-items: flex-start; }
+.erreur-champ .i { width: 15px; height: 15px; margin-top: 1px; }
+.inp {
+  width: 100%; min-width: 0; min-height: 44px; padding: 8px 12px;
+  border: 1px solid var(--line-2); border-radius: 9px; background: var(--surface); color: var(--ink);
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.inp:hover { border-color: color-mix(in srgb, var(--pri) 30%, var(--line-2)); }
+.inp:focus { border-color: var(--pri); box-shadow: 0 0 0 3px var(--pri-ring); outline: none; }
+.inp[aria-invalid="true"] { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); }
+.vf-saisie { font-family: var(--mono); font-size: 15px; letter-spacing: 0.02em; }
+.vf-saisie::placeholder { color: var(--faint); }
+
+/* ---------- Cartes, encadrés, étiquettes ---------- */
+.carte { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 18px; box-shadow: var(--sh-1); min-width: 0; }
+.vf-titre { display: flex; align-items: center; gap: 9px; font-size: 15px; margin-bottom: 14px; }
+.vf-titre .i { color: var(--pri); }
+.vf-titre:focus-visible { outline-offset: 4px; }
+.encadre { display: flex; gap: 10px; align-items: flex-start; padding: 11px 13px; border-radius: 11px; font-size: 13px; line-height: 1.45; background: var(--info-soft); color: var(--ink-2); border: 1px solid color-mix(in srgb, var(--info) 20%, transparent); }
+.encadre > .i { color: var(--info); margin-top: 1px; }
+.encadre > div { min-width: 0; }
+.encadre.ok { background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 25%, transparent); }
+.encadre.ok > .i { color: var(--ok); }
+.encadre.avert { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
+.encadre.avert > .i { color: var(--warn); }
+.encadre.erreur { background: var(--bad-soft); border-color: color-mix(in srgb, var(--bad) 25%, transparent); }
+.encadre.erreur > .i { color: var(--bad); }
+.encadre b { color: var(--ink); }
+.tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px; font: 700 11.5px/1.5 var(--font); background: var(--sunk); color: var(--ink-2); white-space: nowrap; vertical-align: 1px; }
+.tag .i { width: 13px; height: 13px; }
+.tag.ok { background: var(--ok-soft); color: var(--ok); }
+.tag.avert { background: var(--warn-soft); color: var(--warn); }
+.tag.mauvais { background: var(--bad-soft); color: var(--bad); }
+
+/* ---------- En-tête : école, copie du registre, clés ---------- */
+.vf-entete { background: var(--nuit-900); color: var(--nuit-txt); padding: 18px 16px 14px; border-bottom: 3px solid var(--acc); }
+.vf-entete-in { max-width: 1120px; margin: 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.vf-marque { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.vf-marque > div { min-width: 0; }
+.vf-logo { width: 44px; height: 44px; padding: 9px; border-radius: 12px; background: var(--nuit-700); color: #fff; }
+.vf-sur { margin: 0; font-size: 12px; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; color: var(--nuit-mut); }
+.vf-entete h1 { color: #fff; font-size: var(--fs-xl); line-height: 1.2; overflow-wrap: anywhere; }
+.vf-sous { margin: 2px 0 0; color: var(--nuit-mut); font-size: 13px; overflow-wrap: anywhere; }
+.vf-theme { flex: none; background: var(--nuit-800); border-color: var(--nuit-600); color: var(--nuit-txt); box-shadow: none; }
+.vf-theme:hover { background: var(--nuit-700); color: #fff; border-color: var(--nuit-600); }
+.vf-theme[aria-pressed="true"] { background: var(--nuit-600); color: #fff; }
+.vf-infos { max-width: 1120px; margin: 14px auto 0; display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--nuit-txt); }
+.vf-infos b { color: #fff; }
+.vf-cles { display: contents; }
+.vf-info-l { display: inline-flex; align-items: center; gap: 7px; min-width: 0; flex-wrap: wrap; }
+.vf-info-l > .i { color: var(--acc); }
+.vf-entete .tag { background: var(--nuit-700); color: var(--nuit-txt); }
+.vf-entete .tag.ok { background: color-mix(in srgb, #4fbf87 22%, var(--nuit-800)); color: #c9f0dc; }
+.vf-entete .tag.mauvais { background: color-mix(in srgb, #ef7a70 26%, var(--nuit-800)); color: #ffd9d5; }
+.vf-empreinte { letter-spacing: 0.04em; overflow-wrap: anywhere; }
+
+/* ---------- Corps ---------- */
+.vf-corps { max-width: 1120px; margin: 0 auto; padding: 20px 16px 8px; display: grid; gap: 16px; }
+.vf-etroit { max-width: 760px; }
+.vf-grille { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 16px; align-items: start; }
+.vf-resultat { position: sticky; top: 12px; }
+.vf-vide { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 26px 12px; color: var(--ink-2); }
+.vf-vide-i { width: 40px; height: 40px; color: var(--faint); margin-bottom: 4px; }
+.vf-etat:empty { display: none; }
+.vf-etat.erreur { color: var(--bad); font-weight: 600; }
+.vf-etat.ok { color: var(--ok); font-weight: 600; }
+.vf-etapes { margin: 0; padding-left: 22px; display: grid; gap: 6px; }
+.vf-apropos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.vf-apropos h3, .vf-sous-titre { font-size: 13.5px; }
+.vf-sous-titre { margin-bottom: 8px; }
+.vf-liste-cles { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.vf-liste-cles li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.vf-pied { max-width: 1120px; margin: 0 auto; padding: 8px 16px 28px; font-size: 12.5px; color: var(--mut); }
+
+/* Détails à comparer */
+.vf-details { display: grid; grid-template-columns: minmax(0, 210px) minmax(0, 1fr); margin: 0; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; font-size: 13px; }
+.vf-details dt, .vf-details dd { margin: 0; padding: 7px 12px; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.vf-details dt { color: var(--mut); font-weight: 600; background: var(--surface-2); }
+.vf-details dd { font-weight: 600; }
+.vf-details dt:first-of-type, .vf-details dt:first-of-type + dd { border-top: 0; }
+
+/* Historique de la session */
+.vf-historique { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.vf-hist { width: 100%; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface-2); text-align: left; }
+.vf-hist:hover { border-color: color-mix(in srgb, var(--pri) 40%, var(--line)); }
+.vf-hist[aria-current="true"] { border-color: var(--pri); background: var(--pri-soft); }
+.vf-hist-ref { font-weight: 650; overflow-wrap: anywhere; min-width: 0; }
+
+/* Caméra */
+.vf-camera { position: relative; border-radius: 12px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; width: 100%; max-width: 520px; }
+.vf-camera video { display: block; width: 100%; height: 100%; object-fit: cover; }
+.vf-viseur { position: absolute; inset: 16%; border: 3px solid rgba(255, 255, 255, 0.85); border-radius: 14px; box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.3); pointer-events: none; }
+.vf-depot.survol { border-color: var(--pri); box-shadow: 0 0 0 3px var(--pri-ring); }
+
+/* ---------- Résultat (AK.verif.rendu) ---------- */
+.verif-res { border-radius: var(--r-lg); border: 1px solid var(--line); overflow: hidden; }
+.verif-tete { display: flex; gap: 14px; align-items: center; padding: 16px 18px; }
+.verif-tete .i { width: 40px; height: 40px; flex: none; }
+.verif-tete b { display: block; font-size: 17px; font-family: var(--font-titre); line-height: 1.25; }
+.verif-tete span { overflow-wrap: anywhere; }
+.verif-res.valide .verif-tete { background: var(--ok-soft); color: var(--ok); }
+.verif-res.douteux .verif-tete { background: var(--warn-soft); color: var(--warn); }
+.verif-res.invalide .verif-tete { background: var(--bad-soft); color: var(--bad); }
+.verif-res.inconnu .verif-tete { background: var(--sunk); color: var(--ink-2); }
+.verif-points { display: grid; }
+.verif-point { display: grid; grid-template-columns: 24px 150px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 13px; }
+.verif-point span { overflow-wrap: anywhere; min-width: 0; }
+.verif-point .i { color: var(--mut); }
+.verif-point.ok .i { color: var(--ok); }
+.verif-point.ko .i { color: var(--bad); }
+.verif-point.av .i { color: var(--warn); }
+.verif-point b { font-weight: 650; }
+
+/* ---------- Petits écrans ---------- */
+@media (max-width: 900px) {
+  .vf-grille, .vf-apropos { grid-template-columns: minmax(0, 1fr); }
+  .vf-resultat { position: static; }
+}
+@media (max-width: 560px) {
+  .vf-entete { padding-top: 14px; }
+  .vf-entete h1 { font-size: var(--fs-lg); }
+  .vf-logo { width: 38px; height: 38px; padding: 8px; }
+  .carte { padding: 14px; }
+  .verif-tete { padding: 14px; }
+  .verif-point { grid-template-columns: 22px minmax(0, 1fr); padding: 10px 14px; }
+  .verif-point span:last-child { grid-column: 2; }
+  .vf-details { grid-template-columns: minmax(0, 1fr); }
+  .vf-details dd { border-top: 0; padding-top: 0; }
+  .vf-details dt { background: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+@media print {
+  .vf-entete { background: none; color: #000; border-bottom: 1px solid #000; }
+  .vf-entete h1, .vf-infos b { color: #000; }
+  .vf-theme, .lien-evitement, .vf-depot, #vf-form .ligne, [data-action="vf-copier"] { display: none !important; }
+  .vf-resultat { position: static; }
+}
+
+</style>
+</head>
+<body>
+<a class="lien-evitement" href="#vf-texte">Aller à la saisie</a>
+<noscript><p class="vf-noscript">Cet outil de vérification a besoin de JavaScript : activez-le dans votre navigateur, puis rouvrez le fichier.</p></noscript>
+<div id="vf-racine" class="vf"><p class="vf-chargement">Chargement de l’outil de vérification…</p></div>
+<div id="vf-annonce" class="sr" role="status" aria-live="polite"></div>
+<script>window.AKWA_DONNEES = /*@DONNEES*/null;</script>
+<script>
+/* =====================================================================================
+   AKWA SCHOOL 2 — espace de noms et amorçage
+   Toute l'application vit sous window.AK, découpée en modules (un fichier = un module).
+   Ordre de chargement : src/manifest.json. Les scripts sont « classiques » (pas de modules ES)
+   pour fonctionner en ouvrant directement le fichier HTML (adresse file://).
+   ===================================================================================== */
+(function () {
+  'use strict';
+  const AK = (window.AK = window.AK || {});
+  AK.VERSION = '2.0.0';
+  AK.NOM = 'AKWA SCHOOL';
+  AK.vendor = AK.vendor || {};
+
+  /* Erreurs métier : message destiné à l'utilisateur, jamais une trace technique. */
+  class ErreurMetier extends Error {
+    constructor(message, champ) {
+      super(message);
+      this.name = 'ErreurMetier';
+      this.champ = champ || null;
+    }
+  }
+  class ErreurDroits extends ErreurMetier {
+    constructor(message) {
+      super(message || 'Cette opération n’est pas autorisée pour votre profil.');
+      this.name = 'ErreurDroits';
+    }
+  }
+  AK.ErreurMetier = ErreurMetier;
+  AK.ErreurDroits = ErreurDroits;
+
+  /* Petit bus d'événements : les modules s'écoutent sans se connaître. */
+  const ecoutes = new Map();
+  AK.bus = {
+    on(nom, f) {
+      if (!ecoutes.has(nom)) ecoutes.set(nom, new Set());
+      ecoutes.get(nom).add(f);
+      return () => ecoutes.get(nom).delete(f);
+    },
+    emit(nom, donnee) {
+      (ecoutes.get(nom) || []).forEach((f) => {
+        try {
+          f(donnee);
+        } catch (e) {
+          if (AK.diag) AK.diag.erreur(e, 'bus:' + nom);
+          else console.error(e);
+        }
+      });
+    }
+  };
+})();
+
+//# sourceURL=akwa/js/core/ns.js
+</script>
+<script>
+/* =====================================================================================
+   Outils communs : HTML sûr, DOM, dates, nombres, textes, identifiants, fichiers.
+   Règle de sécurité : tout texte inséré dans le HTML passe par html`…` (échappement automatique).
+   Seul un fragment produit par html`…` (ou marqué AK.u.raw) est inséré tel quel.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+
+  /* ---------- HTML sûr ---------- */
+  class Html {
+    constructor(s) {
+      this.s = s;
+    }
+    toString() {
+      return this.s;
+    }
+  }
+  const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '`': '&#96;' };
+  const esc = (s) => String(s ?? '').replace(/[&<>"'`]/g, (c) => ESC[c]);
+  function enHtml(v) {
+    if (v == null || v === false) return '';
+    if (v instanceof Html) return v.s;
+    if (Array.isArray(v)) return v.map(enHtml).join('');
+    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
+    return esc(v);
+  }
+  /** Gabarit HTML : les valeurs interpolées sont échappées, sauf les fragments Html. */
+  function html(chaines, ...vals) {
+    let out = chaines[0];
+    for (let i = 0; i < vals.length; i++) out += enHtml(vals[i]) + chaines[i + 1];
+    return new Html(out);
+  }
+  /** Marque un texte comme HTML déjà sûr (à n'utiliser que pour du HTML produit par le code). */
+  const raw = (s) => new Html(String(s ?? ''));
+  const joindre = (liste, sep = '') => new Html(liste.map(enHtml).join(enHtml(sep)));
+
+  /* ---------- DOM ---------- */
+  const $ = (s, e = document) => e.querySelector(s);
+  const $$ = (s, e = document) => [...e.querySelectorAll(s)];
+  function poser(el, contenu) {
+    el.innerHTML = enHtml(contenu);
+    return el;
+  }
+
+  /* ---------- Dates (chaînes AAAA-MM-JJ, heure locale) ---------- */
+  const pad = (n, k = 2) => String(n).padStart(k, '0');
+  const iso = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  const parseISO = (s) => {
+    const [y, m, d] = String(s).split('-').map(Number);
+    return new Date(y, (m || 1) - 1, d || 1);
+  };
+  const estISO = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) && !isNaN(parseISO(s)) && iso(parseISO(s)) === s;
+  const ajouterJours = (s, n) => {
+    const d = parseISO(s);
+    d.setDate(d.getDate() + n);
+    return iso(d);
+  };
+  const aujourdhui = () => iso(new Date());
+  const ecartJours = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 864e5);
+  const fmtDate = (s) => {
+    if (!s) return '—';
+    const [y, m, d] = String(s).split('-');
+    return d && m && y ? `${d}/${m}/${y}` : String(s);
+  };
+  const fmtDateLongue = (s) =>
+    s ? parseISO(s).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  const fmtJour = (s) => parseISO(s).toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  const fmtHorodatage = (t) =>
+    new Date(t).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  /** « 14/05/2018 », « 14-5-2018 » ou « 2018-05-14 » → « 2018-05-14 » (sinon '') */
+  function versISO(v) {
+    v = String(v || '').trim();
+    const m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/);
+    if (m) v = `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+    return estISO(v) ? v : '';
+  }
+
+  /* ---------- Nombres ---------- */
+  /** Arrondi décimal au plus proche, demi vers le haut (10,075 → 10,08) : décalage par l'exposant, sans erreur binaire. */
+  const arrondi = (x, n = 2) => {
+    if (!Number.isFinite(x)) return x;
+    // 12 chiffres significatifs : absorbe l'erreur binaire des sommes (10,01 + 10 = 20,009999…)
+    const y = Number(x.toPrecision(12));
+    const r = Number(Math.round(Number(y + 'e' + n)) + 'e-' + n);
+    return Number.isFinite(r) ? r + 0 : Math.round(x * 10 ** n) / 10 ** n; // + 0 : jamais « -0 »
+  };
+  const moyenne = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const fmtNote = (n) => (n == null || !Number.isFinite(n) ? '—' : n.toFixed(2).replace('.', ','));
+  const fmtSaisie = (n) => (n == null ? '' : String(n).replace('.', ','));
+  const pct = (a, b) => (b ? Math.round((a / b) * 100) + ' %' : '—');
+  const fcfa = (n) => (Math.round(n || 0) + 0).toLocaleString('fr-FR') + ' F';
+  const pluriel = (n, a, b) => n + ' ' + (Math.abs(n) > 1 ? b || a + 's' : a);
+  const entier = (v) => (v === '' || v == null ? null : Math.max(0, parseInt(v, 10) || 0));
+
+  /* ---------- Textes ---------- */
+  /** Forme de comparaison : minuscules, sans accents ni ponctuation. */
+  const norm = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]/g, '');
+  const sansAccents = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const majNom = (v) => String(v || '').toUpperCase();
+  const majPrenoms = (v) =>
+    String(v || '')
+      .toLowerCase()
+      .replace(/(^|[\s\-'’])(\p{L})/gu, (x, a, b) => a + b.toUpperCase());
+  const majNomComplet = (v) => {
+    const m = String(v || '').match(/^(\s*\S+)([\s\S]*)$/);
+    return m ? m[1].toUpperCase() + majPrenoms(m[2]) : '';
+  };
+  const capitale = (s) => String(s || '').toLowerCase().replace(/(^|[\s-])\p{L}/gu, (x) => x.toUpperCase());
+  const tronquer = (s, n) => (String(s || '').length > n ? String(s).slice(0, n - 1) + '…' : String(s || ''));
+
+  /* ---------- Identifiants et empreintes ---------- */
+  function uid() {
+    if (window.crypto && crypto.getRandomValues) {
+      const b = crypto.getRandomValues(new Uint8Array(9));
+      return [...b].map((x) => x.toString(36).padStart(2, '0')).join('').slice(0, 12);
+    }
+    return Math.random().toString(36).slice(2, 14);
+  }
+  /** Empreinte rapide (non cryptographique) d'un texte : clé des images en stockage. */
+  function empreinte(str) {
+    let h1 = 0xdeadbeef,
+      h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) {
+      const c = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761);
+      h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, '0') + (h1 >>> 0).toString(16).padStart(8, '0') + '-' + str.length.toString(36);
+  }
+  const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
+
+  /* ---------- Temporisation ---------- */
+  function differer(f, ms) {
+    let t = null;
+    const d = (...a) => {
+      clearTimeout(t);
+      t = setTimeout(() => f(...a), ms);
+    };
+    d.annuler = () => clearTimeout(t);
+    return d;
+  }
+  const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /* ---------- Fichiers ---------- */
+  /** Téléchargement direct par le navigateur (l'hôte de bureau peut le remplacer). */
+  function telechargerNavigateur(nom, contenu, type = 'text/plain') {
+    const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type: type + ';charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nom;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+  /** CSV pour Excel (séparateur « ; », BOM UTF-8). */
+  const csv = (lignes) =>
+    '﻿' + lignes.map((r) => r.map((x) => '"' + String(x ?? '').replace(/"/g, '""') + '"').join(';')).join('\r\n');
+  /** Image choisie par l'utilisateur, réduite (côté le plus long ≤ max) et recompressée. */
+  function lireImage(fichier, max = 360, type = 'image/jpeg', qualite = 0.86) {
+    return new Promise((ok, ko) => {
+      if (!fichier || !/^image\//.test(fichier.type)) return ko(new AK.ErreurMetier('Ce fichier n’est pas une image.'));
+      if (fichier.size > 25 * 1024 * 1024) return ko(new AK.ErreurMetier('Image trop volumineuse (25 Mo au maximum).'));
+      const r = new FileReader();
+      r.onload = () => {
+        const im = new Image();
+        im.onload = () => {
+          const k = Math.min(1, max / Math.max(im.width, im.height));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(im.width * k));
+          c.height = Math.max(1, Math.round(im.height * k));
+          const g = c.getContext('2d');
+          if (type === 'image/jpeg') {
+            g.fillStyle = '#fff';
+            g.fillRect(0, 0, c.width, c.height);
+          }
+          g.drawImage(im, 0, 0, c.width, c.height);
+          ok(c.toDataURL(type, qualite));
+        };
+        im.onerror = () => ko(new AK.ErreurMetier('Image illisible.'));
+        im.src = r.result;
+      };
+      r.onerror = () => ko(new AK.ErreurMetier('Fichier illisible.'));
+      r.readAsDataURL(fichier);
+    });
+  }
+  const IMG_OK = /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/;
+
+  AK.u = {
+    Html, html, raw, esc, joindre, enHtml, $, $$, poser,
+    pad, iso, parseISO, estISO, ajouterJours, aujourdhui, ecartJours, fmtDate, fmtDateLongue, fmtJour, fmtHorodatage, versISO,
+    arrondi, moyenne, fmtNote, fmtSaisie, pct, fcfa, pluriel, entier,
+    norm, sansAccents, majNom, majPrenoms, majNomComplet, capitale, tronquer,
+    uid, empreinte, clone, differer, attendre,
+    telechargerNavigateur, csv, lireImage, IMG_OK
+  };
+})(window.AK);
+
+//# sourceURL=akwa/js/core/util.js
+</script>
+<script>
+/* =====================================================================================
+   Icônes : un seul jeu cohérent (trait de 1,75 px sur une grille de 24), dessiné dans le
+   style de Feather Icons (licence MIT, voir vendor/LICENCES.md). Aucune ressource en ligne.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const I = {
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h5v-6h4v6h5V9.5"/>',
+    users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+    user: '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+    userPlus: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/>',
+    userCheck: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="m16 11 2 2 4-4"/>',
+    grid: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>',
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    award: '<circle cx="12" cy="8" r="6"/><path d="M8.2 13.9 7 23l5-3 5 3-1.2-9.1"/>',
+    cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+    chart: '<path d="M18 20V10M12 20V4M6 20v-6"/>',
+    sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+    settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
+    plus: '<path d="M12 5v14M5 12h14"/>',
+    minus: '<path d="M5 12h14"/>',
+    search: '<circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35"/>',
+    trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m19 6-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/>',
+    print: '<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+    moon: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/>',
+    sun: '<circle cx="12" cy="12" r="4.5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>',
+    help: '<circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+    info: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>',
+    down: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+    up: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/>',
+    x: '<path d="M18 6 6 18M6 6l12 12"/>',
+    file: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h8M8 9h2"/>',
+    filePlus: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/>',
+    fileCheck: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="m9 15 2 2 4-4"/>',
+    chev: '<path d="m9 18 6-6-6-6"/>',
+    chevL: '<path d="m15 18-6-6 6-6"/>',
+    chevD: '<path d="m6 9 6 6 6-6"/>',
+    chevU: '<path d="m18 15-6-6-6 6"/>',
+    check: '<path d="M20 6 9 17l-5-5"/>',
+    checkCircle: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>',
+    xCircle: '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6M9 9l6 6"/>',
+    lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    unlock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.9-1"/>',
+    key: '<circle cx="7.5" cy="15.5" r="4.5"/><path d="m10.7 12.3 9.8-9.8M17 6l3 3M14 9l2 2"/>',
+    cam: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/><circle cx="12" cy="13" r="4"/>',
+    clip: '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+    flag: '<path d="M4 22V4"/><path d="M4 4h13l-2 4 2 4H4"/>',
+    book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5Z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/>',
+    brief: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2M2 13h20"/>',
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+    bell: '<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+    alert: '<circle cx="12" cy="12" r="10"/><path d="M12 8v5M12 16h.01"/>',
+    warn: '<path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
+    mail: '<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/>',
+    coin: '<circle cx="12" cy="12" r="10"/><path d="M15 8.5c-.6-1-1.7-1.5-3-1.5-1.7 0-3 .9-3 2.2 0 3 6 1.6 6 4.6 0 1.3-1.3 2.2-3 2.2-1.4 0-2.6-.6-3.1-1.6M12 5.5V7M12 17v1.5"/>',
+    heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8Z"/>',
+    clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    shield: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>',
+    shieldCheck: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/>',
+    shieldX: '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9.5 9.5 5 5M14.5 9.5l-5 5"/>',
+    send: '<path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4Z"/>',
+    msg: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
+    food: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
+    star: '<path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21 7 14.2l-5-4.9 6.9-1Z"/>',
+    list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+    idCard: '<rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="11" r="2.5"/><path d="M4.5 17c.6-1.7 2-2.5 3.5-2.5s2.9.8 3.5 2.5M14 9h5M14 12.5h5M14 16h3"/>',
+    qr: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>',
+    scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10"/>',
+    layers: '<path d="m12 2 10 5-10 5L2 7Z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>',
+    eye: '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12Z"/><circle cx="12" cy="12" r="3"/>',
+    eyeOff: '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="m1 1 22 22"/>',
+    refresh: '<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+    archive: '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
+    database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>',
+    filter: '<path d="M22 3H2l8 9.46V19l4 2v-8.54Z"/>',
+    sort: '<path d="m7 15 5 5 5-5M7 9l5-5 5 5"/>',
+    more: '<circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/><circle cx="5" cy="12" r="1.2"/>',
+    logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
+    image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/>',
+    copy: '<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+    drop: '<path d="M12 2.7 5.6 9.1a9 9 0 1 0 12.8 0Z"/>',
+    layout: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>',
+    school: '<path d="m2 10 10-6 10 6-10 6Z"/><path d="M6 12.4V17c0 1.7 2.7 3 6 3s6-1.3 6-3v-4.6M22 10v6"/>',
+    pin: '<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"/><circle cx="12" cy="10" r="3"/>',
+    history: '<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>',
+    save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/>',
+    offline: '<path d="m1 1 22 22M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.58 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>',
+    folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2Z"/>',
+    hash: '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+    stamp: '<path d="M5 22h14M19 15H5a2 2 0 0 0-2 2v1h18v-1a2 2 0 0 0-2-2ZM14 15V9.4a3.5 3.5 0 1 0-4 0V15"/>',
+    sign: '<path d="M3 17c3-1 4-5 6-5s1 4 3 4 2-3 4-3 2 2 5 2"/><path d="M3 21h18"/>',
+    zoomIn: '<circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35M11 8v6M8 11h6"/>',
+    zoomOut: '<circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.35-4.35M8 11h6"/>',
+    ban: '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
+    rotate: '<path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>',
+    scissors: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12"/>',
+    activity: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+    building: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h.01M15 10h.01M9 14h.01M15 14h.01"/>',
+    link: '<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+    tool: '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76Z"/>'
+  };
+  /** Icône SVG (décorative : aria-hidden) */
+  function ic(nom, cls = '') {
+    const d = I[nom] || I.info;
+    return AK.u.raw(
+      `<svg class="i${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${d}</svg>`
+    );
+  }
+  AK.icones = I;
+  AK.ic = ic;
+})(window.AK);
+
+//# sourceURL=akwa/js/core/icons.js
+</script>
+<script>
+/* =====================================================================================
+   Réglages métier (repris d'AKWA SCHOOL 1.7.0 sans changement de règle) :
+   niveaux, grilles de notation, calendrier des évaluations, listes de choix, en-tête officiel.
+   Les réglages propres à une école (nom, logos, année…) sont dans les données (S.school).
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const C = {};
+
+  C.TOUS_NIVEAUX = ['CP1', 'CP2', 'CE1', 'CE2', 'CM1', 'CM2'];
+  C.AGE_NORMAL = { CP1: 6, CP2: 7, CE1: 8, CE2: 9, CM1: 10, CM2: 11 };
+
+  /* Grilles : COEF = note sur 10 avec coefficient ; BAREME = note sur le barème de la matière */
+  C.CP_MATIERES = ['ECRITURE', 'E.D.H.C', 'EXPRESSION ECRITE', 'MATHEMATIQUE', 'ORTHOGRAPHE', 'DESSIN', 'CHANT ET POESIE', 'LECTURE'];
+  C.GRILLES = {
+    CP: { lib: 'CP1 et CP2', mode: 'COEF', echelle: 10, max: 10, mat: () => C.CP_MATIERES.map((m) => [m, 1]) },
+    CE1: { lib: 'CE1', mode: 'BAREME', echelle: 10, mat: () => [['EXPLOITATION DE TEXTE', 50], ['EVEIL AU MILIEU', 40], ['MATHEMATIQUES', 40], ['DICTEE', 10]] },
+    'CE2-CM1': { lib: 'CE2 et CM1', mode: 'BAREME', echelle: 10, mat: () => [['EXPLOITATION DE TEXTE', 50], ['EVEIL AU MILIEU', 50], ['MATHEMATIQUES', 50], ['DICTEE', 20]] },
+    CM2: {
+      lib: 'CM2', mode: 'BAREME', echelle: 20,
+      mat: (n) => [['EXPLOITATION DE TEXTE', 50], ['EVEIL AU MILIEU', 50], ['MATHEMATIQUES', 50], ['DICTEE', 20], ...(n >= 3 ? [['EPREUVES PHYSIQUES', 20]] : [])]
+    }
+  };
+  /* Classe : grille, seuil d'admission, barème de la MGA, calendrier, règle de la MGA */
+  C.CLASSE_INFO = {
+    CP1: { grille: 'CP', seuil: 5, bareme: 10, cal: 'STD', regle: 'STANDARD' },
+    CP2: { grille: 'CP', seuil: 5, bareme: 10, cal: 'STD', regle: 'STANDARD' },
+    CE1: { grille: 'CE1', seuil: 5, bareme: 10, cal: 'STD', regle: 'STANDARD' },
+    CE2: { grille: 'CE2-CM1', seuil: 5, bareme: 10, cal: 'STD', regle: 'STANDARD' },
+    CM1: { grille: 'CE2-CM1', seuil: 5, bareme: 10, cal: 'STD', regle: 'STANDARD' },
+    CM2: { grille: 'CM2', seuil: 10, bareme: 20, cal: 'CM2', regle: 'MOYENNE4' }
+  };
+  C.EVALUATIONS = {
+    STD: ['1re composition', '2e composition', '3e composition', 'Composition de passage'],
+    CM2: ['1re composition', '2e composition', '1er examen blanc', '2e examen blanc']
+  };
+  /* mois, jour, années après la rentrée */
+  C.EVAL_DATES = { STD: [[12, 9, 0], [3, 10, 1], [5, 26, 1], [6, 16, 1]], CM2: [[12, 9, 0], [3, 10, 1], [3, 4, 1], [4, 27, 1]] };
+  C.EV_GEN = ['1re composition', '2e composition', '3e composition / 1er examen blanc (CM2)', 'Composition de passage / 2e examen blanc (CM2)'];
+  C.evCourt = (n) => C.EV_GEN[n - 1].split(' /')[0];
+  C.JOURS_MOIS = { 9: 13, 10: 22, 11: 21, 12: 17, 1: 20, 2: 15, 3: 23, 4: 15, 5: 21, 6: 22, 7: 12 };
+  C.MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+  C.JOURS_CLASSE = [1, 2, 4, 5]; // lundi, mardi, jeudi, vendredi (0 = dimanche, 3 = mercredi)
+
+  C.MOTIFS = ['Maladie', 'Raison familiale', 'Décès d’un proche', 'Mariage', 'Naissance', 'Opération bancaire', 'Congé de maternité', 'Convocation IEPP', 'Formation', 'Autre'];
+  C.DECISIONS = ['Admis', 'Redoublant', 'Abandon', 'Exclu', 'Transféré'];
+  C.STATUTS = ['Inscrit', 'Abandon', 'Exclu', 'Transféré'];
+  C.FONCTIONS = ['Directeur', 'Directrice', 'Adjoint au Directeur', 'Adjointe au Directeur', 'Instituteur', 'Institutrice', 'Instituteur adjoint', 'Institutrice adjointe', 'Agent', 'Autre'];
+  C.GRADES = ['Instituteur ordinaire', 'Instituteur adjoint', 'Instituteur principal', 'Conseiller pédagogique', 'Bénévole'];
+  C.FONCTS = [['simple', 'Simple'], ['jumelee', 'Jumelée'], ['multigrade', 'Multigrade'], ['autre', 'Autre']];
+  C.CIVS = ['M.', 'Mme', 'Mlle'];
+  C.PROF_P = ['Cultivateur', 'Commerçant', 'Planteur', 'Mécanicien', 'Éleveur', 'Enseignant', 'Transporteur', 'Menuisier', 'Infirmier', 'Tailleur'];
+  C.PROF_M = ['Ménagère', 'Commerçante', 'Couturière', 'Cultivatrice', 'Coiffeuse', 'Enseignante', 'Restauratrice', 'Sage-femme'];
+  C.SANG = ['A+', 'A−', 'B+', 'B−', 'AB+', 'AB−', 'O+', 'O−'];
+  C.NAT_DEFAUT = 'IVOIRIENNE';
+  C.STATUTS_ECOLE = [['publique', 'École publique'], ['privee', 'École privée']];
+
+  /* En-tête officiel des documents (modifiable dans Paramètres) */
+  C.ENTETE = {
+    ministere: "MINISTERE DE L'EDUCATION NATIONALE, DE L'ALPHABETISATION ET DE L'ENSEIGNEMENT TECHNIQUE",
+    direction: "DIRECTION REGIONALE DE L'EDUCATION NATIONALE, DE L'ALPHABETISATION ET DE L'ENSEIGNEMENT TECHNIQUE",
+    inspection: "INSPECTION DE L'ENSEIGNEMENT PRESCOLAIRE ET PRIMAIRE",
+    republique: "REPUBLIQUE DE CÔTE D'IVOIRE",
+    devise: 'Union – Discipline – Travail'
+  };
+  /* École vierge : aucune valeur par défaut trompeuse (nom, DRENAET… demandés à la création) */
+  C.ECOLE = {
+    ...C.ENTETE, localite: '', sp: '', armoiries: '', name: '', statut: 'publique', iepp: '', drenaet: '',
+    year: '', director: '', dirTel: '', secteur: '', inspNom: '', inspTel: '', cpNom: '', cpTel: '',
+    evalCourante: 1, codedren: '', codeiep: '', codeecole: '', entete: '', adresse: '', telephone: '', email: '',
+    accent: 'navy', theme: 'auto', logoEcole: '', logoIepp: '', niveaux: C.TOUS_NIVEAUX.slice(), validation: true, idLock: false
+  };
+
+  /* Téléphones : 10 chiffres commençant par 07 (Orange), 05 (MTN) ou 01 (Moov), indicatif +225 */
+  C.TEL_ERR = '10 chiffres commençant par 07 (Orange), 05 (MTN) ou 01 (Moov), indicatif +225 facultatif.';
+
+  /* Apparence : couleurs d'accent proposées (la structure reste bleu nuit) */
+  C.ACCENTS = [
+    ['navy', '#1F4E8C', 'Bleu AKWA'],
+    ['green', '#1C6B4A', 'Vert'],
+    ['amber', '#9A5212', 'Ambre'],
+    ['plum', '#5E3A8C', 'Prune']
+  ];
+
+  /* ---------- Modules de gestion (vie scolaire, finances, services) ---------- */
+  C.JOURS_EDT = [['1', 'Lundi'], ['2', 'Mardi'], ['4', 'Jeudi'], ['5', 'Vendredi']];
+  C.CRENEAUX = ['07 h 30 – 08 h 30', '08 h 30 – 09 h 30', '09 h 30 – 10 h 00', '10 h 15 – 11 h 15', '11 h 15 – 12 h 00', '15 h 00 – 16 h 00', '16 h 00 – 17 h 00'];
+  C.FAITS = ['Retards répétés', 'Bavardage en classe', 'Travail non fait', 'Insolence envers un enseignant', 'Bagarre dans la cour', 'Dégradation de matériel', 'Tricherie', 'Objet dangereux', 'Sortie sans autorisation', 'Autre'];
+  C.SANCTIONS = ['Avertissement oral', 'Travail supplémentaire', 'Mot aux parents', 'Convocation des parents', 'Retenue', 'Exclusion temporaire (décision du conseil des maîtres)'];
+  C.MAUX = ['Fièvre', 'Maux de tête', 'Maux de ventre', 'Blessure légère', 'Toux', 'Vomissements', 'Crise de paludisme suspectée', 'Saignement de nez', 'Autre'];
+  C.SUITES_SOIN = ['Retour en classe', 'Repos à l’infirmerie', 'Parents prévenus', 'Remis aux parents', 'Orienté vers le centre de santé'];
+  C.CAT_DEP = ['Fournitures scolaires', 'Entretien et réparations', 'Cantine', 'Équipement', 'Activités et fêtes', 'Hygiène et santé', 'Frais administratifs', 'Autre'];
+  C.MODES_PAIE = ['Espèces', 'Mobile Money', 'Virement', 'Chèque'];
+  C.OBJETS_PAIE = ['Cotisation COGES', 'Inscription', 'Tenue scolaire', 'Cantine', 'Autre'];
+  C.PIECES_CEPE = [['extrait', 'Extrait de naissance'], ['photos', '4 photos d’identité'], ['certif', 'Certificat de scolarité'], ['frais', 'Frais d’examen réglés'], ['fiche', 'Fiche d’inscription signée']];
+  C.GENRES = ['Manuel', 'Contes', 'Roman', 'Documentaire', 'Dictionnaire', 'Bande dessinée', 'Atlas'];
+  C.SMS_MODELES = [
+    ['Réunion des parents', 'Chers parents, une réunion se tiendra à l’école le [date] à [heure]. Votre présence est vivement souhaitée. La Direction.'],
+    ['Absence de l’élève', 'Chers parents, votre enfant [élève] était absent(e) aujourd’hui. Merci de nous en indiquer le motif. La Direction.'],
+    ['Rappel de cotisation', 'Chers parents, nous vous rappelons que la cotisation de [élève] reste à régler. Merci de passer à la direction. La Direction.'],
+    ['Résultats de composition', 'Chers parents, les bulletins de la [composition] sont disponibles. Passez les retirer à l’école. La Direction.'],
+    ['Message libre', '']
+  ];
+
+  /* ---------- Rapport d'infrastructures ---------- */
+  C.INFRA0 = {
+    bat: { agglo: '', prov: '' }, salles: { agglo: '', prov: '' },
+    toil: { existe: '', eleves: { type: '', n: '', fonct: '', sep: '', nf: '', ng: '' }, ens: { type: '', n: '', fonct: '', sep: '' } },
+    eau: { existe: '', forage: { n: '', fonct: '' }, puits: { n: '', fonct: '' }, robinet: { n: '', fonct: '' } },
+    elec: { village: '', ecole: '', salles: '' }, loge: { existe: '', n: '' },
+    mob: { tb: '', tbBon: '', bureaux: '', tableaux: '' }, cant: { existe: '', fonct: '', ration: '', partenaire: '' },
+    locaux: { bureau: '', magasin: '', biblio: '', info: '', cloture: '', sport: '' }, manuels: {},
+    acces: { dist: '', route: '', reseau: '', rampe: '', pharma: '' }, maj: ''
+  };
+  C.TOIL_T = ['Latrines simples', 'Latrines améliorées (VIP)', 'WC avec chasse d’eau', 'Autre'];
+  C.EAUX = [['forage', 'Forage (pompe)'], ['puits', 'Puits'], ['robinet', 'Robinet']];
+  C.LOCAUX = [['bureau', 'Bureau du directeur'], ['magasin', 'Magasin'], ['biblio', 'Bibliothèque'], ['info', 'Salle informatique'], ['cloture', 'Clôture', 1], ['sport', 'Terrain de sport']];
+  C.ON = [['oui', 'Oui'], ['non', 'Non']];
+  C.ONP = [...C.ON, ['partiel', 'En partie']];
+  C.ROUTES = [['bonne', 'Bonne'], ['praticable', 'Praticable'], ['difficile', 'Difficile en saison des pluies']];
+  C.RESEAUX = [['bon', 'Bon'], ['faible', 'Faible'], ['aucun', 'Aucun']];
+  C.PARTS = ['État (DCS)', 'PAM', 'Communauté (COGES)', 'Autre'];
+
+  /* ---------- Statistiques et import ---------- */
+  C.BINS = ['≤5', '6', '7', '8', '9', '10', '11', '12', '≥13'];
+  /* Colonnes de l'export national des élèves (fichier ELEVES), dans cet ordre */
+  C.COLS_ELEVES = ['codedren', 'codeiep', 'iep', 'codeecole', 'ecole', 'matricule', 'nom', 'prenoms', 'sexe', 'jour', 'mois', 'annee', 'nationalite', 'localite', 'codesp', 'sp', 'pere', 'mere', 'nacte', 'lieuacte', 'residence', 'niveau'];
+  C.MAT_COURT = { 'EXPLOITATION DE TEXTE': 'EXP. TEXTE', 'EVEIL AU MILIEU': 'EVEIL MILIEU', DICTEE: 'ORTH', MATHEMATIQUES: 'MATH', 'EPREUVES PHYSIQUES': 'EPS' };
+  C.ORDRE_MAT = ['EXPLOITATION DE TEXTE', 'EVEIL AU MILIEU', 'DICTEE', 'MATHEMATIQUES', 'EPREUVES PHYSIQUES'];
+  C.REPORTS = [['rentree', 'Rapport de rentrée'], ['compo', 'Rapport de composition'], ['mensuel', 'Rapport mensuel'], ['fin', 'Rapport de fin d’année'], ['cm2', 'Rapport CM2'], ['resultats', 'Rapport des notes par classe']];
+
+  /* ---------- Sécurité ---------- */
+  C.SECU = {
+    PBKDF2_ITER: 310000,       // itérations PBKDF2-SHA-256 (empreintes de mots de passe)
+    MDP_MIN: 8,                // longueur minimale d'un nouveau mot de passe
+    VERROU_MIN: 15,            // verrouillage automatique après inactivité (minutes)
+    GRACE_SEC: 180,            // délai pendant lequel une confirmation par mot de passe reste valable
+    ALPHABET_CODE: '23456789ABCDEFGHJKLMNPQRSTUVWXYZ'  // codes lisibles : ni 0/O ni 1/I
+  };
+
+  AK.cfg = C;
+})(window.AK);
+
+//# sourceURL=akwa/js/core/config.js
+</script>
+<script>
+/* =====================================================================================
+   Validation des données : chaque règle renvoie '' (valide) ou un message compréhensible.
+   Les formulaires affichent le message sous le champ concerné ; la logique métier
+   revalide toujours avant d'enregistrer (un bouton masqué n'est pas une protection).
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const C = AK.cfg, u = AK.u;
+  const V = {};
+
+  /* ---------- Noms ---------- */
+  const CIVIL = /^(M\.?|MR\.?|MME\.?|MLLE\.?|DR\.?)$/i;
+  const motOk = (w) => /^[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+$/.test(w) && !/^(.)\1*$/i.test(w.replace(/['’-]/g, ''));
+  /** Nom de personne : mots de 2 lettres au moins ; min = nombre de mots exigés (2 pour « nom et prénoms »). */
+  V.nom = function (v, lib, min = 2, max = 80) {
+    const s = String(v || '').trim();
+    if (s.length > max) return `${lib} : ${max} caractères au maximum.`;
+    const m = s.split(/\s+/).filter((w) => w && !CIVIL.test(w));
+    if (m.length < min) return min > 1 ? `${lib} : nom et prénoms en entier (ex. KOFFI KOUADIO).` : `${lib} : à renseigner.`;
+    return m.every(motOk) ? '' : `${lib} : lettres uniquement, 2 au moins par mot (ex. KOFFI KOUADIO).`;
+  };
+  V.civ = {
+    de(n) {
+      const m = String(n || '').trim().match(/^(MLLE|MME|MR|M)\.?\s+/i);
+      return m ? { mlle: 'Mlle', mme: 'Mme' }[m[1].toLowerCase()] || 'M.' : '';
+    },
+    sans: (n) => String(n || '').trim().replace(/^(MLLE|MME|MR|M)\.?\s+/i, ''),
+    avec: (c, n) => (C.CIVS.includes(c) ? c + ' ' : '') + u.majNomComplet(V.civ.sans(n))
+  };
+
+  /* ---------- Téléphones (Côte d'Ivoire) ---------- */
+  V.telCI = (v) => {
+    const n = String(v || '').replace(/[\s.\-()/]/g, '').replace(/^(?:\+|00)?225(?=\d{10}$)/, '');
+    return /^0[157]\d{8}$/.test(n) ? '+225 ' + n.replace(/(\d\d)(?=\d)/g, '$1 ') : null;
+  };
+  V.tel = (v, lib) => (!String(v || '').trim() || V.telCI(v) ? '' : `${lib} : ${C.TEL_ERR}`);
+  V.telPropre = (v) => V.telCI(v) || String(v || '').trim();
+
+  /* ---------- Dates ---------- */
+  V.date = (v, lib, { requise = false, min, max } = {}) => {
+    if (!v) return requise ? `${lib} : date à renseigner.` : '';
+    if (!u.estISO(v)) return `${lib} : date invalide.`;
+    if (min && v < min) return `${lib} : la date doit être postérieure au ${u.fmtDate(min)}.`;
+    if (max && v > max) return `${lib} : la date ne peut pas dépasser le ${u.fmtDate(max)}.`;
+    return '';
+  };
+  V.periode = (du, au) => (du && au && au < du ? 'La date de fin est avant la date de début.' : '');
+  /** Naissance plausible pour un élève du primaire (2 à 20 ans à la rentrée). */
+  V.naissanceEleve = (v, anneeRentree) => {
+    const e = V.date(v, 'Date de naissance', { requise: true, max: u.aujourdhui() });
+    if (e) return e;
+    const age = anneeRentree - Number(v.slice(0, 4));
+    return age < 2 || age > 20 ? 'Date de naissance improbable pour un élève du primaire (âge entre 2 et 20 ans).' : '';
+  };
+
+  /* ---------- Scolarité ---------- */
+  V.classe = (v, niveaux) => ((niveaux || C.TOUS_NIVEAUX).includes(v) ? '' : 'Classe inconnue : choisissez un niveau ouvert dans l’école.');
+  V.anneeScolaire = (v) => {
+    const m = String(v || '').match(/^(\d{4})\s*[–-]\s*(\d{4})$/);
+    return m && Number(m[2]) === Number(m[1]) + 1 ? '' : 'Année scolaire au format 2026–2027.';
+  };
+  V.normAnnee = (v) => {
+    const m = String(v || '').match(/^(\d{4})\s*[–-]\s*(\d{4})$/);
+    return m ? `${m[1]}–${m[2]}` : String(v || '');
+  };
+  /** Matricule national (DESPS) : 6 à 12 caractères, lettres et chiffres (ex. 12345678A). */
+  V.matNat = (v) => {
+    const s = String(v || '').replace(/\s/g, '').toUpperCase();
+    if (!s) return '';
+    return /^[0-9A-Z]{6,12}$/.test(s) ? '' : 'Matricule national : 6 à 12 lettres ou chiffres, sans espace (ex. 12345678A).';
+  };
+  V.matriculeAgent = (v) => (!String(v || '').trim() || /^[0-9A-Za-z][0-9A-Za-z \-/.]{2,19}$/.test(String(v).trim()) ? '' : 'Matricule : 3 à 20 caractères (lettres, chiffres, espaces, - / .).');
+  V.ecoleNom = (v, prive) => {
+    const n = String(v || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    return (prive ? n.length >= 3 : /^EPP\s+\S/.test(n)) && n.length <= 80 ? n : null;
+  };
+  V.ECOLE_ERR = (prive) => (prive ? 'Saisissez le nom de l’école (3 caractères au moins).' : 'Une école publique a un nom commençant par EPP (ex. EPP OUANINOU 2).');
+  /** DRENAET : « Touba » ou « DRENAET DE TOUBA » → libellé et direction régionale de l'en-tête */
+  V.drenaetDe = (v) => {
+    const l = String(v || '').trim().replace(/\s+/g, ' ').toUpperCase().replace(/^DRENA(?:ET)?\s*(?:(?:DE|DU|DES)(?:\s+|$)|D['’]\s*)?/, '').trim();
+    if (!l) return null;
+    const de = /^[AEIOUYÀÂÉÈÊÎÔ]/.test(l) ? "D'" : 'DE ';
+    return { drenaet: 'DRENAET ' + de + l, direction: C.ENTETE.direction + ' ' + de + l };
+  };
+  V.texte = (v, lib, { requis = false, max = 200 } = {}) => {
+    const s = String(v || '').trim();
+    if (!s) return requis ? `${lib} : à renseigner.` : '';
+    return s.length > max ? `${lib} : ${max} caractères au maximum.` : '';
+  };
+  V.montant = (v, lib, { min = 0, max = 100000000 } = {}) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= min && n <= max ? '' : `${lib} : montant entre ${min} et ${max.toLocaleString('fr-FR')} F.`;
+  };
+  /** Note saisie : nombre décimal (virgule ou point) entre 0 et max ; renvoie {v} ou {err}. */
+  V.note = (raw, max) => {
+    const s = String(raw ?? '').trim().replace(',', '.');
+    if (s === '') return { v: null };
+    if (!/^\d+(\.\d+)?$/.test(s)) return { err: `Note invalide : entrez un nombre entre 0 et ${max}.` };
+    // deux décimales au plus, contrôlées sur le texte (8,7 * 100 n'est pas exactement 870 en binaire)
+    if (/\.\d{3,}$/.test(s)) return { err: 'Note invalide : deux décimales au plus.' };
+    const v = Number(s);
+    if (v > max) return { err: `Note invalide : ${String(v).replace('.', ',')} dépasse le barème (${max}).` };
+    return { v };
+  };
+
+  /* ---------- Références documentaires ----------
+     Format : AK-<TYPE>-<ANNÉE>-<NUMÉRO sur 6 chiffres>-<CLÉ>, ex. AK-CSC-2026-000042-7.
+     La clé (Luhn mod 36) détecte une erreur de frappe sur un caractère et la plupart des inversions. */
+  const B36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  V.cleLuhn36 = (s) => {
+    const t = String(s).toUpperCase().replace(/[^0-9A-Z]/g, '');
+    let facteur = 2, somme = 0;
+    for (let i = t.length - 1; i >= 0; i--) {
+      let a = facteur * B36.indexOf(t[i]);
+      facteur = facteur === 2 ? 1 : 2;
+      a = Math.floor(a / 36) + (a % 36);
+      somme += a;
+    }
+    return B36[(36 - (somme % 36)) % 36];
+  };
+  V.reference = (type, annee, numero) => {
+    const base = `AK-${type}-${annee}-${u.pad(numero, 6)}`;
+    return `${base}-${V.cleLuhn36(base)}`;
+  };
+  V.refValide = (ref) => {
+    const m = String(ref || '').trim().toUpperCase().match(/^(AK-[A-Z]{3}-\d{4}-\d{6})-([0-9A-Z])$/);
+    return !!m && V.cleLuhn36(m[1]) === m[2];
+  };
+  V.normRef = (ref) => String(ref || '').trim().toUpperCase().replace(/\s+/g, '');
+
+  /* ---------- Mot de passe ---------- */
+  V.motDePasse = (p, lib = 'Mot de passe') => {
+    const s = String(p || '');
+    if (s.length < C.SECU.MDP_MIN) return `${lib} : ${C.SECU.MDP_MIN} caractères au moins.`;
+    if (s.length > 128) return `${lib} : 128 caractères au maximum.`;
+    if (/^(.)\1+$/.test(s) || /^(?:0123456789|123456789|12345678|azertyui|password|motdepasse|admin123)/i.test(s))
+      return `${lib} : trop facile à deviner.`;
+    if (!/[A-Za-zÀ-ÿ]/.test(s) || !/\d/.test(s)) return `${lib} : mélangez des lettres et au moins un chiffre.`;
+    return '';
+  };
+  V.forceMotDePasse = (p) => {
+    const s = String(p || '');
+    let n = 0;
+    if (s.length >= 8) n++;
+    if (s.length >= 12) n++;
+    if (/[a-z]/.test(s) && /[A-Z]/.test(s)) n++;
+    if (/\d/.test(s)) n++;
+    if (/[^A-Za-z0-9]/.test(s)) n++;
+    return Math.min(4, n);
+  };
+
+  AK.valid = V;
+})(window.AK);
+
+//# sourceURL=akwa/js/core/validate.js
+</script>
+<script>
+/*
+ * QRCode for JavaScript — Copyright (c) 2009 Kazuhiko Arase — licence MIT
+ * (http://www.opensource.org/licenses/mit-license.php). « QR Code » est une marque déposée de DENSO WAVE.
+ * Copie reprise d'AKWA SCHOOL 1.7.0 (version fournie avec qrcode-terminal), sans modification du code d'origine.
+ * Seule l'enveloppe finale (AK.vendor.qr) est propre à AKWA SCHOOL.
+ */
+window.AK = window.AK || {}; (window.AK.vendor = window.AK.vendor || {}).qr = (function(){var M={};function req(n){return M[n.replace("./","")]}
+(function(){var module={exports:{}},require=req;
+module.exports = {
+    MODE_NUMBER :       1 << 0,
+    MODE_ALPHA_NUM :    1 << 1,
+    MODE_8BIT_BYTE :    1 << 2,
+    MODE_KANJI :        1 << 3
+};
+M["QRMode"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+module.exports = {
+	L : 1,
+	M : 0,
+	Q : 3,
+	H : 2
+};
+M["QRErrorCorrectLevel"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+module.exports = {
+	PATTERN000 : 0,
+	PATTERN001 : 1,
+	PATTERN010 : 2,
+	PATTERN011 : 3,
+	PATTERN100 : 4,
+	PATTERN101 : 5,
+	PATTERN110 : 6,
+	PATTERN111 : 7
+};
+M["QRMaskPattern"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+var QRMath = {
+
+	glog : function(n) {
+	
+		if (n < 1) {
+			throw new Error("glog(" + n + ")");
+		}
+		
+		return QRMath.LOG_TABLE[n];
+	},
+	
+	gexp : function(n) {
+	
+		while (n < 0) {
+			n += 255;
+		}
+	
+		while (n >= 256) {
+			n -= 255;
+		}
+	
+		return QRMath.EXP_TABLE[n];
+	},
+	
+	EXP_TABLE : new Array(256),
+	
+	LOG_TABLE : new Array(256)
+
+};
+	
+for (var i = 0; i < 8; i++) {
+	QRMath.EXP_TABLE[i] = 1 << i;
+}
+for (var i = 8; i < 256; i++) {
+	QRMath.EXP_TABLE[i] = QRMath.EXP_TABLE[i - 4]
+		^ QRMath.EXP_TABLE[i - 5]
+		^ QRMath.EXP_TABLE[i - 6]
+		^ QRMath.EXP_TABLE[i - 8];
+}
+for (var i = 0; i < 255; i++) {
+	QRMath.LOG_TABLE[QRMath.EXP_TABLE[i] ] = i;
+}
+
+module.exports = QRMath;
+M["QRMath"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+var QRMath = require('./QRMath');
+
+function QRPolynomial(num, shift) {
+	if (num.length === undefined) {
+		throw new Error(num.length + "/" + shift);
+	}
+
+	var offset = 0;
+
+	while (offset < num.length && num[offset] === 0) {
+		offset++;
+	}
+
+	this.num = new Array(num.length - offset + shift);
+	for (var i = 0; i < num.length - offset; i++) {
+		this.num[i] = num[i + offset];
+	}
+}
+
+QRPolynomial.prototype = {
+
+	get : function(index) {
+		return this.num[index];
+	},
+	
+	getLength : function() {
+		return this.num.length;
+	},
+	
+	multiply : function(e) {
+	
+		var num = new Array(this.getLength() + e.getLength() - 1);
+	
+		for (var i = 0; i < this.getLength(); i++) {
+			for (var j = 0; j < e.getLength(); j++) {
+				num[i + j] ^= QRMath.gexp(QRMath.glog(this.get(i) ) + QRMath.glog(e.get(j) ) );
+			}
+		}
+	
+		return new QRPolynomial(num, 0);
+	},
+	
+	mod : function(e) {
+	
+		if (this.getLength() - e.getLength() < 0) {
+			return this;
+		}
+	
+		var ratio = QRMath.glog(this.get(0) ) - QRMath.glog(e.get(0) );
+	
+		var num = new Array(this.getLength() );
+		
+		for (var i = 0; i < this.getLength(); i++) {
+			num[i] = this.get(i);
+		}
+		
+		for (var x = 0; x < e.getLength(); x++) {
+			num[x] ^= QRMath.gexp(QRMath.glog(e.get(x) ) + ratio);
+		}
+	
+		// recursive call
+		return new QRPolynomial(num, 0).mod(e);
+	}
+};
+
+module.exports = QRPolynomial;
+M["QRPolynomial"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+var QRErrorCorrectLevel = require('./QRErrorCorrectLevel');
+
+function QRRSBlock(totalCount, dataCount) {
+	this.totalCount = totalCount;
+	this.dataCount  = dataCount;
+}
+
+QRRSBlock.RS_BLOCK_TABLE = [
+
+	// L
+	// M
+	// Q
+	// H
+
+	// 1
+	[1, 26, 19],
+	[1, 26, 16],
+	[1, 26, 13],
+	[1, 26, 9],
+	
+	// 2
+	[1, 44, 34],
+	[1, 44, 28],
+	[1, 44, 22],
+	[1, 44, 16],
+
+	// 3
+	[1, 70, 55],
+	[1, 70, 44],
+	[2, 35, 17],
+	[2, 35, 13],
+
+	// 4		
+	[1, 100, 80],
+	[2, 50, 32],
+	[2, 50, 24],
+	[4, 25, 9],
+	
+	// 5
+	[1, 134, 108],
+	[2, 67, 43],
+	[2, 33, 15, 2, 34, 16],
+	[2, 33, 11, 2, 34, 12],
+	
+	// 6
+	[2, 86, 68],
+	[4, 43, 27],
+	[4, 43, 19],
+	[4, 43, 15],
+	
+	// 7		
+	[2, 98, 78],
+	[4, 49, 31],
+	[2, 32, 14, 4, 33, 15],
+	[4, 39, 13, 1, 40, 14],
+	
+	// 8
+	[2, 121, 97],
+	[2, 60, 38, 2, 61, 39],
+	[4, 40, 18, 2, 41, 19],
+	[4, 40, 14, 2, 41, 15],
+	
+	// 9
+	[2, 146, 116],
+	[3, 58, 36, 2, 59, 37],
+	[4, 36, 16, 4, 37, 17],
+	[4, 36, 12, 4, 37, 13],
+	
+	// 10		
+	[2, 86, 68, 2, 87, 69],
+	[4, 69, 43, 1, 70, 44],
+	[6, 43, 19, 2, 44, 20],
+	[6, 43, 15, 2, 44, 16],
+
+	// 11
+	[4, 101, 81],
+	[1, 80, 50, 4, 81, 51],
+	[4, 50, 22, 4, 51, 23],
+	[3, 36, 12, 8, 37, 13],
+
+	// 12
+	[2, 116, 92, 2, 117, 93],
+	[6, 58, 36, 2, 59, 37],
+	[4, 46, 20, 6, 47, 21],
+	[7, 42, 14, 4, 43, 15],
+
+	// 13
+	[4, 133, 107],
+	[8, 59, 37, 1, 60, 38],
+	[8, 44, 20, 4, 45, 21],
+	[12, 33, 11, 4, 34, 12],
+
+	// 14
+	[3, 145, 115, 1, 146, 116],
+	[4, 64, 40, 5, 65, 41],
+	[11, 36, 16, 5, 37, 17],
+	[11, 36, 12, 5, 37, 13],
+
+	// 15
+	[5, 109, 87, 1, 110, 88],
+	[5, 65, 41, 5, 66, 42],
+	[5, 54, 24, 7, 55, 25],
+	[11, 36, 12],
+
+	// 16
+	[5, 122, 98, 1, 123, 99],
+	[7, 73, 45, 3, 74, 46],
+	[15, 43, 19, 2, 44, 20],
+	[3, 45, 15, 13, 46, 16],
+
+	// 17
+	[1, 135, 107, 5, 136, 108],
+	[10, 74, 46, 1, 75, 47],
+	[1, 50, 22, 15, 51, 23],
+	[2, 42, 14, 17, 43, 15],
+
+	// 18
+	[5, 150, 120, 1, 151, 121],
+	[9, 69, 43, 4, 70, 44],
+	[17, 50, 22, 1, 51, 23],
+	[2, 42, 14, 19, 43, 15],
+
+	// 19
+	[3, 141, 113, 4, 142, 114],
+	[3, 70, 44, 11, 71, 45],
+	[17, 47, 21, 4, 48, 22],
+	[9, 39, 13, 16, 40, 14],
+
+	// 20
+	[3, 135, 107, 5, 136, 108],
+	[3, 67, 41, 13, 68, 42],
+	[15, 54, 24, 5, 55, 25],
+	[15, 43, 15, 10, 44, 16],
+
+	// 21
+	[4, 144, 116, 4, 145, 117],
+	[17, 68, 42],
+	[17, 50, 22, 6, 51, 23],
+	[19, 46, 16, 6, 47, 17],
+
+	// 22
+	[2, 139, 111, 7, 140, 112],
+	[17, 74, 46],
+	[7, 54, 24, 16, 55, 25],
+	[34, 37, 13],
+
+	// 23
+	[4, 151, 121, 5, 152, 122],
+	[4, 75, 47, 14, 76, 48],
+	[11, 54, 24, 14, 55, 25],
+	[16, 45, 15, 14, 46, 16],
+
+	// 24
+	[6, 147, 117, 4, 148, 118],
+	[6, 73, 45, 14, 74, 46],
+	[11, 54, 24, 16, 55, 25],
+	[30, 46, 16, 2, 47, 17],
+
+	// 25
+	[8, 132, 106, 4, 133, 107],
+	[8, 75, 47, 13, 76, 48],
+	[7, 54, 24, 22, 55, 25],
+	[22, 45, 15, 13, 46, 16],
+
+	// 26
+	[10, 142, 114, 2, 143, 115],
+	[19, 74, 46, 4, 75, 47],
+	[28, 50, 22, 6, 51, 23],
+	[33, 46, 16, 4, 47, 17],
+
+	// 27
+	[8, 152, 122, 4, 153, 123],
+	[22, 73, 45, 3, 74, 46],
+	[8, 53, 23, 26, 54, 24],
+	[12, 45, 15, 28, 46, 16],
+
+	// 28
+	[3, 147, 117, 10, 148, 118],
+	[3, 73, 45, 23, 74, 46],
+	[4, 54, 24, 31, 55, 25],
+	[11, 45, 15, 31, 46, 16],
+
+	// 29
+	[7, 146, 116, 7, 147, 117],
+	[21, 73, 45, 7, 74, 46],
+	[1, 53, 23, 37, 54, 24],
+	[19, 45, 15, 26, 46, 16],
+
+	// 30
+	[5, 145, 115, 10, 146, 116],
+	[19, 75, 47, 10, 76, 48],
+	[15, 54, 24, 25, 55, 25],
+	[23, 45, 15, 25, 46, 16],
+
+	// 31
+	[13, 145, 115, 3, 146, 116],
+	[2, 74, 46, 29, 75, 47],
+	[42, 54, 24, 1, 55, 25],
+	[23, 45, 15, 28, 46, 16],
+
+	// 32
+	[17, 145, 115],
+	[10, 74, 46, 23, 75, 47],
+	[10, 54, 24, 35, 55, 25],
+	[19, 45, 15, 35, 46, 16],
+
+	// 33
+	[17, 145, 115, 1, 146, 116],
+	[14, 74, 46, 21, 75, 47],
+	[29, 54, 24, 19, 55, 25],
+	[11, 45, 15, 46, 46, 16],
+
+	// 34
+	[13, 145, 115, 6, 146, 116],
+	[14, 74, 46, 23, 75, 47],
+	[44, 54, 24, 7, 55, 25],
+	[59, 46, 16, 1, 47, 17],
+
+	// 35
+	[12, 151, 121, 7, 152, 122],
+	[12, 75, 47, 26, 76, 48],
+	[39, 54, 24, 14, 55, 25],
+	[22, 45, 15, 41, 46, 16],
+
+	// 36
+	[6, 151, 121, 14, 152, 122],
+	[6, 75, 47, 34, 76, 48],
+	[46, 54, 24, 10, 55, 25],
+	[2, 45, 15, 64, 46, 16],
+
+	// 37
+	[17, 152, 122, 4, 153, 123],
+	[29, 74, 46, 14, 75, 47],
+	[49, 54, 24, 10, 55, 25],
+	[24, 45, 15, 46, 46, 16],
+
+	// 38
+	[4, 152, 122, 18, 153, 123],
+	[13, 74, 46, 32, 75, 47],
+	[48, 54, 24, 14, 55, 25],
+	[42, 45, 15, 32, 46, 16],
+
+	// 39
+	[20, 147, 117, 4, 148, 118],
+	[40, 75, 47, 7, 76, 48],
+	[43, 54, 24, 22, 55, 25],
+	[10, 45, 15, 67, 46, 16],
+
+	// 40
+	[19, 148, 118, 6, 149, 119],
+	[18, 75, 47, 31, 76, 48],
+	[34, 54, 24, 34, 55, 25],
+	[20, 45, 15, 61, 46, 16]
+];
+
+QRRSBlock.getRSBlocks = function(typeNumber, errorCorrectLevel) {
+	
+	var rsBlock = QRRSBlock.getRsBlockTable(typeNumber, errorCorrectLevel);
+	
+	if (rsBlock === undefined) {
+		throw new Error("bad rs block @ typeNumber:" + typeNumber + "/errorCorrectLevel:" + errorCorrectLevel);
+	}
+
+	var length = rsBlock.length / 3;
+	
+	var list = [];
+	
+	for (var i = 0; i < length; i++) {
+
+		var count = rsBlock[i * 3 + 0];
+		var totalCount = rsBlock[i * 3 + 1];
+		var dataCount  = rsBlock[i * 3 + 2];
+
+		for (var j = 0; j < count; j++) {
+			list.push(new QRRSBlock(totalCount, dataCount) );	
+		}
+	}
+	
+	return list;
+};
+
+QRRSBlock.getRsBlockTable = function(typeNumber, errorCorrectLevel) {
+
+	switch(errorCorrectLevel) {
+	case QRErrorCorrectLevel.L :
+		return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+	case QRErrorCorrectLevel.M :
+		return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+	case QRErrorCorrectLevel.Q :
+		return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+	case QRErrorCorrectLevel.H :
+		return QRRSBlock.RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+	default :
+		return undefined;
+	}
+};
+
+module.exports = QRRSBlock;
+M["QRRSBlock"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+function QRBitBuffer() {
+	this.buffer = [];
+	this.length = 0;
+}
+
+QRBitBuffer.prototype = {
+
+	get : function(index) {
+		var bufIndex = Math.floor(index / 8);
+		return ( (this.buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+	},
+	
+	put : function(num, length) {
+		for (var i = 0; i < length; i++) {
+			this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+		}
+	},
+	
+	getLengthInBits : function() {
+		return this.length;
+	},
+	
+	putBit : function(bit) {
+	
+		var bufIndex = Math.floor(this.length / 8);
+		if (this.buffer.length <= bufIndex) {
+			this.buffer.push(0);
+		}
+	
+		if (bit) {
+			this.buffer[bufIndex] |= (0x80 >>> (this.length % 8) );
+		}
+	
+		this.length++;
+	}
+};
+
+module.exports = QRBitBuffer;
+M["QRBitBuffer"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+var QRMode = require('./QRMode');
+
+function QR8bitByte(data) {
+	this.mode = QRMode.MODE_8BIT_BYTE;
+	this.data = data;
+}
+
+QR8bitByte.prototype = {
+
+	getLength : function() {
+		return this.data.length;
+	},
+	
+	write : function(buffer) {
+		for (var i = 0; i < this.data.length; i++) {
+			// not JIS ...
+			buffer.put(this.data.charCodeAt(i), 8);
+		}
+	}
+};
+
+module.exports = QR8bitByte;
+M["QR8bitByte"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+var QRMode = require('./QRMode');
+var QRPolynomial = require('./QRPolynomial');
+var QRMath = require('./QRMath');
+var QRMaskPattern = require('./QRMaskPattern');
+
+var QRUtil = {
+
+    PATTERN_POSITION_TABLE : [
+        [],
+        [6, 18],
+        [6, 22],
+        [6, 26],
+        [6, 30],
+        [6, 34],
+        [6, 22, 38],
+        [6, 24, 42],
+        [6, 26, 46],
+        [6, 28, 50],
+        [6, 30, 54],        
+        [6, 32, 58],
+        [6, 34, 62],
+        [6, 26, 46, 66],
+        [6, 26, 48, 70],
+        [6, 26, 50, 74],
+        [6, 30, 54, 78],
+        [6, 30, 56, 82],
+        [6, 30, 58, 86],
+        [6, 34, 62, 90],
+        [6, 28, 50, 72, 94],
+        [6, 26, 50, 74, 98],
+        [6, 30, 54, 78, 102],
+        [6, 28, 54, 80, 106],
+        [6, 32, 58, 84, 110],
+        [6, 30, 58, 86, 114],
+        [6, 34, 62, 90, 118],
+        [6, 26, 50, 74, 98, 122],
+        [6, 30, 54, 78, 102, 126],
+        [6, 26, 52, 78, 104, 130],
+        [6, 30, 56, 82, 108, 134],
+        [6, 34, 60, 86, 112, 138],
+        [6, 30, 58, 86, 114, 142],
+        [6, 34, 62, 90, 118, 146],
+        [6, 30, 54, 78, 102, 126, 150],
+        [6, 24, 50, 76, 102, 128, 154],
+        [6, 28, 54, 80, 106, 132, 158],
+        [6, 32, 58, 84, 110, 136, 162],
+        [6, 26, 54, 82, 110, 138, 166],
+        [6, 30, 58, 86, 114, 142, 170]
+    ],
+
+    G15 : (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0),
+    G18 : (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0),
+    G15_MASK : (1 << 14) | (1 << 12) | (1 << 10)    | (1 << 4) | (1 << 1),
+
+    getBCHTypeInfo : function(data) {
+        var d = data << 10;
+        while (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G15) >= 0) {
+            d ^= (QRUtil.G15 << (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G15) ) );    
+        }
+        return ( (data << 10) | d) ^ QRUtil.G15_MASK;
+    },
+
+    getBCHTypeNumber : function(data) {
+        var d = data << 12;
+        while (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G18) >= 0) {
+            d ^= (QRUtil.G18 << (QRUtil.getBCHDigit(d) - QRUtil.getBCHDigit(QRUtil.G18) ) );    
+        }
+        return (data << 12) | d;
+    },
+
+    getBCHDigit : function(data) {
+
+        var digit = 0;
+
+        while (data !== 0) {
+            digit++;
+            data >>>= 1;
+        }
+
+        return digit;
+    },
+
+    getPatternPosition : function(typeNumber) {
+        return QRUtil.PATTERN_POSITION_TABLE[typeNumber - 1];
+    },
+
+    getMask : function(maskPattern, i, j) {
+        
+        switch (maskPattern) {
+            
+        case QRMaskPattern.PATTERN000 : return (i + j) % 2 === 0;
+        case QRMaskPattern.PATTERN001 : return i % 2 === 0;
+        case QRMaskPattern.PATTERN010 : return j % 3 === 0;
+        case QRMaskPattern.PATTERN011 : return (i + j) % 3 === 0;
+        case QRMaskPattern.PATTERN100 : return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 === 0;
+        case QRMaskPattern.PATTERN101 : return (i * j) % 2 + (i * j) % 3 === 0;
+        case QRMaskPattern.PATTERN110 : return ( (i * j) % 2 + (i * j) % 3) % 2 === 0;
+        case QRMaskPattern.PATTERN111 : return ( (i * j) % 3 + (i + j) % 2) % 2 === 0;
+
+        default :
+            throw new Error("bad maskPattern:" + maskPattern);
+        }
+    },
+
+    getErrorCorrectPolynomial : function(errorCorrectLength) {
+
+        var a = new QRPolynomial([1], 0);
+
+        for (var i = 0; i < errorCorrectLength; i++) {
+            a = a.multiply(new QRPolynomial([1, QRMath.gexp(i)], 0) );
+        }
+
+        return a;
+    },
+
+    getLengthInBits : function(mode, type) {
+
+        if (1 <= type && type < 10) {
+
+            // 1 - 9
+
+            switch(mode) {
+            case QRMode.MODE_NUMBER     : return 10;
+            case QRMode.MODE_ALPHA_NUM  : return 9;
+            case QRMode.MODE_8BIT_BYTE  : return 8;
+            case QRMode.MODE_KANJI      : return 8;
+            default :
+                throw new Error("mode:" + mode);
+            }
+
+        } else if (type < 27) {
+
+            // 10 - 26
+
+            switch(mode) {
+            case QRMode.MODE_NUMBER     : return 12;
+            case QRMode.MODE_ALPHA_NUM  : return 11;
+            case QRMode.MODE_8BIT_BYTE  : return 16;
+            case QRMode.MODE_KANJI      : return 10;
+            default :
+                throw new Error("mode:" + mode);
+            }
+
+        } else if (type < 41) {
+
+            // 27 - 40
+
+            switch(mode) {
+            case QRMode.MODE_NUMBER     : return 14;
+            case QRMode.MODE_ALPHA_NUM  : return 13;
+            case QRMode.MODE_8BIT_BYTE  : return 16;
+            case QRMode.MODE_KANJI      : return 12;
+            default :
+                throw new Error("mode:" + mode);
+            }
+
+        } else {
+            throw new Error("type:" + type);
+        }
+    },
+
+    getLostPoint : function(qrCode) {
+        
+        var moduleCount = qrCode.getModuleCount();
+        var lostPoint = 0;
+        var row = 0; 
+        var col = 0;
+
+        
+        // LEVEL1
+        
+        for (row = 0; row < moduleCount; row++) {
+
+            for (col = 0; col < moduleCount; col++) {
+
+                var sameCount = 0;
+                var dark = qrCode.isDark(row, col);
+
+                for (var r = -1; r <= 1; r++) {
+
+                    if (row + r < 0 || moduleCount <= row + r) {
+                        continue;
+                    }
+
+                    for (var c = -1; c <= 1; c++) {
+
+                        if (col + c < 0 || moduleCount <= col + c) {
+                            continue;
+                        }
+
+                        if (r === 0 && c === 0) {
+                            continue;
+                        }
+
+                        if (dark === qrCode.isDark(row + r, col + c) ) {
+                            sameCount++;
+                        }
+                    }
+                }
+
+                if (sameCount > 5) {
+                    lostPoint += (3 + sameCount - 5);
+                }
+            }
+        }
+
+        // LEVEL2
+
+        for (row = 0; row < moduleCount - 1; row++) {
+            for (col = 0; col < moduleCount - 1; col++) {
+                var count = 0;
+                if (qrCode.isDark(row,     col    ) ) count++;
+                if (qrCode.isDark(row + 1, col    ) ) count++;
+                if (qrCode.isDark(row,     col + 1) ) count++;
+                if (qrCode.isDark(row + 1, col + 1) ) count++;
+                if (count === 0 || count === 4) {
+                    lostPoint += 3;
+                }
+            }
+        }
+
+        // LEVEL3
+
+        for (row = 0; row < moduleCount; row++) {
+            for (col = 0; col < moduleCount - 6; col++) {
+                if (qrCode.isDark(row, col) && 
+                        !qrCode.isDark(row, col + 1) && 
+                         qrCode.isDark(row, col + 2) && 
+                         qrCode.isDark(row, col + 3) && 
+                         qrCode.isDark(row, col + 4) && 
+                        !qrCode.isDark(row, col + 5) && 
+                         qrCode.isDark(row, col + 6) ) {
+                    lostPoint += 40;
+                }
+            }
+        }
+
+        for (col = 0; col < moduleCount; col++) {
+            for (row = 0; row < moduleCount - 6; row++) {
+                if (qrCode.isDark(row, col) &&
+                        !qrCode.isDark(row + 1, col) &&
+                         qrCode.isDark(row + 2, col) &&
+                         qrCode.isDark(row + 3, col) &&
+                         qrCode.isDark(row + 4, col) &&
+                        !qrCode.isDark(row + 5, col) &&
+                         qrCode.isDark(row + 6, col) ) {
+                    lostPoint += 40;
+                }
+            }
+        }
+
+        // LEVEL4
+        
+        var darkCount = 0;
+
+        for (col = 0; col < moduleCount; col++) {
+            for (row = 0; row < moduleCount; row++) {
+                if (qrCode.isDark(row, col) ) {
+                    darkCount++;
+                }
+            }
+        }
+        
+        var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+        lostPoint += ratio * 10;
+
+        return lostPoint;       
+    }
+
+};
+
+module.exports = QRUtil;
+M["QRUtil"]=module.exports})();
+(function(){var module={exports:{}},require=req;
+var QR8bitByte = require('./QR8bitByte');
+var QRUtil = require('./QRUtil');
+var QRPolynomial = require('./QRPolynomial');
+var QRRSBlock = require('./QRRSBlock');
+var QRBitBuffer = require('./QRBitBuffer');
+
+function QRCode(typeNumber, errorCorrectLevel) {
+	this.typeNumber = typeNumber;
+	this.errorCorrectLevel = errorCorrectLevel;
+	this.modules = null;
+	this.moduleCount = 0;
+	this.dataCache = null;
+	this.dataList = [];
+}
+
+QRCode.prototype = {
+	
+	addData : function(data) {
+		var newData = new QR8bitByte(data);
+		this.dataList.push(newData);
+		this.dataCache = null;
+	},
+	
+	isDark : function(row, col) {
+		if (row < 0 || this.moduleCount <= row || col < 0 || this.moduleCount <= col) {
+			throw new Error(row + "," + col);
+		}
+		return this.modules[row][col];
+	},
+
+	getModuleCount : function() {
+		return this.moduleCount;
+	},
+	
+	make : function() {
+		// Calculate automatically typeNumber if provided is < 1
+		if (this.typeNumber < 1 ){
+			var typeNumber = 1;
+			for (typeNumber = 1; typeNumber < 40; typeNumber++) {
+				var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, this.errorCorrectLevel);
+
+				var buffer = new QRBitBuffer();
+				var totalDataCount = 0;
+				for (var i = 0; i < rsBlocks.length; i++) {
+					totalDataCount += rsBlocks[i].dataCount;
+				}
+
+				for (var x = 0; x < this.dataList.length; x++) {
+					var data = this.dataList[x];
+					buffer.put(data.mode, 4);
+					buffer.put(data.getLength(), QRUtil.getLengthInBits(data.mode, typeNumber) );
+					data.write(buffer);
+				}
+				if (buffer.getLengthInBits() <= totalDataCount * 8)
+					break;
+			}
+			this.typeNumber = typeNumber;
+		}
+		this.makeImpl(false, this.getBestMaskPattern() );
+	},
+	
+	makeImpl : function(test, maskPattern) {
+		
+		this.moduleCount = this.typeNumber * 4 + 17;
+		this.modules = new Array(this.moduleCount);
+		
+		for (var row = 0; row < this.moduleCount; row++) {
+			
+			this.modules[row] = new Array(this.moduleCount);
+			
+			for (var col = 0; col < this.moduleCount; col++) {
+				this.modules[row][col] = null;//(col + row) % 3;
+			}
+		}
+	
+		this.setupPositionProbePattern(0, 0);
+		this.setupPositionProbePattern(this.moduleCount - 7, 0);
+		this.setupPositionProbePattern(0, this.moduleCount - 7);
+		this.setupPositionAdjustPattern();
+		this.setupTimingPattern();
+		this.setupTypeInfo(test, maskPattern);
+		
+		if (this.typeNumber >= 7) {
+			this.setupTypeNumber(test);
+		}
+	
+		if (this.dataCache === null) {
+			this.dataCache = QRCode.createData(this.typeNumber, this.errorCorrectLevel, this.dataList);
+		}
+	
+		this.mapData(this.dataCache, maskPattern);
+	},
+
+	setupPositionProbePattern : function(row, col)  {
+		
+		for (var r = -1; r <= 7; r++) {
+			
+			if (row + r <= -1 || this.moduleCount <= row + r) continue;
+			
+			for (var c = -1; c <= 7; c++) {
+				
+				if (col + c <= -1 || this.moduleCount <= col + c) continue;
+				
+				if ( (0 <= r && r <= 6 && (c === 0 || c === 6) ) || 
+                     (0 <= c && c <= 6 && (r === 0 || r === 6) ) || 
+                     (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+					this.modules[row + r][col + c] = true;
+				} else {
+					this.modules[row + r][col + c] = false;
+				}
+			}		
+		}		
+	},
+	
+	getBestMaskPattern : function() {
+	
+		var minLostPoint = 0;
+		var pattern = 0;
+	
+		for (var i = 0; i < 8; i++) {
+			
+			this.makeImpl(true, i);
+	
+			var lostPoint = QRUtil.getLostPoint(this);
+	
+			if (i === 0 || minLostPoint >  lostPoint) {
+				minLostPoint = lostPoint;
+				pattern = i;
+			}
+		}
+	
+		return pattern;
+	},
+	
+	createMovieClip : function(target_mc, instance_name, depth) {
+	
+		var qr_mc = target_mc.createEmptyMovieClip(instance_name, depth);
+		var cs = 1;
+	
+		this.make();
+
+		for (var row = 0; row < this.modules.length; row++) {
+			
+			var y = row * cs;
+			
+			for (var col = 0; col < this.modules[row].length; col++) {
+	
+				var x = col * cs;
+				var dark = this.modules[row][col];
+			
+				if (dark) {
+					qr_mc.beginFill(0, 100);
+					qr_mc.moveTo(x, y);
+					qr_mc.lineTo(x + cs, y);
+					qr_mc.lineTo(x + cs, y + cs);
+					qr_mc.lineTo(x, y + cs);
+					qr_mc.endFill();
+				}
+			}
+		}
+		
+		return qr_mc;
+	},
+
+	setupTimingPattern : function() {
+		
+		for (var r = 8; r < this.moduleCount - 8; r++) {
+			if (this.modules[r][6] !== null) {
+				continue;
+			}
+			this.modules[r][6] = (r % 2 === 0);
+		}
+	
+		for (var c = 8; c < this.moduleCount - 8; c++) {
+			if (this.modules[6][c] !== null) {
+				continue;
+			}
+			this.modules[6][c] = (c % 2 === 0);
+		}
+	},
+	
+	setupPositionAdjustPattern : function() {
+	
+		var pos = QRUtil.getPatternPosition(this.typeNumber);
+		
+		for (var i = 0; i < pos.length; i++) {
+		
+			for (var j = 0; j < pos.length; j++) {
+			
+				var row = pos[i];
+				var col = pos[j];
+				
+				if (this.modules[row][col] !== null) {
+					continue;
+				}
+				
+				for (var r = -2; r <= 2; r++) {
+				
+					for (var c = -2; c <= 2; c++) {
+					
+						if (Math.abs(r) === 2 || 
+                            Math.abs(c) === 2 ||
+                            (r === 0 && c === 0) ) {
+							this.modules[row + r][col + c] = true;
+						} else {
+							this.modules[row + r][col + c] = false;
+						}
+					}
+				}
+			}
+		}
+	},
+	
+	setupTypeNumber : function(test) {
+	
+		var bits = QRUtil.getBCHTypeNumber(this.typeNumber);
+        var mod;
+	
+		for (var i = 0; i < 18; i++) {
+			mod = (!test && ( (bits >> i) & 1) === 1);
+			this.modules[Math.floor(i / 3)][i % 3 + this.moduleCount - 8 - 3] = mod;
+		}
+	
+		for (var x = 0; x < 18; x++) {
+			mod = (!test && ( (bits >> x) & 1) === 1);
+			this.modules[x % 3 + this.moduleCount - 8 - 3][Math.floor(x / 3)] = mod;
+		}
+	},
+	
+	setupTypeInfo : function(test, maskPattern) {
+	
+		var data = (this.errorCorrectLevel << 3) | maskPattern;
+		var bits = QRUtil.getBCHTypeInfo(data);
+        var mod;
+	
+		// vertical		
+		for (var v = 0; v < 15; v++) {
+	
+			mod = (!test && ( (bits >> v) & 1) === 1);
+	
+			if (v < 6) {
+				this.modules[v][8] = mod;
+			} else if (v < 8) {
+				this.modules[v + 1][8] = mod;
+			} else {
+				this.modules[this.moduleCount - 15 + v][8] = mod;
+			}
+		}
+	
+		// horizontal
+		for (var h = 0; h < 15; h++) {
+	
+			mod = (!test && ( (bits >> h) & 1) === 1);
+			
+			if (h < 8) {
+				this.modules[8][this.moduleCount - h - 1] = mod;
+			} else if (h < 9) {
+				this.modules[8][15 - h - 1 + 1] = mod;
+			} else {
+				this.modules[8][15 - h - 1] = mod;
+			}
+		}
+	
+		// fixed module
+		this.modules[this.moduleCount - 8][8] = (!test);
+	
+	},
+	
+	mapData : function(data, maskPattern) {
+		
+		var inc = -1;
+		var row = this.moduleCount - 1;
+		var bitIndex = 7;
+		var byteIndex = 0;
+		
+		for (var col = this.moduleCount - 1; col > 0; col -= 2) {
+	
+			if (col === 6) col--;
+	
+			while (true) {
+	
+				for (var c = 0; c < 2; c++) {
+					
+					if (this.modules[row][col - c] === null) {
+						
+						var dark = false;
+	
+						if (byteIndex < data.length) {
+							dark = ( ( (data[byteIndex] >>> bitIndex) & 1) === 1);
+						}
+	
+						var mask = QRUtil.getMask(maskPattern, row, col - c);
+	
+						if (mask) {
+							dark = !dark;
+						}
+						
+						this.modules[row][col - c] = dark;
+						bitIndex--;
+	
+						if (bitIndex === -1) {
+							byteIndex++;
+							bitIndex = 7;
+						}
+					}
+				}
+								
+				row += inc;
+	
+				if (row < 0 || this.moduleCount <= row) {
+					row -= inc;
+					inc = -inc;
+					break;
+				}
+			}
+		}
+		
+	}
+
+};
+
+QRCode.PAD0 = 0xEC;
+QRCode.PAD1 = 0x11;
+
+QRCode.createData = function(typeNumber, errorCorrectLevel, dataList) {
+	
+	var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectLevel);
+	
+	var buffer = new QRBitBuffer();
+	
+	for (var i = 0; i < dataList.length; i++) {
+		var data = dataList[i];
+		buffer.put(data.mode, 4);
+		buffer.put(data.getLength(), QRUtil.getLengthInBits(data.mode, typeNumber) );
+		data.write(buffer);
+	}
+
+	// calc num max data.
+	var totalDataCount = 0;
+	for (var x = 0; x < rsBlocks.length; x++) {
+		totalDataCount += rsBlocks[x].dataCount;
+	}
+
+	if (buffer.getLengthInBits() > totalDataCount * 8) {
+		throw new Error("code length overflow. (" + 
+            buffer.getLengthInBits() + 
+            ">" +  
+            totalDataCount * 8 + 
+            ")");
+	}
+
+	// end code
+	if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+		buffer.put(0, 4);
+	}
+
+	// padding
+	while (buffer.getLengthInBits() % 8 !== 0) {
+		buffer.putBit(false);
+	}
+
+	// padding
+	while (true) {
+		
+		if (buffer.getLengthInBits() >= totalDataCount * 8) {
+			break;
+		}
+		buffer.put(QRCode.PAD0, 8);
+		
+		if (buffer.getLengthInBits() >= totalDataCount * 8) {
+			break;
+		}
+		buffer.put(QRCode.PAD1, 8);
+	}
+
+	return QRCode.createBytes(buffer, rsBlocks);
+};
+
+QRCode.createBytes = function(buffer, rsBlocks) {
+
+	var offset = 0;
+	
+	var maxDcCount = 0;
+	var maxEcCount = 0;
+	
+	var dcdata = new Array(rsBlocks.length);
+	var ecdata = new Array(rsBlocks.length);
+	
+	for (var r = 0; r < rsBlocks.length; r++) {
+
+		var dcCount = rsBlocks[r].dataCount;
+		var ecCount = rsBlocks[r].totalCount - dcCount;
+
+		maxDcCount = Math.max(maxDcCount, dcCount);
+		maxEcCount = Math.max(maxEcCount, ecCount);
+		
+		dcdata[r] = new Array(dcCount);
+		
+		for (var i = 0; i < dcdata[r].length; i++) {
+			dcdata[r][i] = 0xff & buffer.buffer[i + offset];
+		}
+		offset += dcCount;
+		
+		var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+		var rawPoly = new QRPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+		var modPoly = rawPoly.mod(rsPoly);
+		ecdata[r] = new Array(rsPoly.getLength() - 1);
+		for (var x = 0; x < ecdata[r].length; x++) {
+            var modIndex = x + modPoly.getLength() - ecdata[r].length;
+			ecdata[r][x] = (modIndex >= 0)? modPoly.get(modIndex) : 0;
+		}
+
+	}
+	
+	var totalCodeCount = 0;
+	for (var y = 0; y < rsBlocks.length; y++) {
+		totalCodeCount += rsBlocks[y].totalCount;
+	}
+
+	var data = new Array(totalCodeCount);
+	var index = 0;
+
+	for (var z = 0; z < maxDcCount; z++) {
+		for (var s = 0; s < rsBlocks.length; s++) {
+			if (z < dcdata[s].length) {
+				data[index++] = dcdata[s][z];
+			}
+		}
+	}
+
+	for (var xx = 0; xx < maxEcCount; xx++) {
+		for (var t = 0; t < rsBlocks.length; t++) {
+			if (xx < ecdata[t].length) {
+				data[index++] = ecdata[t][xx];
+			}
+		}
+	}
+
+	return data;
+
+};
+
+module.exports = QRCode;
+M["index"]=module.exports})();
+var QRCode=M.index,L=M.QRErrorCorrectLevel;
+/* Matrice d'un QR code : texte UTF-8, niveau de correction L, M, Q ou H. */
+function matrix(text,level){var q=new QRCode(-1,L[level||'M']);q.addData(unescape(encodeURIComponent(text)));q.make();
+ var n=q.getModuleCount(),rows=[];for(var r=0;r<n;r++){var row=[];for(var c=0;c<n;c++)row.push(q.isDark(r,c));rows.push(row)}
+ return {size:n,version:q.typeNumber,rows:rows}}
+/* Tables du code d'origine exposées pour le décodeur (AK.qrdecode) : blocs Reed-Solomon, positions des motifs
+   d'alignement, codes BCH du format et de la version, masques, arithmétique GF(256). */
+return {matrix:matrix,
+ rsBlocks:function(v,l){return M.QRRSBlock.getRSBlocks(v,l).map(function(b){return {total:b.totalCount,data:b.dataCount}})},
+ patternPosition:function(v){return M.QRUtil.getPatternPosition(v)},
+ bchTypeInfo:function(d){return M.QRUtil.getBCHTypeInfo(d)},
+ bchTypeNumber:function(v){return M.QRUtil.getBCHTypeNumber(v)},
+ mask:function(p,i,j){return M.QRUtil.getMask(p,i,j)},
+ gexp:function(n){return M.QRMath.gexp(n)},
+ glog:function(n){return M.QRMath.glog(n)}}})();
+
+//# sourceURL=akwa/vendor/qrcode-generator.js
+</script>
+<script>
+/* =====================================================================================
+   Primitives cryptographiques : uniquement l'API Web Crypto du navigateur (implémentation
+   éprouvée du navigateur ; aucun algorithme maison).
+     - Empreintes de mots de passe : PBKDF2-SHA-256 (sel aléatoire de 16 octets).
+     - Chiffrement de la clé privée de signature : AES-GCM 256 bits, clé dérivée par PBKDF2.
+     - Signature des documents : ECDSA P-256 / SHA-256.
+     - Empreintes de contrôle : SHA-256.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const enc = new TextEncoder();
+
+  const dispo = () => !!(window.crypto && crypto.subtle && window.isSecureContext !== false);
+  const exiger = () => {
+    if (!dispo()) throw new AK.ErreurMetier('La cryptographie du navigateur (Web Crypto) est indisponible ici : ouvrez AKWA SCHOOL dans Chrome, Edge ou Firefox récent.');
+  };
+
+  /* ---------- Encodages ---------- */
+  const b64 = (buf) => {
+    const b = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode.apply(null, b.subarray(i, i + 0x8000));
+    return btoa(s);
+  };
+  const deB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+  const b64url = (buf) => b64(buf).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const deB64url = (s) => deB64(String(s).replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((String(s).length + 3) % 4));
+  const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const b32 = (buf) => {
+    const b = new Uint8Array(buf);
+    let bits = 0, val = 0, out = '';
+    for (const x of b) {
+      val = (val << 8) | x;
+      bits += 8;
+      while (bits >= 5) {
+        out += B32[(val >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+    if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+    return out;
+  };
+  const hex = (buf) => [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+  const aleatoire = (n) => crypto.getRandomValues(new Uint8Array(n));
+  /** Comparaison à temps constant de deux tableaux d'octets. */
+  const egaux = (a, b) => {
+    if (a.length !== b.length) return false;
+    let d = 0;
+    for (let i = 0; i < a.length; i++) d |= a[i] ^ b[i];
+    return d === 0;
+  };
+
+  async function sha256(texte) {
+    exiger();
+    return new Uint8Array(await crypto.subtle.digest('SHA-256', typeof texte === 'string' ? enc.encode(texte) : texte));
+  }
+
+  /* ---------- Mots de passe ---------- */
+  async function pbkdf2(secret, sel, iterations, octets = 32) {
+    const cle = await crypto.subtle.importKey('raw', enc.encode(String(secret).normalize('NFC')), 'PBKDF2', false, ['deriveBits']);
+    return new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: sel, iterations }, cle, octets * 8));
+  }
+  /** Empreinte d'un mot de passe (ou d'un code de secours) : { algo, iter, sel, empreinte }. */
+  async function empreinteSecret(secret) {
+    exiger();
+    const sel = aleatoire(16), iter = AK.cfg.SECU.PBKDF2_ITER;
+    const h = await pbkdf2(secret, sel, iter);
+    return { algo: 'PBKDF2-SHA256', iter, sel: b64(sel), empreinte: b64(h) };
+  }
+  async function verifierSecret(secret, rec) {
+    if (!rec || rec.algo !== 'PBKDF2-SHA256') return false;
+    exiger();
+    const h = await pbkdf2(secret, deB64(rec.sel), rec.iter);
+    return egaux(h, deB64(rec.empreinte));
+  }
+
+  /* ---------- Chiffrement d'une donnée par un secret (clé privée de signature) ---------- */
+  async function cleDeSecret(secret, sel, iter) {
+    const bits = await pbkdf2(secret, sel, iter);
+    return crypto.subtle.importKey('raw', bits, 'AES-GCM', false, ['encrypt', 'decrypt']);
+  }
+  async function chiffrer(octets, secret) {
+    exiger();
+    const sel = aleatoire(16), iv = aleatoire(12), iter = AK.cfg.SECU.PBKDF2_ITER;
+    const k = await cleDeSecret(secret, sel, iter);
+    const c = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, octets);
+    return { algo: 'PBKDF2-AESGCM', iter, sel: b64(sel), iv: b64(iv), donnees: b64(c) };
+  }
+  async function dechiffrer(paquet, secret) {
+    exiger();
+    try {
+      const k = await cleDeSecret(secret, deB64(paquet.sel), paquet.iter);
+      return new Uint8Array(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(paquet.iv) }, k, deB64(paquet.donnees)));
+    } catch (e) {
+      return null; // secret incorrect ou donnée altérée
+    }
+  }
+
+  /* ---------- Signature ECDSA P-256 ---------- */
+  const ALG = { name: 'ECDSA', namedCurve: 'P-256' };
+  const SIG = { name: 'ECDSA', hash: 'SHA-256' };
+  async function nouvellePaire() {
+    exiger();
+    const p = await crypto.subtle.generateKey(ALG, true, ['sign', 'verify']);
+    const pub = await crypto.subtle.exportKey('jwk', p.publicKey);
+    const priv = new Uint8Array(await crypto.subtle.exportKey('pkcs8', p.privateKey));
+    return { pub: { kty: pub.kty, crv: pub.crv, x: pub.x, y: pub.y }, priv };
+  }
+  async function importerPrivee(pkcs8) {
+    return crypto.subtle.importKey('pkcs8', pkcs8, ALG, false, ['sign']);
+  }
+  async function importerPublique(jwk) {
+    return crypto.subtle.importKey('jwk', { ...jwk, ext: true }, ALG, false, ['verify']);
+  }
+  async function signer(clePrivee, message) {
+    return b64url(await crypto.subtle.sign(SIG, clePrivee, enc.encode(message)));
+  }
+  async function verifierSignature(jwk, message, signature) {
+    exiger();
+    try {
+      const k = await importerPublique(jwk);
+      return await crypto.subtle.verify(SIG, k, deB64url(signature), enc.encode(message));
+    } catch (e) {
+      return false;
+    }
+  }
+  /** Empreinte lisible d'une clé publique : 4 groupes de 4 caractères (à comparer à voix haute). */
+  async function empreinteCle(jwk) {
+    const h = await sha256(`${jwk.crv}|${jwk.x}|${jwk.y}`);
+    return b32(h.slice(0, 10)).match(/.{4}/g).join('-');
+  }
+  /** Code aléatoire lisible (ni 0/O ni 1/I) : XXXX-XXXX-XXXX… */
+  function codeLisible(groupes = 3) {
+    const A = AK.cfg.SECU.ALPHABET_CODE;
+    const r = aleatoire(groupes * 4);
+    let s = '';
+    for (let i = 0; i < r.length; i++) s += A[r[i] % A.length];
+    return s.match(/.{4}/g).join('-');
+  }
+  const normCode = (c) => String(c || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+
+  AK.crypto = {
+    dispo, sha256, b64, deB64, b64url, deB64url, b32, hex, aleatoire, egaux,
+    empreinteSecret, verifierSecret, chiffrer, dechiffrer,
+    nouvellePaire, importerPrivee, importerPublique, signer, verifierSignature, empreinteCle,
+    codeLisible, normCode
+  };
+})(window.AK);
+
+//# sourceURL=akwa/js/security/crypto.js
+</script>
+<script>
+/* =====================================================================================
+   QR codes des documents : contenu minimal, canonique et vérifiable.
+
+   Format (version 1), champs dans cet ordre, séparés par « ; » :
+     AKS1 ; T=<type> ; R=<référence> ; E=<émission AAAA-MM-JJ> ; X=<expiration> ; H=<empreinte>
+          [; N=<NOM PRÉNOMS>] [; M=<matricule>] ; K=<clé> ; S=<signature>
+   - Jamais de photo, de téléphone, de donnée médicale ni de détail d'acte de naissance.
+   - N et M (nom et matricule, déjà imprimés sur le document) seulement si le modèle le prévoit
+     (cartes d'identification par défaut) : ils permettent une vérification hors ligne sans base.
+   - H : empreinte SHA-256 (80 bits, base 32) des données du titulaire au moment de l'émission.
+   - S : signature ECDSA P-256 du texte qui précède « ;S= » (absente si aucune clé n'est créée).
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u;
+  const PREFIXE = 'AKS1';
+  const ORDRE = ['T', 'R', 'E', 'X', 'H', 'N', 'M', 'K'];
+
+  /** Valeur sûre dans le QR : majuscules sans accents, sans « ; » ni « = ». */
+  const propre = (v) => u.sansAccents(String(v || '')).toUpperCase().replace(/[;=\r\n]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+
+  /** Données canoniques du titulaire → empreinte H (texte de 16 caractères). */
+  async function empreinteTitulaire(canon) {
+    const t = ['type', 'ref', 'nom', 'prenoms', 'matricule', 'classe', 'annee', 'ecole', 'extra'].map((k) => propre(canon[k])).join('|');
+    if (!AK.crypto.dispo()) return '';
+    return AK.crypto.b32((await AK.crypto.sha256(t)).slice(0, 10));
+  }
+
+  /** Texte signé (sans la signature). */
+  function message(c) {
+    const parts = [PREFIXE];
+    ORDRE.forEach((k) => {
+      if (c[k] != null && c[k] !== '') parts.push(`${k}=${k === 'R' ? String(c[k]).toUpperCase() : propre(c[k])}`);
+    });
+    return parts.join(';');
+  }
+  function texte(c) {
+    const m = message(c);
+    return c.S ? `${m};S=${c.S}` : m;
+  }
+  /** Lecture tolérante (espaces, minuscules, saisie au clavier) ; null si ce n'est pas un QR AKWA. */
+  function lire(brut) {
+    let s = String(brut || '').trim();
+    try {
+      if (/%[0-9A-F]{2}/i.test(s)) s = decodeURIComponent(s);
+    } catch (e) { /* texte laissé tel quel */ }
+    const i = s.toUpperCase().indexOf(PREFIXE + ';');
+    if (i < 0) return null;
+    s = s.slice(i);
+    const champs = {};
+    const morceaux = s.split(';');
+    for (const p of morceaux.slice(1)) {
+      const k = p.indexOf('=');
+      if (k < 1) continue;
+      const cle = p.slice(0, k).trim().toUpperCase();
+      champs[cle] = p.slice(k + 1).trim();
+    }
+    if (!champs.T || !champs.R) return null;
+    const sansSig = { ...champs };
+    delete sansSig.S;
+    return { champs, message: message(sansSig), signature: champs.S || null };
+  }
+
+  /** Emplacement réservé dans un aperçu : le vrai QR (référence, signature) est créé à l'impression. */
+  const BROUILLON = '@brouillon';
+  const SVG_BROUILLON = u.raw('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" role="img" aria-label="QR code créé à l’impression"><rect x="1" y="1" width="38" height="38" rx="2" fill="#fff" stroke="#8a94a6" stroke-width=".8" stroke-dasharray="2 1.6"/><path d="M6 6h9v9H6zM25 6h9v9h-9zM6 25h9v9H6z" fill="none" stroke="#8a94a6" stroke-width="1.4"/><text x="20" y="22" font-size="4.2" text-anchor="middle" fill="#5c687a" font-family="sans-serif">QR</text><text x="27" y="31" font-size="3.2" text-anchor="middle" fill="#5c687a" font-family="sans-serif">à l’impression</text></svg>');
+
+  /** Matrice → SVG vectoriel (zone de silence de 4 modules), net à toutes les tailles. */
+  function svg(texteQR, { niveau = 'M', titre = 'QR code' } = {}) {
+    if (texteQR === BROUILLON) return SVG_BROUILLON;
+    const m = AK.vendor.qr.matrix(texteQR, niveau);
+    const n = m.size;
+    let d = '';
+    for (let r = 0; r < n; r++) {
+      let c = 0;
+      while (c < n) {
+        if (m.rows[r][c]) {
+          let l = 1;
+          while (c + l < n && m.rows[r][c + l]) l++;
+          d += `M${c + 4} ${r + 4}h${l}v1h-${l}z`;
+          c += l;
+        } else c++;
+      }
+    }
+    const t = n + 8;
+    return u.raw(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${t} ${t}" shape-rendering="crispEdges" role="img" aria-label="${u.esc(titre)}"><rect width="${t}" height="${t}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`);
+  }
+
+  AK.qr = { PREFIXE, BROUILLON, propre, empreinteTitulaire, message, texte, lire, svg };
+})(window.AK);
+
+//# sourceURL=akwa/js/docs/qr.js
+</script>
+<script>
+/* =====================================================================================
+   Lecture de QR codes à partir d'une image (caméra ou photo), entièrement hors ligne.
+   Écrit pour AKWA SCHOOL (aucune bibliothèque téléchargeable) ; s'appuie sur les tables
+   éprouvées de la bibliothèque de génération (blocs Reed-Solomon, codes BCH, masques).
+
+   Étapes : niveaux de gris → seuillage adaptatif → repérage des trois motifs de position →
+   motif d'alignement → transformation perspective → échantillonnage → format et version →
+   démasquage → codes correcteurs (Reed-Solomon) → segments (numérique, alphanumérique, octets).
+   Si l'API BarcodeDetector du navigateur existe, elle est essayée d'abord (plus rapide).
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const Q = () => AK.vendor.qr;
+
+  /* ---------- Image → matrice binaire ---------- */
+  function binariser(img) {
+    const { data, width: w, height: h } = img;
+    const lum = new Uint8ClampedArray(w * h);
+    for (let i = 0, p = 0; i < lum.length; i++, p += 4) lum[i] = (data[p] * 77 + data[p + 1] * 150 + data[p + 2] * 29) >> 8;
+    const B = 8, bw = Math.ceil(w / B), bh = Math.ceil(h / B);
+    const seuils = new Float32Array(bw * bh);
+    for (let by = 0; by < bh; by++)
+      for (let bx = 0; bx < bw; bx++) {
+        let min = 255, max = 0, som = 0, n = 0;
+        for (let y = by * B; y < Math.min(h, by * B + B); y++)
+          for (let x = bx * B; x < Math.min(w, bx * B + B); x++) {
+            const v = lum[y * w + x];
+            som += v;
+            n++;
+            if (v < min) min = v;
+            if (v > max) max = v;
+          }
+        let moy = som / n;
+        if (max - min <= 24) {
+          moy = min / 2;
+          if (by > 0 && bx > 0) {
+            const voisins = (seuils[(by - 1) * bw + bx] + 2 * seuils[by * bw + bx - 1] + seuils[(by - 1) * bw + bx - 1]) / 4;
+            if (min < voisins) moy = voisins;
+          }
+        }
+        seuils[by * bw + bx] = moy;
+      }
+    const noir = new Uint8Array(w * h);
+    for (let by = 0; by < bh; by++)
+      for (let bx = 0; bx < bw; bx++) {
+        let s = 0, n = 0;
+        for (let dy = -2; dy <= 2; dy++)
+          for (let dx = -2; dx <= 2; dx++) {
+            const yy = by + dy, xx = bx + dx;
+            if (yy >= 0 && xx >= 0 && yy < bh && xx < bw) {
+              s += seuils[yy * bw + xx];
+              n++;
+            }
+          }
+        const t = s / n;
+        for (let y = by * B; y < Math.min(h, by * B + B); y++)
+          for (let x = bx * B; x < Math.min(w, bx * B + B); x++) noir[y * w + x] = lum[y * w + x] <= t ? 1 : 0;
+      }
+    return { w, h, noir, inverse: false, get(x, y) { return x >= 0 && y >= 0 && x < w && y < h ? noir[y * w + x] ^ (this.inverse ? 1 : 0) : 0; } };
+  }
+
+  /* ---------- Motifs de position (1:1:3:1:1) ---------- */
+  function ratioOk(c, tol = 0.5) {
+    const total = c[0] + c[1] + c[2] + c[3] + c[4];
+    if (total < 7) return false;
+    const m = total / 7, v = m * tol;
+    return Math.abs(m - c[0]) < v && Math.abs(m - c[1]) < v && Math.abs(3 * m - c[2]) < 3 * v && Math.abs(m - c[3]) < v && Math.abs(m - c[4]) < v;
+  }
+  const centreDe = (c, fin) => fin - c[4] - c[3] - c[2] / 2;
+  function croiserVertical(M, cx, cy, maxCompte, total) {
+    const c = [0, 0, 0, 0, 0];
+    let y = cy;
+    while (y >= 0 && M.get(cx, y)) { c[2]++; y--; }
+    if (y < 0) return NaN;
+    while (y >= 0 && !M.get(cx, y) && c[1] <= maxCompte) { c[1]++; y--; }
+    if (y < 0 || c[1] > maxCompte) return NaN;
+    while (y >= 0 && M.get(cx, y) && c[0] <= maxCompte) { c[0]++; y--; }
+    if (c[0] > maxCompte) return NaN;
+    y = cy + 1;
+    while (y < M.h && M.get(cx, y)) { c[2]++; y++; }
+    if (y === M.h) return NaN;
+    while (y < M.h && !M.get(cx, y) && c[3] < maxCompte) { c[3]++; y++; }
+    if (y === M.h || c[3] >= maxCompte) return NaN;
+    while (y < M.h && M.get(cx, y) && c[4] < maxCompte) { c[4]++; y++; }
+    if (c[4] >= maxCompte) return NaN;
+    const t = c[0] + c[1] + c[2] + c[3] + c[4];
+    if (5 * Math.abs(t - total) >= 2 * total) return NaN;
+    return ratioOk(c) ? centreDe(c, y) : NaN;
+  }
+  function croiserHorizontal(M, cx, cy, maxCompte, total) {
+    const c = [0, 0, 0, 0, 0];
+    let x = cx;
+    while (x >= 0 && M.get(x, cy)) { c[2]++; x--; }
+    if (x < 0) return NaN;
+    while (x >= 0 && !M.get(x, cy) && c[1] <= maxCompte) { c[1]++; x--; }
+    if (x < 0 || c[1] > maxCompte) return NaN;
+    while (x >= 0 && M.get(x, cy) && c[0] <= maxCompte) { c[0]++; x--; }
+    if (c[0] > maxCompte) return NaN;
+    x = cx + 1;
+    while (x < M.w && M.get(x, cy)) { c[2]++; x++; }
+    if (x === M.w) return NaN;
+    while (x < M.w && !M.get(x, cy) && c[3] < maxCompte) { c[3]++; x++; }
+    if (x === M.w || c[3] >= maxCompte) return NaN;
+    while (x < M.w && M.get(x, cy) && c[4] < maxCompte) { c[4]++; x++; }
+    if (c[4] >= maxCompte) return NaN;
+    const t = c[0] + c[1] + c[2] + c[3] + c[4];
+    if (5 * Math.abs(t - total) >= total) return NaN;
+    return ratioOk(c) ? centreDe(c, x) : NaN;
+  }
+  function chercherMotifs(M) {
+    const cands = [];
+    const ajouter = (x, y, taille) => {
+      const ex = cands.find((p) => Math.abs(p.x - x) <= taille && Math.abs(p.y - y) <= taille && Math.abs(p.m - taille) <= Math.max(1, p.m) * 0.7);
+      if (ex) {
+        ex.x = (ex.x * ex.n + x) / (ex.n + 1);
+        ex.y = (ex.y * ex.n + y) / (ex.n + 1);
+        ex.m = (ex.m * ex.n + taille) / (ex.n + 1);
+        ex.n++;
+      } else cands.push({ x, y, m: taille, n: 1 });
+    };
+    const pas = Math.max(1, Math.floor(M.h / 300));
+    for (let y = 0; y < M.h; y += pas) {
+      const c = [0, 0, 0, 0, 0];
+      let etat = 0;
+      for (let x = 0; x < M.w; x++) {
+        const n = M.get(x, y);
+        if (n) {
+          if (etat & 1) etat++;
+          c[etat]++;
+        } else if (!(etat & 1)) {
+          if (etat === 4) {
+            if (ratioOk(c)) {
+              const total = c[0] + c[1] + c[2] + c[3] + c[4];
+              let cx = centreDe(c, x);
+              const cy = croiserVertical(M, Math.floor(cx), y, c[2], total);
+              if (!isNaN(cy)) {
+                cx = croiserHorizontal(M, Math.floor(cx), Math.floor(cy), c[2], total);
+                if (!isNaN(cx)) ajouter(cx, cy, total / 7);
+              }
+              c[0] = c[2]; c[1] = c[3]; c[2] = c[4]; c[3] = 1; c[4] = 0;
+              etat = 3;
+              continue;
+            }
+            c[0] = c[2]; c[1] = c[3]; c[2] = c[4]; c[3] = 1; c[4] = 0;
+            etat = 3;
+          } else c[++etat]++;
+        } else c[etat]++;
+      }
+      if (ratioOk(c)) {
+        const total = c[0] + c[1] + c[2] + c[3] + c[4];
+        const cx = centreDe(c, M.w);
+        const cy = croiserVertical(M, Math.floor(cx), y, c[2], total);
+        if (!isNaN(cy)) ajouter(cx, cy, total / 7);
+      }
+    }
+    return cands.filter((p) => p.n >= 2 || cands.length <= 3).sort((a, b) => b.n - a.n).slice(0, 12);
+  }
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  /** Choix de trois motifs formant un triangle rectangle isocèle ; renvoie [hautGauche, hautDroit, basGauche]. */
+  function trier(cands) {
+    let meilleur = null, score = Infinity;
+    for (let i = 0; i < cands.length; i++)
+      for (let j = i + 1; j < cands.length; j++)
+        for (let k = j + 1; k < cands.length; k++) {
+          const P = [cands[i], cands[j], cands[k]];
+          const m = (P[0].m + P[1].m + P[2].m) / 3;
+          if (P.some((p) => Math.abs(p.m - m) > m * 0.5)) continue;
+          const d = [dist(P[1], P[2]), dist(P[0], P[2]), dist(P[0], P[1])];
+          const h = d.indexOf(Math.max(...d)); // hypoténuse opposée au coin haut-gauche
+          const a = P[h], b = P[(h + 1) % 3], c = P[(h + 2) % 3];
+          const db = dist(a, b), dc = dist(a, c);
+          if (db < m * 14 || dc < m * 14) continue; // au moins 21 modules : distance entre centres ≥ 14
+          const s = Math.abs(db - dc) / Math.max(db, dc) + Math.abs(d[h] - Math.hypot(db, dc)) / d[h];
+          if (s < score) {
+            score = s;
+            meilleur = [a, b, c];
+          }
+        }
+    if (!meilleur || score > 0.35) return null;
+    let [hg, b, c] = meilleur;
+    const croix = (b.x - hg.x) * (c.y - hg.y) - (b.y - hg.y) * (c.x - hg.x);
+    if (croix < 0) [b, c] = [c, b];
+    return [hg, b, c];
+  }
+
+  /* ---------- Transformation perspective (carré → quadrilatère) ---------- */
+  function carreVersQuad(x0, y0, x1, y1, x2, y2, x3, y3) {
+    const dx3 = x0 - x1 + x2 - x3, dy3 = y0 - y1 + y2 - y3;
+    if (Math.abs(dx3) < 1e-9 && Math.abs(dy3) < 1e-9) return [x1 - x0, x2 - x1, x0, y1 - y0, y2 - y1, y0, 0, 0, 1];
+    const dx1 = x1 - x2, dx2 = x3 - x2, dy1 = y1 - y2, dy2 = y3 - y2, den = dx1 * dy2 - dx2 * dy1;
+    const a13 = (dx3 * dy2 - dx2 * dy3) / den, a23 = (dx1 * dy3 - dx3 * dy1) / den;
+    return [x1 - x0 + a13 * x1, x3 - x0 + a23 * x3, x0, y1 - y0 + a13 * y1, y3 - y0 + a23 * y3, y0, a13, a23, 1];
+  }
+  function adjointe(m) {
+    const [a11, a21, a31, a12, a22, a32, a13, a23, a33] = m;
+    return [a22 * a33 - a23 * a32, a23 * a31 - a21 * a33, a21 * a32 - a22 * a31, a13 * a32 - a12 * a33, a11 * a33 - a13 * a31, a12 * a31 - a11 * a32, a12 * a23 - a13 * a22, a13 * a21 - a11 * a23, a11 * a22 - a12 * a21];
+  }
+  function produit(a, b) {
+    const [a11, a21, a31, a12, a22, a32, a13, a23, a33] = a, [b11, b21, b31, b12, b22, b32, b13, b23, b33] = b;
+    return [a11 * b11 + a21 * b12 + a31 * b13, a11 * b21 + a21 * b22 + a31 * b23, a11 * b31 + a21 * b32 + a31 * b33, a12 * b11 + a22 * b12 + a32 * b13, a12 * b21 + a22 * b22 + a32 * b23, a12 * b31 + a22 * b32 + a32 * b33, a13 * b11 + a23 * b12 + a33 * b13, a13 * b21 + a23 * b22 + a33 * b23, a13 * b31 + a23 * b32 + a33 * b33];
+  }
+  /* Quadrilatère source (coordonnées en modules) → quadrilatère image */
+  function quadVersQuad(src, dst) {
+    const q2s = adjointe(carreVersQuad(...src));
+    const s2q = carreVersQuad(...dst);
+    const m = produit(s2q, q2s);
+    return (x, y) => {
+      const [a11, a21, a31, a12, a22, a32, a13, a23, a33] = m;
+      const d = a13 * x + a23 * y + a33;
+      return [(a11 * x + a21 * y + a31) / d, (a12 * x + a22 * y + a32) / d];
+    };
+  }
+
+  /* ---------- Motif d'alignement ---------- */
+  function chercherAlignement(M, ex, ey, m) {
+    const rayon = Math.ceil(m * 5);
+    let meilleur = null, md = Infinity;
+    for (let y = Math.max(0, Math.round(ey - rayon)); y <= Math.min(M.h - 1, Math.round(ey + rayon)); y++) {
+      let x = Math.max(0, Math.round(ex - rayon));
+      const xf = Math.min(M.w - 1, Math.round(ex + rayon));
+      while (x <= xf) {
+        if (!M.get(x, y)) { x++; continue; }
+        let a = x;
+        while (a <= xf && M.get(a, y)) a++;
+        const noirL = a - x;
+        if (noirL <= m * 1.8 && noirL >= m * 0.4) {
+          // clair - noir - clair horizontal et vertical autour d'un module noir central
+          const cx = (x + a - 1) / 2;
+          const ok = (dx, dy) => {
+            let l1 = 0, k = 1;
+            while (k < m * 3 && !M.get(Math.round(cx + dx * (noirL / 2 + k)), Math.round(y + dy * (noirL / 2 + k)))) { l1++; k++; }
+            return l1 >= m * 0.4 && l1 <= m * 1.8 && M.get(Math.round(cx + dx * (noirL / 2 + k)), Math.round(y + dy * (noirL / 2 + k)));
+          };
+          if (ok(1, 0) && ok(-1, 0) && ok(0, 1) && ok(0, -1)) {
+            const d = Math.hypot(cx - ex, y - ey);
+            if (d < md) {
+              md = d;
+              meilleur = { x: cx, y };
+            }
+          }
+        }
+        x = a;
+      }
+    }
+    return meilleur;
+  }
+
+  /* ---------- Échantillonnage ---------- */
+  function echantillonner(M, f, dim) {
+    const m = [];
+    for (let y = 0; y < dim; y++) {
+      const L = [];
+      for (let x = 0; x < dim; x++) {
+        const [px, py] = f(x + 0.5, y + 0.5);
+        L.push(M.get(Math.floor(px), Math.floor(py)) === 1);
+      }
+      m.push(L);
+    }
+    return m;
+  }
+
+  /* ---------- Lecture du contenu ---------- */
+  const poids = (n) => {
+    let c = 0;
+    while (n) { c += n & 1; n >>>= 1; }
+    return c;
+  };
+  function lireFormat(m) {
+    const n = m.length;
+    let a = 0, b = 0;
+    for (let i = 0; i < 15; i++) {
+      const v = i < 6 ? m[i][8] : i < 8 ? m[i + 1][8] : m[n - 15 + i][8];
+      const hz = i < 8 ? m[8][n - i - 1] : i < 9 ? m[8][7] : m[8][14 - i];
+      if (v) a |= 1 << i;
+      if (hz) b |= 1 << i;
+    }
+    let meilleur = null, md = 99;
+    for (let ec = 0; ec < 4; ec++)
+      for (let mk = 0; mk < 8; mk++) {
+        const code = Q().bchTypeInfo((ec << 3) | mk);
+        const d = Math.min(poids(code ^ a), poids(code ^ b));
+        if (d < md) {
+          md = d;
+          meilleur = { ec, masque: mk };
+        }
+      }
+    return md <= 3 ? meilleur : null;
+  }
+  function lireVersion(m) {
+    const n = m.length, v0 = (n - 17) / 4;
+    if (v0 < 7) return v0;
+    let a = 0, b = 0;
+    for (let i = 0; i < 18; i++) {
+      if (m[Math.floor(i / 3)][(i % 3) + n - 11]) a |= 1 << i;
+      if (m[(i % 3) + n - 11][Math.floor(i / 3)]) b |= 1 << i;
+    }
+    let meilleur = v0, md = 99;
+    for (let v = 7; v <= 40; v++) {
+      const code = Q().bchTypeNumber(v), d = Math.min(poids(code ^ a), poids(code ^ b));
+      if (d < md) {
+        md = d;
+        meilleur = v;
+      }
+    }
+    return md <= 3 ? meilleur : v0;
+  }
+  function reserves(v) {
+    const n = v * 4 + 17, R = Array.from({ length: n }, () => new Uint8Array(n));
+    const zone = (r0, c0, h, l) => {
+      for (let r = r0; r < r0 + h; r++) for (let c = c0; c < c0 + l; c++) if (r >= 0 && c >= 0 && r < n && c < n) R[r][c] = 1;
+    };
+    zone(0, 0, 9, 9);
+    zone(0, n - 8, 9, 8);
+    zone(n - 8, 0, 8, 9);
+    for (let i = 0; i < n; i++) R[6][i] = R[i][6] = 1;
+    const pos = Q().patternPosition(v);
+    pos.forEach((r) => pos.forEach((c) => {
+      const surFinder = (r <= 8 && c <= 8) || (r <= 8 && c >= n - 9) || (r >= n - 9 && c <= 8);
+      if (!surFinder) zone(r - 2, c - 2, 5, 5);
+    }));
+    if (v >= 7) {
+      zone(0, n - 11, 6, 3);
+      zone(n - 11, 0, 3, 6);
+    }
+    return R;
+  }
+  function lireOctets(m, v, masque) {
+    const n = m.length, R = reserves(v), octets = [];
+    let cur = 0, nb = 0, inc = -1, row = n - 1;
+    for (let col = n - 1; col > 0; col -= 2) {
+      if (col === 6) col--;
+      for (;;) {
+        for (let c = 0; c < 2; c++) {
+          const x = col - c;
+          if (!R[row][x]) {
+            let bit = m[row][x];
+            if (Q().mask(masque, row, x)) bit = !bit;
+            cur = (cur << 1) | (bit ? 1 : 0);
+            if (++nb === 8) {
+              octets.push(cur);
+              cur = 0;
+              nb = 0;
+            }
+          }
+        }
+        row += inc;
+        if (row < 0 || row >= n) {
+          row -= inc;
+          inc = -inc;
+          break;
+        }
+      }
+    }
+    return octets;
+  }
+
+  /* Reed-Solomon sur GF(256) (polynôme 0x11D, racines α^0 … α^(n-1)) */
+  const mul = (a, b) => (a && b ? Q().gexp(Q().glog(a) + Q().glog(b)) : 0);
+  const div = (a, b) => (a ? Q().gexp(Q().glog(a) - Q().glog(b) + 255) : 0);
+  const pow = (k) => Q().gexp(((k % 255) + 255) % 255);
+  function evalAsc(p, x) {
+    let r = 0;
+    for (let i = p.length - 1; i >= 0; i--) r = mul(r, x) ^ p[i];
+    return r;
+  }
+  function corriger(bloc, nEc) {
+    const N = bloc.length, S = [];
+    let erreur = false;
+    for (let j = 0; j < nEc; j++) {
+      let s = 0;
+      const a = pow(j);
+      for (let k = 0; k < N; k++) s = mul(s, a) ^ bloc[k];
+      S.push(s);
+      if (s) erreur = true;
+    }
+    if (!erreur) return bloc;
+    let C = [1], B = [1], L = 0, m = 1, b = 1;
+    for (let n = 0; n < nEc; n++) {
+      let d = S[n];
+      for (let i = 1; i <= L; i++) d ^= mul(C[i] || 0, S[n - i]);
+      if (d === 0) {
+        m++;
+        continue;
+      }
+      const coef = div(d, b), T = C.slice();
+      const nouveau = C.slice();
+      for (let i = 0; i < B.length; i++) {
+        while (nouveau.length <= i + m) nouveau.push(0);
+        nouveau[i + m] ^= mul(coef, B[i]);
+      }
+      C = nouveau;
+      if (2 * L <= n) {
+        L = n + 1 - L;
+        B = T;
+        b = d;
+        m = 1;
+      } else m++;
+    }
+    const lambda = C.slice(0, L + 1);
+    const positions = [];
+    for (let i = 0; i < N; i++) if (evalAsc(lambda, pow(-i)) === 0) positions.push(i);
+    if (positions.length !== L) throw new Error('trop d’erreurs');
+    const omega = [];
+    for (let i = 0; i < nEc; i++) {
+      let v = 0;
+      for (let j = 0; j <= i; j++) v ^= mul(S[j], lambda[i - j] || 0);
+      omega.push(v);
+    }
+    const derivee = lambda.map((c, i) => (i & 1 ? c : 0)).slice(1);
+    const r = bloc.slice();
+    positions.forEach((i) => {
+      const X = pow(i), Xi = pow(-i);
+      const den = evalAsc(derivee, Xi);
+      if (!den) throw new Error('correction impossible');
+      const e = mul(X, div(evalAsc(omega, Xi), den));
+      r[N - 1 - i] ^= e;
+    });
+    return r;
+  }
+  function desentrelacer(octets, v, ec) {
+    const blocs = Q().rsBlocks(v, ec);
+    const maxD = Math.max(...blocs.map((b) => b.data)), maxE = Math.max(...blocs.map((b) => b.total - b.data));
+    const D = blocs.map(() => []), E2 = blocs.map(() => []);
+    let k = 0;
+    for (let i = 0; i < maxD; i++) blocs.forEach((b, r) => i < b.data && D[r].push(octets[k++]));
+    for (let i = 0; i < maxE; i++) blocs.forEach((b, r) => i < b.total - b.data && E2[r].push(octets[k++]));
+    const donnees = [];
+    blocs.forEach((b, r) => {
+      const c = corriger([...D[r], ...E2[r]], b.total - b.data);
+      donnees.push(...c.slice(0, b.data));
+    });
+    return donnees;
+  }
+  const ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+  function segments(octets, v) {
+    let pos = 0;
+    const lire = (n) => {
+      let r = 0;
+      for (let i = 0; i < n; i++) {
+        const o = octets[pos >> 3];
+        r = (r << 1) | (o == null ? 0 : (o >> (7 - (pos & 7))) & 1);
+        pos++;
+      }
+      return r;
+    };
+    const lg = (mode) => {
+      const t = v < 10 ? 0 : v < 27 ? 1 : 2;
+      return { 1: [10, 12, 14], 2: [9, 11, 13], 4: [8, 16, 16], 8: [8, 10, 12] }[mode][t];
+    };
+    const bytes = [];
+    let texte = '';
+    const viderOctets = () => {
+      if (bytes.length) {
+        texte += new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+        bytes.length = 0;
+      }
+    };
+    while (pos + 4 <= octets.length * 8) {
+      const mode = lire(4);
+      if (mode === 0) break;
+      if (mode === 7) {
+        const a = lire(8);
+        if ((a & 0x80) && !(a & 0x40)) lire(8);
+        else if ((a & 0xc0) === 0xc0) lire(16);
+        continue;
+      }
+      if (![1, 2, 4, 8].includes(mode)) break;
+      let n = lire(lg(mode));
+      if (mode === 4) {
+        while (n--) bytes.push(lire(8));
+        continue;
+      }
+      viderOctets();
+      if (mode === 1) {
+        while (n >= 3) { texte += String(lire(10)).padStart(3, '0'); n -= 3; }
+        if (n === 2) texte += String(lire(7)).padStart(2, '0');
+        else if (n === 1) texte += String(lire(4));
+      } else if (mode === 2) {
+        while (n >= 2) { const x = lire(11); texte += ALNUM[Math.floor(x / 45)] + ALNUM[x % 45]; n -= 2; }
+        if (n === 1) texte += ALNUM[lire(6)];
+      } else {
+        while (n--) { const x = lire(13); const a = Math.floor(x / 0xc0), b = x % 0xc0; texte += String.fromCharCode(a * 0x100 + b); }
+      }
+    }
+    viderOctets();
+    return texte;
+  }
+
+  function decoderMatrice(m) {
+    const f = lireFormat(m);
+    if (!f) throw new Error('format illisible');
+    const v = lireVersion(m);
+    if (v < 1 || v > 40 || m.length !== v * 4 + 17) throw new Error('version incohérente');
+    return segments(desentrelacer(lireOctets(m, v, f.masque), v, f.ec), v);
+  }
+
+  function essayer(M) {
+    const P = trier(chercherMotifs(M));
+    if (!P) return null;
+    const [hg, hd, bg] = P;
+    const m = (hg.m + hd.m + bg.m) / 3;
+    let dim = Math.round((dist(hg, hd) / m + dist(hg, bg) / m) / 2) + 7;
+    switch (dim & 3) {
+      case 0: dim++; break;
+      case 2: dim--; break;
+      case 3: dim -= 2; break;
+    }
+    const dims = [dim, dim + 4, dim - 4].filter((d) => d >= 21 && d <= 177);
+    for (const d of dims) {
+      const bdx = hd.x - hg.x + bg.x, bdy = hd.y - hg.y + bg.y;
+      const cands = [];
+      if (d > 21) {
+        const corr = 1 - 3 / (d - 7);
+        const ax = hg.x + corr * (bdx - hg.x), ay = hg.y + corr * (bdy - hg.y);
+        const al = chercherAlignement(M, ax, ay, m);
+        if (al) cands.push(quadVersQuad([3.5, 3.5, d - 3.5, 3.5, d - 6.5, d - 6.5, 3.5, d - 3.5], [hg.x, hg.y, hd.x, hd.y, al.x, al.y, bg.x, bg.y]));
+      }
+      cands.push(quadVersQuad([3.5, 3.5, d - 3.5, 3.5, d - 3.5, d - 3.5, 3.5, d - 3.5], [hg.x, hg.y, hd.x, hd.y, bdx, bdy, bg.x, bg.y]));
+      for (const f of cands) {
+        try {
+          return decoderMatrice(echantillonner(M, f, d));
+        } catch (e) { /* stratégie suivante */ }
+      }
+    }
+    return null;
+  }
+
+  /** Décode un QR code dans une image (ImageData) ; renvoie le texte ou null. */
+  function decoder(img) {
+    const M = binariser(img);
+    let r = essayer(M);
+    if (r == null) {
+      M.inverse = true; // QR clair sur fond sombre
+      r = essayer(M);
+    }
+    return r;
+  }
+
+  /** Image (fichier, vidéo, canvas) → ImageData réduite (côté ≤ max). */
+  function imageData(source, max = 1000) {
+    const w0 = source.videoWidth || source.naturalWidth || source.width, h0 = source.videoHeight || source.naturalHeight || source.height;
+    const k = Math.min(1, max / Math.max(w0, h0));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w0 * k));
+    c.height = Math.max(1, Math.round(h0 * k));
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(source, 0, 0, c.width, c.height);
+    return g.getImageData(0, 0, c.width, c.height);
+  }
+  let detecteur = null;
+  async function lireSource(source) {
+    if ('BarcodeDetector' in window) {
+      try {
+        detecteur = detecteur || new window.BarcodeDetector({ formats: ['qr_code'] });
+        const r = await detecteur.detect(source);
+        if (r && r[0] && r[0].rawValue) return r[0].rawValue;
+      } catch (e) { /* lecteur intégré indisponible : décodeur AKWA */ }
+    }
+    for (const max of [1000, 640, 1600]) {
+      const t = decoder(imageData(source, max));
+      if (t != null) return t;
+    }
+    return null;
+  }
+  async function lireFichier(fichier) {
+    const url = URL.createObjectURL(fichier);
+    try {
+      const im = new Image();
+      await new Promise((ok, ko) => {
+        im.onload = ok;
+        im.onerror = () => ko(new AK.ErreurMetier('Image illisible.'));
+        im.src = url;
+      });
+      return await lireSource(im);
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  AK.qrdecode = { decoder, decoderMatrice, imageData, lireSource, lireFichier, _interne: { binariser, chercherMotifs, trier, corriger } };
+})(window.AK);
+
+//# sourceURL=akwa/js/docs/qrdecode.js
+</script>
+<script>
+/* =====================================================================================
+   Vérification d'un document (QR code scanné ou référence saisie).
+
+   Quatre questions distinctes, jamais confondues :
+     1. Intégrité   : le contenu du QR a-t-il été modifié ? (signature ECDSA)
+     2. Émetteur    : qui a signé ? (clé connue, active, retirée, compromise)
+     3. Validité    : le document figure-t-il au registre, avec la même empreinte ?
+     4. Statut      : annulé, remplacé, expiré, version dépassée ?
+   Une signature valide ne prouve PAS qu'un document n'a pas été annulé après son émission :
+   seul un registre à jour le dit. Hors ligne, la liste d'annulation n'est connue qu'à la date
+   de la dernière copie du registre (indiquée dans le résultat).
+
+   Code pur, partagé par l'application et l'outil de vérification autonome.
+   source = { cles: [clés publiques], trouver(ref) → entrée | null, registreDate, ecole }
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u;
+  const AZERTY = { '&': '1', 'é': '2', '"': '3', "'": '4', '(': '5', '§': '6', 'è': '7', '!': '8', 'ç': '9', 'à': '0', ')': '-', '_': '8' };
+
+  /** Référence saisie au clavier, y compris par une douchette réglée en QWERTY sur un clavier AZERTY. */
+  function lireReference(t) {
+    let s = String(t || '').trim().toUpperCase().replace(/\s+/g, '');
+    const brut = s;
+    if (!/^AK-[A-Z]{3}-\d{4}-\d{6}-[0-9A-Z]$/.test(s)) s = [...String(t || '').trim()].map((c) => AZERTY[c] || c).join('').toUpperCase().replace(/\s+/g, '');
+    const m = s.match(/AK-[A-Z]{3}-\d{4}-\d{6}-[0-9A-Z]/);
+    return m ? m[0] : /^AK-/.test(brut) ? brut : null;
+  }
+
+  async function verifier(texte, source) {
+    const R = { entree: String(texte || '').trim().slice(0, 600), points: [], verdict: 'inconnu' };
+    const point = (cle, etat, titre, detail) => R.points.push({ cle, etat, titre, detail });
+    const q = AK.qr.lire(R.entree);
+    let ref;
+    if (q) {
+      R.format = 'qr';
+      R.champs = q.champs;
+      ref = AK.valid.normRef(q.champs.R);
+    } else {
+      ref = lireReference(R.entree);
+      R.format = ref ? 'reference' : 'inconnu';
+    }
+    R.ref = ref;
+    if (!ref) {
+      R.titre = 'Contenu non reconnu';
+      R.resume = 'Ce texte n’est ni un QR code AKWA SCHOOL ni une référence de document (AK-XXX-AAAA-NNNNNN-C).';
+      point('format', 'ko', 'Format', 'Non reconnu');
+      return R;
+    }
+    const refOk = AK.valid.refValide(ref);
+    point('format', refOk ? 'ok' : 'ko', 'Référence', refOk ? `${ref} (clé de contrôle correcte)` : `${ref} : clé de contrôle incorrecte (faute de frappe ou référence inventée)`);
+    if (!refOk) {
+      R.verdict = 'invalide';
+      R.titre = 'Référence invalide';
+      R.resume = 'La clé de contrôle de la référence ne correspond pas.';
+      return R;
+    }
+    R.type = q ? q.champs.T : ref.split('-')[1];
+
+    /* 1 et 2. Intégrité et émetteur (signature) */
+    let sigOk = null, cle = null;
+    if (q && q.signature) {
+      cle = (source.cles || []).find((c) => c.id === q.champs.K) || null;
+      if (!cle) {
+        point('integrite', 'av', 'Intégrité', 'Document signé avec une clé inconnue de cet appareil : signature non vérifiable ici.');
+        point('emetteur', 'av', 'Émetteur', `Clé ${q.champs.K || '?'} inconnue. Utilisez l’outil de vérification fourni par l’école émettrice.`);
+      } else {
+        sigOk = await AK.crypto.verifierSignature(cle.pub, q.message, q.signature);
+        if (!sigOk) point('integrite', 'ko', 'Intégrité', 'Signature INVALIDE : le contenu du QR code a été modifié ou fabriqué.');
+        else point('integrite', 'ok', 'Intégrité', 'Signature électronique valide : le contenu n’a pas été modifié depuis l’émission.');
+        if (sigOk) {
+          const emis = q.champs.E || '';
+          if (cle.statut === 'compromise') point('emetteur', 'ko', 'Émetteur', `Clé ${cle.id} déclarée COMPROMISE le ${u.fmtDate(String(cle.compromiseLe || '').slice(0, 10))} : la signature ne suffit plus à garantir l’origine.`);
+          else if (cle.statut === 'retiree' && cle.retireeLe && emis > String(cle.retireeLe).slice(0, 10)) point('emetteur', 'ko', 'Émetteur', `Clé ${cle.id} retirée le ${u.fmtDate(String(cle.retireeLe).slice(0, 10))} : un document daté après cette date ne devrait pas être signé par elle.`);
+          else point('emetteur', 'ok', 'Émetteur', `${cle.ecole || 'École'} · clé ${cle.id} (${cle.empreinte})${cle.statut === 'retiree' ? ' · clé retirée depuis, document antérieur' : ''}`);
+        }
+      }
+    } else if (q) {
+      point('integrite', 'info', 'Intégrité', 'QR code non signé : l’authenticité repose uniquement sur la comparaison avec le registre de l’école (empreinte ci-dessous).');
+    } else {
+      point('integrite', 'info', 'Intégrité', 'Référence saisie à la main : pas de signature à contrôler. Comparez le document présenté avec les informations du registre.');
+    }
+
+    /* 3 et 4. Registre et statut */
+    const e = source.trouver ? source.trouver(ref) : null;
+    R.entreeRegistre = e;
+    let statutOk = false, registreOk = false;
+    if (!e) {
+      point('registre', 'av', 'Registre', source.registreDate
+        ? `Absent de la copie du registre du ${u.fmtDate(source.registreDate)}${sigOk ? ' : document signé, peut-être émis après cette date.' : '.'}`
+        : `Absent du registre de cet appareil${sigOk ? ' (document signé : registre à mettre à jour ?)' : ''}.`);
+    } else {
+      if (e.demo) point('registre', 'av', 'Registre', 'Document de DÉMONSTRATION : sans valeur officielle.');
+      if (q && q.champs.H) {
+        if (q.champs.H === e.h) {
+          registreOk = !e.demo;
+          if (!e.demo) point('registre', 'ok', 'Registre', `Inscrit au registre le ${u.fmtDate(e.e)}${e.n ? ' · ' + e.n : ''} ; empreinte identique.`);
+        } else if ((e.v || []).includes(q.champs.H)) point('registre', 'av', 'Registre', 'Version ANCIENNE : ce document a été réédité depuis (par exemple après une correction de note). Demandez la version en vigueur.');
+        else point('registre', 'ko', 'Registre', 'Empreinte DIFFÉRENTE de celle du registre : document falsifié ou mal copié.');
+      } else {
+        registreOk = !e.demo;
+        if (!e.demo) point('registre', 'ok', 'Registre', `Référence inscrite au registre le ${u.fmtDate(e.e)}${e.n ? ' · ' + e.n : ''}. Comparez le document avec les informations du registre.`);
+      }
+      const auj = source.aujourdhui || u.aujourdhui();
+      if (e.s === 'annule') point('statut', 'ko', 'Statut', `ANNULÉ${e.a ? ' le ' + u.fmtDate(e.a) : ''}${e.motif ? ' : ' + e.motif : ''}.`);
+      else if (e.s === 'remplace') point('statut', 'ko', 'Statut', `REMPLACÉ par un duplicata${e.remplacePar ? ' (' + e.remplacePar + ')' : ''} : cet exemplaire n’est plus valable.`);
+      else if (e.x && e.x < auj) point('statut', 'av', 'Statut', `EXPIRÉ depuis le ${u.fmtDate(e.x)}.`);
+      else {
+        statutOk = true;
+        point('statut', 'ok', 'Statut', `En vigueur${e.x ? ' jusqu’au ' + u.fmtDate(e.x) : ''}${source.registreDate ? ` (selon le registre du ${u.fmtDate(source.registreDate)})` : ''}.`);
+      }
+    }
+    if (!e && q && q.champs.X && q.champs.X < (source.aujourdhui || u.aujourdhui())) point('statut', 'av', 'Statut', `Date de fin de validité inscrite dans le QR dépassée (${u.fmtDate(q.champs.X)}).`);
+
+    /* Identité inscrite dans le QR (à comparer avec le document présenté) */
+    if (q && (q.champs.N || q.champs.M)) point('identite', 'info', 'Titulaire (QR)', `${q.champs.N || ''}${q.champs.M ? ' · matricule ' + q.champs.M : ''} — comparez avec la carte et la personne.`);
+
+    /* Verdict */
+    const ko = R.points.some((p) => p.etat === 'ko');
+    const av = R.points.some((p) => p.etat === 'av');
+    if (ko) R.verdict = 'invalide';
+    else if (!e && !sigOk) R.verdict = 'inconnu';
+    else if (registreOk && statutOk && (sigOk || !q || !q.signature)) R.verdict = av ? 'douteux' : 'valide';
+    else R.verdict = 'douteux';
+    const libType = AK.registre ? AK.registre.libelleType(R.type) : R.type;
+    const titreValide = sigOk ? 'Document authentique et en vigueur' : R.format === 'reference' ? 'Référence inscrite au registre et en vigueur' : 'Inscrit au registre et en vigueur (document non signé)';
+    R.titre = { valide: titreValide, douteux: 'Vérification incomplète : prudence', invalide: 'Document NON valable', inconnu: 'Document inconnu' }[R.verdict];
+    R.resume = `${libType || 'Document'} · ${ref}`;
+    return R;
+  }
+
+  /** Affichage du résultat (application et outil autonome). */
+  function rendu(R) {
+    const { html } = u, ic = AK.ic;
+    const icone = { valide: 'shieldCheck', douteux: 'warn', invalide: 'shieldX', inconnu: 'help' }[R.verdict];
+    const ico = { ok: 'checkCircle', ko: 'xCircle', av: 'warn', info: 'info' };
+    return html`<div class="verif-res ${R.verdict}" role="status" aria-live="polite"><div class="verif-tete">${ic(icone)}<div><b>${R.titre}</b><span>${R.resume}</span></div></div>
+      <div class="verif-points">${R.points.map((p) => html`<div class="verif-point ${p.etat}">${ic(ico[p.etat] || 'info')}<b>${p.titre}</b><span>${p.detail}</span></div>`)}</div></div>`;
+  }
+
+  AK.verif = { verifier, rendu, lireReference };
+})(window.AK);
+
+//# sourceURL=akwa/js/docs/verification.js
+</script>
+<script>
+/* =====================================================================================
+   Outil de vérification AUTONOME : fichier HTML hors ligne remis par l'école à l'IEPP, à un
+   autre établissement ou à un parent. Il fonctionne en ouvrant simplement le fichier
+   (adresse file://), sans connexion, sans aucune ressource externe.
+
+   Données intégrées par AKWA SCHOOL › Documents › Vérifier › « Créer l'outil »
+   (window.AKWA_DONNEES) :
+     { format: 'akwa-verification', version: 1, cree, registreDate, ecole: { nom, iepp, drenaet },
+       cles: [clés PUBLIQUES de signature], registre: [{ r, t, e, x, h, s, a, v, n? }] }
+   Le modèle livré avec l'application n'en contient aucune : il explique alors comment
+   produire l'outil de l'école.
+
+   Le contrôle (signature, registre, statut) est confié au moteur commun AK.verif
+   (docs/verification.js), le même que dans l'application. Cet écran ne fait que :
+     - préparer la source (clés publiques contrôlées, index du registre, date de la copie) ;
+     - lire la référence, le texte d'une douchette, la caméra ou une photo ;
+     - présenter le résultat avec des avertissements honnêtes : la copie du registre est
+       datée (une annulation postérieure n'est pas connue), la signature prouve l'intégrité
+       et l'émetteur mais pas la validité administrative, et il faut comparer la personne.
+   ===================================================================================== */
+(function (AK) {
+  'use strict';
+  const u = AK.u, { html } = u, ic = AK.ic, V = AK.valid;
+  const $ = (s, e) => u.$(s, e);
+
+  /* Libellés des types de document : copie de AK.registre.TYPES (docs/registre.js), module
+     qui n'est pas embarqué dans l'outil. Le moteur de vérification s'en sert s'il existe. */
+  const TYPES = {
+    CEL: 'Carte d’identité scolaire',
+    CPE: 'Carte professionnelle',
+    CSC: 'Certificat de scolarité',
+    ATF: 'Attestation de fréquentation',
+    CTR: 'Certificat de transfert (exeat)',
+    FIS: 'Fiche scolaire',
+    FII: 'Fiche individuelle de l’élève',
+    FIN: 'Fiche d’inscription',
+    BUL: 'Bulletin de notes',
+    BUA: 'Bulletin annuel',
+    ATS: 'Attestation de service',
+    REC: 'Reçu de versement'
+  };
+  const libelleType = (t) => TYPES[t] || t || 'Document';
+  if (!AK.registre) AK.registre = { TYPES, libelleType };
+
+  const COPIE_ANCIENNE = 30; // jours au-delà desquels la copie du registre est signalée comme ancienne
+  const HISTORIQUE_MAX = 12;
+  const VERDICTS = { valide: ['ok', 'Valable'], douteux: ['avert', 'À vérifier'], invalide: ['mauvais', 'Non valable'], inconnu: ['', 'Inconnu'] };
+  const STATUTS_CLE = { active: 'Active', retiree: 'Retirée', compromise: 'COMPROMISE' };
+  const STATUTS_DOC = { valide: 'En vigueur', annule: 'Annulé', remplace: 'Remplacé' };
+
+  /* ---------- Données intégrées : contrôle de forme, index du registre ---------- */
+  const estTexte = (v) => typeof v === 'string' && v.length > 0;
+  const cleBienFormee = (c) => c && estTexte(c.id) && c.pub && typeof c.pub === 'object' && estTexte(c.pub.x) && estTexte(c.pub.y) && estTexte(c.pub.crv);
+
+  function chargerDonnees(brut) {
+    if (brut == null) return { etat: 'modele' };
+    if (typeof brut !== 'object' || brut.format !== 'akwa-verification' || brut.version !== 1 || !Array.isArray(brut.registre) || !Array.isArray(brut.cles)) return { etat: 'illisible' };
+    const e = brut.ecole && typeof brut.ecole === 'object' ? brut.ecole : {};
+    const ecole = { nom: String(e.nom || '').trim(), iepp: String(e.iepp || '').trim(), drenaet: String(e.drenaet || '').trim() };
+    const index = new Map();
+    const comptes = { valide: 0, annule: 0, remplace: 0 };
+    let ignorees = 0;
+    for (const x of brut.registre) {
+      const ref = x && estTexte(x.r) ? V.normRef(x.r) : '';
+      if (!V.refValide(ref)) {
+        ignorees++;
+        continue;
+      }
+      index.set(ref, x);
+      if (comptes[x.s] != null) comptes[x.s]++;
+    }
+    const cles = brut.cles.filter(cleBienFormee).map((c) => ({ ...c, ecole: c.ecole || ecole.nom, controle: 'en-cours' }));
+    ignorees += brut.cles.length - cles.length;
+    return {
+      etat: 'ok', ecole, cles, index, comptes, ignorees,
+      registreDate: u.estISO(brut.registreDate) ? brut.registreDate : null,
+      cree: typeof brut.cree === 'string' && !isNaN(Date.parse(brut.cree)) ? brut.cree : null
+    };
+  }
+
+  const D = chargerDonnees(window.AKWA_DONNEES);
+  const cryptoDispo = AK.crypto && AK.crypto.dispo();
+
+  /* L'empreinte affichée d'une clé sert à authentifier l'outil (comparée à celle que l'école
+     communique). Elle est recalculée ici : une clé dont l'empreinte ne correspond pas est
+     écartée (fichier altéré) et n'est jamais utilisée pour valider une signature. */
+  const clesControlees = D.etat !== 'ok' || !cryptoDispo ? Promise.resolve() : Promise.all(D.cles.map(async (c) => {
+    try {
+      const calc = await AK.crypto.empreinteCle(c.pub);
+      c.controle = calc === c.empreinte ? 'ok' : 'alteree';
+      c.empreinteCalculee = calc;
+    } catch (e) {
+      c.controle = 'alteree';
+    }
+  }));
+
+  /** Entrée de la copie du registre → format attendu par AK.verif.verifier. */
+  const entree = (x) => (x ? {
+    e: estTexte(x.e) ? x.e : '', n: estTexte(x.n) ? x.n : '', h: estTexte(x.h) ? x.h : '', v: Array.isArray(x.v) ? x.v : [],
+    s: x.s, a: estTexte(x.a) ? x.a : null, motif: '', remplacePar: '', x: estTexte(x.x) ? x.x : null, demo: false
+  } : null);
+  const source = () => ({
+    cles: D.cles.filter((c) => c.controle === 'ok'),
+    trouver: (ref) => entree(D.index.get(V.normRef(ref))),
+    registreDate: D.registreDate,
+    aujourdhui: u.aujourdhui(),
+    ecole: D.ecole
+  });
+  const ageCopie = () => (D.registreDate ? u.ecartJours(D.registreDate, u.aujourdhui()) : null);
+
+  /* ---------- Affichage général ---------- */
+  const ecoleNom = () => D.ecole.nom || 'École non nommée';
+  const sousTitre = () => [D.ecole.iepp && `IEPP : ${D.ecole.iepp}`, D.ecole.drenaet && `DRENAET : ${D.ecole.drenaet}`].filter(Boolean).join(' · ');
+  const dateCopie = () => (D.registreDate ? u.fmtDate(D.registreDate) : 'date inconnue');
+
+  const boutonTheme = () => html`<button type="button" class="btn btn-ic vf-theme" data-action="vf-theme" aria-pressed="${themeSombre() ? 'true' : 'false'}" aria-label="Thème sombre" title="Thème sombre">${ic('moon')}</button>`;
+
+  function vueModele() {
+    return html`<header class="vf-entete"><div class="vf-entete-in">
+        <div class="vf-marque">${ic('shieldCheck', 'vf-logo')}<div><p class="vf-sur">AKWA SCHOOL · outil de vérification</p><h1>Modèle sans données</h1></div></div>
+        ${boutonTheme()}</div></header>
+      <main class="vf-corps vf-etroit" id="vf-principal">
+        <section class="carte pile" aria-labelledby="vf-modele-titre">
+          <h2 id="vf-modele-titre">Ce fichier ne peut encore vérifier aucun document</h2>
+          <p class="mb0">C’est le <b>modèle</b> de l’outil de vérification livré avec AKWA SCHOOL. Il ne contient ni les clés publiques de signature d’une école ni de copie de son registre : sans elles, aucun document ne peut être contrôlé.</p>
+          <h3>Pour obtenir l’outil de votre école</h3>
+          <ol class="vf-etapes">
+            <li>Ouvrez AKWA SCHOOL avec le compte du <b>directeur</b>.</li>
+            <li>Allez dans <b>Documents › Vérifier</b>, rubrique « Vérification par d’autres personnes » (ou dans <b>Documents › Registre</b>, bouton « Outil de vérification autonome »).</li>
+            <li>Cliquez sur <b>Créer l’outil</b> ; choisissez d’inclure ou non les noms des titulaires.</li>
+            <li>Remettez le fichier créé (<span class="mono">AKWA_verification_…html</span>) à l’IEPP, à l’établissement ou au parent concerné. Il s’ouvre dans un navigateur, sans connexion.</li>
+          </ol>
+          ${encadre('Le fichier produit contient les clés publiques de l’école et une copie datée du registre (références et statuts). Il ne contient aucune clé privée ni aucun mot de passe. Refaites-le après chaque annulation importante : il ne connaît que les annulations antérieures à sa création.', '', 'info')}
+        </section>
+      </main>${pied()}`;
+  }
+
+  function vueIllisible() {
+    return html`<header class="vf-entete"><div class="vf-entete-in"><div class="vf-marque">${ic('shieldX', 'vf-logo')}<div><p class="vf-sur">AKWA SCHOOL · outil de vérification</p><h1>Fichier inutilisable</h1></div></div>${boutonTheme()}</div></header>
+      <main class="vf-corps vf-etroit" id="vf-principal">
+        ${encadre(html`<b>Les données de vérification de ce fichier sont illisibles.</b> Il a pu être modifié, abîmé pendant une copie ou produit par une version incompatible. N’utilisez pas ce fichier : demandez un nouvel exemplaire à l’école émettrice.`, 'erreur', 'shieldX')}
+      </main>${pied()}`;
+  }
+
+  const encadre = (contenu, ton = '', icone = 'info') => html`<div class="encadre ${ton}">${ic(icone)}<div>${contenu}</div></div>`;
+  const pied = () => html`<footer class="vf-pied"><p class="mb0">AKWA SCHOOL 2.0.0 · outil de vérification hors ligne. Aucune donnée n’est envoyée : la lecture du QR code et les contrôles se font sur cet appareil.</p></footer>`;
+
+  function bandeauCles() {
+    if (!D.cles.length) return html`<span class="vf-info-l">${ic('key')}<span>Aucune clé de signature : vérification par la référence et le registre uniquement.</span></span>`;
+    return html`${D.cles.map((c) => html`<span class="vf-info-l">${ic('key')}<span>Clé ${c.id} · <span class="mono vf-empreinte">${c.empreinteCalculee || c.empreinte || '—'}</span> ${tagCle(c)}</span></span>`)}`;
+  }
+  function tagCle(c) {
+    if (c.controle === 'alteree') return html`<span class="tag mauvais">${ic('xCircle')}Empreinte incohérente</span>`;
+    if (c.statut === 'compromise') return html`<span class="tag mauvais">${ic('warn')}Compromise</span>`;
+    if (c.statut === 'retiree') return html`<span class="tag">Retirée</span>`;
+    return html`<span class="tag ok">${ic('checkCircle')}${STATUTS_CLE[c.statut] || c.statut || 'Active'}</span>`;
+  }
+
+  function alertesGenerales() {
+    const a = [];
+    if (!cryptoDispo) a.push(encadre(html`<b>Ce navigateur ne permet pas de contrôler les signatures électroniques</b> (Web Crypto indisponible). Seules la référence et la copie du registre peuvent être vérifiées. Ouvrez cet outil dans Chrome, Edge ou Firefox récent.`, 'avert', 'warn'));
+    const alterees = D.cles.filter((c) => c.controle === 'alteree');
+    if (alterees.length) a.push(encadre(html`<b>Fichier altéré : ${alterees.map((c) => c.id).join(', ')}.</b> L’empreinte enregistrée ne correspond pas à la clé publique. Cette clé est ignorée : aucune signature n’est validée avec elle. Demandez un nouvel exemplaire de l’outil à l’école.`, 'erreur', 'shieldX'));
+    if (D.ignorees) a.push(encadre(`${u.pluriel(D.ignorees, 'élément illisible')} de la copie ${D.ignorees > 1 ? 'ont été ignorés' : 'a été ignoré'} (fichier peut-être abîmé).`, 'avert', 'warn'));
+    const age = ageCopie();
+    if (age != null && age > COPIE_ANCIENNE) a.push(encadre(html`<b>Copie du registre ancienne (${u.pluriel(age, 'jour')}).</b> Les annulations décidées depuis le ${dateCopie()} ne sont pas connues de cet outil : demandez une version à jour à l’école.`, 'avert', 'cal'));
+    return a.length ? html`<div class="pile">${a}</div>` : '';
+  }
+
+  function vuePrincipale() {
+    const st = sousTitre();
+    const c = D.comptes;
+    const camOk = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+    return html`<header class="vf-entete"><div class="vf-entete-in">
+        <div class="vf-marque">${ic('shieldCheck', 'vf-logo')}<div><p class="vf-sur">Vérification des documents</p><h1>${ecoleNom()}</h1>${st ? html`<p class="vf-sous">${st}</p>` : ''}</div></div>
+        ${boutonTheme()}</div>
+        <div class="vf-infos" aria-label="Informations sur cet outil">
+          <span class="vf-info-l">${ic('cal')}<span>Copie du registre du <b>${dateCopie()}</b> · ${u.pluriel(D.index.size, 'référence')}</span></span>
+          <span id="vf-cles" class="vf-cles">${bandeauCles()}</span>
+        </div></header>
+      <main class="vf-corps" id="vf-principal">
+        <div id="vf-alertes">${alertesGenerales()}</div>
+        <div class="vf-grille">
+          <div class="pile">
+            <section class="carte" aria-labelledby="vf-saisie-titre">
+              <h2 id="vf-saisie-titre" class="vf-titre">${ic('search')}Référence ou contenu du QR code</h2>
+              <form id="vf-form" class="pile" autocomplete="off" novalidate>
+                <div class="champ">
+                  <label for="vf-texte">Référence du document (AK-XXX-AAAA-NNNNNN-C) ou texte lu par une douchette</label>
+                  <input id="vf-texte" name="texte" class="inp vf-saisie" type="text" inputmode="text" spellcheck="false" autocapitalize="characters" maxlength="1000" placeholder="AK-CSC-2026-000012-7" aria-describedby="vf-texte-aide vf-texte-err">
+                  <p class="aide mb0" id="vf-texte-aide">La référence est imprimée à côté du QR code. Une douchette (lecteur de codes) peut aussi écrire ici le contenu du QR code.</p>
+                  <p class="erreur-champ mb0" id="vf-texte-err" hidden></p>
+                </div>
+                <div class="ligne"><button type="submit" class="btn btn-pri">${ic('shieldCheck')}Vérifier</button><button type="button" class="btn btn-ghost" data-action="vf-effacer">Effacer</button></div>
+              </form>
+            </section>
+            <section class="carte vf-depot" id="vf-depot" aria-labelledby="vf-camera-titre">
+              <h2 id="vf-camera-titre" class="vf-titre">${ic('cam')}Caméra ou photo du QR code</h2>
+              <div class="pile">
+                <div class="vf-camera" id="vf-camera" hidden><video playsinline muted aria-label="Image de la caméra : placez le QR code dans le cadre"></video><div class="vf-viseur" aria-hidden="true"></div></div>
+                <div class="ligne">
+                  ${camOk ? html`<button type="button" class="btn" data-action="vf-camera" id="vf-btn-camera" aria-pressed="false">${ic('cam')}<span>Scanner avec la caméra</span></button>` : ''}
+                  <label class="btn vf-fichier">${ic('image')}Importer une photo du QR<input type="file" accept="image/*" id="vf-photo" class="sr"></label>
+                </div>
+                <p class="petit mb0 vf-etat" id="vf-etat-lecture" role="status" aria-live="polite"></p>
+                <p class="mut petit mb0">${camOk ? '' : 'Caméra non disponible dans ce navigateur : importez une photo du QR code. '}Le QR code est lu sur cet appareil ; aucune image n’est envoyée. Vous pouvez aussi déposer une image ici ou la coller (Ctrl+V).</p>
+              </div>
+            </section>
+            <section class="carte" id="vf-historique-zone" aria-labelledby="vf-hist-titre" hidden>
+              <h2 id="vf-hist-titre" class="vf-titre">${ic('clock')}Vérifications de cette session</h2>
+              <ul class="vf-historique" id="vf-historique"></ul>
+              <p class="mut petit mb0">Non conservées : la liste s’efface à la fermeture de l’outil.</p>
+            </section>
+          </div>
+          <section class="carte vf-resultat" aria-labelledby="vf-res-titre">
+            <h2 id="vf-res-titre" class="vf-titre" tabindex="-1">${ic('shieldCheck')}Résultat</h2>
+            <div id="vf-resultat">${attente()}</div>
+          </section>
+        </div>
+        <section class="carte" aria-labelledby="vf-apropos-titre">
+          <h2 id="vf-apropos-titre" class="vf-titre">${ic('info')}À propos de cet outil</h2>
+          <div class="vf-apropos">
+            <div class="pile-sm">
+              <h3>Copie du registre</h3>
+              <p class="mb0">Copie du <b>${dateCopie()}</b>${D.cree ? html` (créée le ${u.fmtHorodatage(D.cree)})` : ''} : ${u.pluriel(D.index.size, 'référence')}, dont ${c.valide} en vigueur, ${u.pluriel(c.annule, 'annulée')}, ${u.pluriel(c.remplace, 'remplacée')} par un duplicata.</p>
+              <p class="mut petit mb0">Elle contient les références, les empreintes et les statuts des documents${[...D.index.values()].some((x) => estTexte(x.n)) ? ', ainsi que le nom des titulaires' : ' (sans le nom des titulaires)'}. Les documents de démonstration n’y figurent pas.</p>
+            </div>
+            <div class="pile-sm">
+              <h3>Clés de signature de l’école</h3>
+              ${D.cles.length ? html`<ul class="vf-liste-cles">${D.cles.map(itemCle)}</ul>` : html`<p class="mb0">Aucune : les documents de cette école ne sont pas signés électroniquement.</p>`}
+              <p class="mut petit mb0">Pour être sûr que cet outil vient bien de l’école, comparez l’empreinte ci-dessus avec celle qu’elle vous a communiquée (AKWA SCHOOL › Paramètres › Sécurité). Elle figure aussi sous le QR code des documents signés.</p>
+            </div>
+          </div>
+        </section>
+      </main>${pied()}`;
+  }
+  const itemCle = (k) => html`<li><b>${k.id}</b> ${tagCle(k)}<br><span class="mono vf-empreinte">${k.empreinteCalculee || k.empreinte || '—'}</span><br><span class="mut petit">${detailCle(k)}</span></li>`;
+  function detailCle(k) {
+    const d = (v) => (v ? u.fmtDate(String(v).slice(0, 10)) : '');
+    return [k.creeeLe && `Créée le ${d(k.creeeLe)}`, k.retireeLe && `retirée le ${d(k.retireeLe)}`, k.compromiseLe && `déclarée compromise le ${d(k.compromiseLe)}`].filter(Boolean).join(' · ') || 'Dates non précisées';
+  }
+
+  const attente = () => html`<div class="vf-vide">${ic('shieldCheck', 'vf-vide-i')}<p class="mb0"><b>En attente d’un document</b></p><p class="mut petit mb0">Le résultat détaille séparément l’intégrité (signature), l’émetteur (clé), l’inscription au registre et le statut (annulé, remplacé, expiré).</p></div>`;
+
+  /* ---------- Résultat ---------- */
+  function lignesDetail(R) {
+    const x = R.ref ? D.index.get(R.ref) : null;
+    const q = R.champs || {};
+    const L = [];
+    L.push(['Type', libelleType(R.type)]);
+    L.push(['Référence', R.ref]);
+    const emis = (x && x.e) || q.E;
+    if (emis) L.push(['Émis le', u.fmtDate(emis)]);
+    const fin = (x && x.x) || q.X;
+    if (fin) L.push(['Valable jusqu’au', u.fmtDate(fin)]);
+    if (x && estTexte(x.n)) L.push(['Titulaire (registre)', x.n]);
+    if (q.N) L.push(['Titulaire (QR code)', q.N]);
+    if (q.M) L.push(['Matricule (QR code)', q.M]);
+    if (x) L.push([`Statut au registre du ${dateCopie()}`, `${STATUTS_DOC[x.s] || x.s || '—'}${x.s !== 'valide' && x.a ? ' le ' + u.fmtDate(x.a) : ''}`]);
+    else L.push([`Registre du ${dateCopie()}`, 'Référence absente de cette copie']);
+    if (q.K) {
+      const k = D.cles.find((c) => c.id === q.K);
+      L.push(['Signature', k ? `Clé ${k.id} · ${k.empreinteCalculee || k.empreinte}` : `Clé ${q.K} (inconnue de cet outil)`]);
+    } else if (R.format === 'qr') L.push(['Signature', 'Aucune (QR code non signé)']);
+    return L;
+  }
+
+  function conseils(R) {
+    const C = [];
+    if (R.verdict === 'invalide') C.push(encadre(html`<b>Ne vous fiez pas à ce document.</b> Signalez-le à l’école émettrice (${ecoleNom()}) en indiquant sa référence.`, 'erreur', 'shieldX'));
+    else if (R.verdict === 'inconnu') C.push(encadre('Ce document n’est pas connu de cette copie du registre et ne porte pas de signature vérifiable ici. Contactez l’école émettrice avant de l’accepter.', 'avert', 'help'));
+    else if (R.verdict === 'douteux') C.push(encadre('Certains contrôles n’ont pas pu aboutir (voir les points signalés). Contactez l’école émettrice avant d’accepter ce document.', 'avert', 'warn'));
+    const age = ageCopie();
+    C.push(encadre(html`<b>Registre daté.</b> Cet outil contient la copie du registre du ${dateCopie()}${age != null && age > 0 ? html` (il y a ${u.pluriel(age, 'jour')})` : ''} : un document annulé ou remplacé après cette date apparaît encore « en vigueur » ici. En cas de doute, demandez à l’école une version à jour de l’outil.`, age != null && age > COPIE_ANCIENNE ? 'avert' : '', 'cal'));
+    C.push(encadre('La signature électronique prouve que le contenu du QR code n’a pas été modifié et qu’il a été émis avec la clé de l’école. Elle ne prouve pas la validité administrative du document (exactitude des informations, décision de l’autorité compétente).', '', 'shield'));
+    C.push(encadre('Comparez le nom, le matricule, la classe et la photo avec la personne et le document présentés : un QR code authentique peut avoir été recopié sur un autre document.', '', 'user'));
+    return C;
+  }
+
+  function resultatHtml(R) {
+    const reconnu = !!R.ref;
+    return html`<div class="pile">
+      ${AK.verif.rendu(R)}
+      ${reconnu ? html`<div><h3 class="vf-sous-titre">Informations à comparer avec le document présenté</h3>
+        <dl class="vf-details">${lignesDetail(R).map(([k, v]) => html`<dt>${k}</dt><dd>${v}</dd>`)}</dl></div>` : ''}
+      ${reconnu ? html`<div class="pile-sm">${conseils(R)}</div>` : encadre('Saisissez la référence imprimée à côté du QR code (par exemple AK-CSC-2026-000012-7), ou scannez le QR code du document.', '', 'info')}
+      <div class="ligne"><button type="button" class="btn btn-sm" data-action="vf-copier">${ic('copy')}Copier le résultat</button><span class="petit mut" id="vf-copie-etat" role="status" aria-live="polite"></span></div>
+    </div>`;
+  }
+
+  /** Résumé texte (à coller dans un message ou un rapport d'inspection). */
+  function texteResultat(R, quand) {
+    const l = [`Vérification d’un document AKWA SCHOOL — ${u.fmtHorodatage(quand)}`, `Outil de vérification : ${ecoleNom()} · copie du registre du ${dateCopie()}`, `Résultat : ${R.titre}`];
+    if (R.ref) l.push(R.resume);
+    R.points.forEach((p) => l.push(`- ${p.titre} : ${p.detail}`));
+    if (R.ref) lignesDetail(R).forEach(([k, v]) => l.push(`  ${k} : ${v}`));
+    l.push(`Rappel : un document annulé après le ${dateCopie()} n’est pas connu de cet outil ; la signature ne prouve pas la validité administrative.`);
+    return l.join('\n');
+  }
+
+  /* ---------- Vérification ---------- */
+  let dernier = null; // { R, t, origine }
+  const historique = [];
+  let enCours = 0;
+
+  function erreurSaisie(message) {
+    const inp = $('#vf-texte'), err = $('#vf-texte-err');
+    if (!inp || !err) return;
+    if (message) u.poser(err, html`${ic('warn')}<span>${message}</span>`);
+    err.hidden = !message;
+    if (message) inp.setAttribute('aria-invalid', 'true');
+    else inp.removeAttribute('aria-invalid');
+  }
+  const annoncer = (t) => {
+    const z = $('#vf-annonce');
+    if (z) z.textContent = t;
+  };
+  const etatLecture = (t, ton = '') => {
+    const z = $('#vf-etat-lecture');
+    if (!z) return;
+    z.textContent = t || '';
+    z.className = `petit mb0 vf-etat ${ton}`;
+  };
+
+  /** Vérifie un texte (référence ou contenu du QR) ; origine : saisie, caméra, photo. */
+  async function verifierTexte(t, origine) {
+    const texte = String(t || '').trim();
+    if (!texte) {
+      erreurSaisie('Saisissez une référence ou collez le contenu du QR code.');
+      const inp = $('#vf-texte');
+      if (inp) inp.focus();
+      return null;
+    }
+    erreurSaisie('');
+    const n = ++enCours;
+    await clesControlees;
+    let R;
+    try {
+      R = await AK.verif.verifier(texte, source());
+    } catch (e) {
+      // seule cause attendue : Web Crypto indisponible pendant le contrôle d'une signature
+      R = {
+        entree: texte.slice(0, 600), verdict: 'douteux', titre: 'Vérification incomplète : prudence', resume: 'La signature n’a pas pu être contrôlée sur cet appareil.', ref: null,
+        points: [{ cle: 'integrite', etat: 'av', titre: 'Intégrité', detail: (e && e.message) || 'Contrôle de la signature impossible dans ce navigateur.' }]
+      };
+    }
+    if (n !== enCours) return R; // une vérification plus récente a été lancée entre-temps
+    dernier = { R, t: Date.now(), origine };
+    historique.unshift(dernier);
+    if (historique.length > HISTORIQUE_MAX) historique.length = HISTORIQUE_MAX;
+    afficher(dernier);
+    dessinerHistorique();
+    return R;
+  }
+
+  function afficher(item) {
+    dernier = item;
+    const z = $('#vf-resultat');
+    if (!z) return;
+    u.poser(z, resultatHtml(item.R));
+    annoncer(`Résultat : ${item.R.titre}. ${item.R.ref ? item.R.resume : ''}`);
+  }
+
+  function dessinerHistorique() {
+    const zone = $('#vf-historique-zone'), liste = $('#vf-historique');
+    if (!zone || !liste) return;
+    zone.hidden = !historique.length;
+    u.poser(liste, historique.map((h, i) => {
+      const [ton, lib] = VERDICTS[h.R.verdict] || VERDICTS.inconnu;
+      const heure = new Date(h.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      return html`<li><button type="button" class="vf-hist" data-action="vf-revoir" data-i="${i}" aria-current="${h === dernier ? 'true' : 'false'}"><span class="tag ${ton}">${lib}</span><span class="mono vf-hist-ref">${h.R.ref || 'Contenu non reconnu'}</span><span class="mut petit">${h.origine} · ${heure}</span></button></li>`;
+    }));
+  }
+
+  /* ---------- Caméra : lecture continue, arrêt propre ---------- */
+  let camera = null; // { flux, actif, minuteur, n }
+  let ouverture = false;
+  let detecteur;
+
+  /** Lecture rapide d'une image de la vidéo : lecteur intégré du navigateur s'il existe, sinon décodeur AKWA (une taille par image, en alternance). */
+  async function lireImageVideo(video, n) {
+    if (detecteur === undefined) {
+      detecteur = null;
+      try {
+        if ('BarcodeDetector' in window) detecteur = new window.BarcodeDetector({ formats: ['qr_code'] });
+      } catch (e) { /* lecteur intégré indisponible */ }
+    }
+    if (detecteur) {
+      try {
+        const r = await detecteur.detect(video);
+        if (r && r[0] && r[0].rawValue) return r[0].rawValue;
+      } catch (e) { /* image suivante */ }
+    }
+    return AK.qrdecode.decoder(AK.qrdecode.imageData(video, n % 2 ? 640 : 960));
+  }
+
+  function boutonCamera(actif) {
+    const b = $('#vf-btn-camera');
+    if (!b) return;
+    b.setAttribute('aria-pressed', actif ? 'true' : 'false');
+    b.lastElementChild.textContent = actif ? 'Arrêter la caméra' : 'Scanner avec la caméra';
+  }
+
+  async function demarrerCamera() {
+    const zone = $('#vf-camera'), video = zone && $('video', zone), b = $('#vf-btn-camera');
+    if (!video || ouverture || camera) return;
+    ouverture = true;
+    if (b) b.classList.add('occupe');
+    etatLecture('Ouverture de la caméra…');
+    let flux;
+    try {
+      flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+    } catch (e) {
+      const nom = e && e.name;
+      etatLecture(nom === 'NotAllowedError' || nom === 'SecurityError' ? 'Accès à la caméra refusé : autorisez-le dans le navigateur, ou importez une photo du QR code.'
+        : nom === 'NotFoundError' || nom === 'OverconstrainedError' ? 'Aucune caméra trouvée sur cet appareil : importez une photo du QR code.'
+          : nom === 'NotReadableError' ? 'La caméra est utilisée par une autre application : fermez-la, puis réessayez.'
+            : 'Caméra indisponible : importez une photo du QR code.', 'erreur');
+      return;
+    } finally {
+      ouverture = false;
+      if (b) b.classList.remove('occupe');
+    }
+    const session = { flux, actif: true, minuteur: 0, n: 0 };
+    camera = session;
+    zone.hidden = false;
+    video.srcObject = flux;
+    await video.play().catch(() => {});
+    if (camera !== session) return; // arrêtée pendant le démarrage
+    boutonCamera(true);
+    etatLecture('Caméra active : placez le QR code dans le cadre, bien éclairé et net.');
+    const boucle = async () => {
+      if (camera !== session || !session.actif) return;
+      if (video.readyState >= 2 && video.videoWidth) {
+        let t = null;
+        try {
+          t = await lireImageVideo(video, session.n++);
+        } catch (e) { /* image suivante */ }
+        if (camera !== session) return;
+        if (t) {
+          arreterCamera('QR code lu : caméra arrêtée.');
+          if (navigator.vibrate) navigator.vibrate(80);
+          const inp = $('#vf-texte');
+          if (inp) inp.value = t;
+          await verifierTexte(t, 'caméra');
+          const titre = $('#vf-res-titre');
+          if (titre) titre.focus();
+          return;
+        }
+      }
+      session.minuteur = setTimeout(boucle, 200);
+    };
+    boucle();
+  }
+
+  function arreterCamera(message) {
+    const etaitActive = !!camera;
+    if (camera) {
+      camera.actif = false;
+      clearTimeout(camera.minuteur);
+      camera.flux.getTracks().forEach((t) => t.stop());
+      camera = null;
+    }
+    const zone = $('#vf-camera'), video = zone && $('video', zone);
+    if (video) {
+      video.pause();
+      video.srcObject = null;
+    }
+    if (zone) zone.hidden = true;
+    boutonCamera(false);
+    if (etaitActive) etatLecture(message || 'Caméra arrêtée.');
+  }
+  // libère la caméra dès que l'outil n'est plus visible (onglet changé, téléphone verrouillé, fermeture)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && camera) arreterCamera('Caméra arrêtée : l’outil n’était plus affiché.');
+  });
+  window.addEventListener('pagehide', () => arreterCamera());
+
+  /* ---------- Photo : import, dépôt ou collage d'une image ---------- */
+  async function lirePhoto(fichier) {
+    if (!fichier) return;
+    if (!/^image\//.test(fichier.type || '')) {
+      etatLecture('Ce fichier n’est pas une image : choisissez une photo du QR code (JPEG, PNG…).', 'erreur');
+      return;
+    }
+    if (camera) arreterCamera();
+    etatLecture('Lecture de l’image…');
+    let t = null;
+    try {
+      t = await AK.qrdecode.lireFichier(fichier);
+    } catch (e) {
+      etatLecture('Image illisible : le fichier est peut-être abîmé ou dans un format non pris en charge.', 'erreur');
+      return;
+    }
+    if (!t) {
+      etatLecture('Aucun QR code lisible dans cette image : reprenez la photo de plus près, bien éclairée et nette, ou saisissez la référence imprimée à côté du QR code.', 'erreur');
+      return;
+    }
+    etatLecture('QR code lu dans l’image.', 'ok');
+    const inp = $('#vf-texte');
+    if (inp) inp.value = t;
+    await verifierTexte(t, 'photo');
+    const titre = $('#vf-res-titre');
+    if (titre) titre.focus();
+  }
+
+  /* ---------- Copie du résultat ---------- */
+  async function copierResultat() {
+    if (!dernier) return;
+    const texte = texteResultat(dernier.R, dernier.t);
+    let ok = false;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(texte);
+        ok = true;
+      }
+    } catch (e) { /* méthode de secours ci-dessous */ }
+    if (!ok) {
+      const z = document.createElement('textarea');
+      z.value = texte;
+      z.setAttribute('readonly', '');
+      z.className = 'sr';
+      document.body.append(z);
+      z.select();
+      try {
+        ok = document.execCommand('copy');
+      } catch (e) {
+        ok = false;
+      }
+      z.remove();
+    }
+    const etat = $('#vf-copie-etat');
+    if (etat) etat.textContent = ok ? 'Résultat copié : collez-le dans un message ou un rapport.' : 'Copie impossible dans ce navigateur : sélectionnez le texte du résultat à la main.';
+  }
+
+  /* ---------- Thème ---------- */
+  function themeSombre() {
+    const t = document.documentElement.dataset.theme;
+    if (t) return t === 'dark';
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  }
+  function basculerTheme() {
+    const sombre = !themeSombre();
+    document.documentElement.dataset.theme = sombre ? 'dark' : 'light';
+    u.$$('[data-action="vf-theme"]').forEach((b) => b.setAttribute('aria-pressed', sombre ? 'true' : 'false'));
+  }
+
+  /* ---------- Événements (délégation) ---------- */
+  const ACTIONS = {
+    'vf-camera': () => (camera ? arreterCamera('Caméra arrêtée.') : demarrerCamera()),
+    'vf-effacer'() {
+      const inp = $('#vf-texte');
+      if (!inp) return;
+      inp.value = '';
+      erreurSaisie('');
+      inp.focus();
+    },
+    'vf-copier': () => copierResultat(),
+    'vf-revoir'(el) {
+      const h = historique[Number(el.dataset.i)];
+      if (!h) return;
+      afficher(h);
+      dessinerHistorique();
+      const inp = $('#vf-texte');
+      if (inp) inp.value = h.R.entree || '';
+    },
+    'vf-theme': () => basculerTheme()
+  };
+  const signaler = (e) => etatLecture((e && e.message) || 'Opération impossible.', 'erreur');
+
+  function brancher() {
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('[data-action]');
+      if (!el || !ACTIONS[el.dataset.action]) return;
+      e.preventDefault();
+      Promise.resolve().then(() => ACTIONS[el.dataset.action](el)).catch(signaler);
+    });
+    const form = $('#vf-form');
+    if (form) {
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const inp = $('#vf-texte');
+        verifierTexte(inp.value, 'saisie').then((R) => {
+          if (R && inp === document.activeElement) inp.select(); // douchette : le scan suivant remplace le texte
+        }).catch(signaler);
+      });
+      $('#vf-texte').addEventListener('input', () => erreurSaisie(''));
+    }
+    const photo = $('#vf-photo');
+    if (photo) photo.addEventListener('change', () => {
+      const f = photo.files && photo.files[0];
+      photo.value = ''; // permet de choisir à nouveau la même image
+      lirePhoto(f).catch(signaler);
+    });
+    // dépôt d'une image n'importe où sur la page (sans quitter l'outil)
+    const depot = $('#vf-depot');
+    window.addEventListener('dragover', (e) => {
+      if (!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+      e.preventDefault();
+      if (depot) depot.classList.add('survol');
+    });
+    window.addEventListener('dragleave', (e) => {
+      if (depot && !e.relatedTarget) depot.classList.remove('survol');
+    });
+    window.addEventListener('drop', (e) => {
+      if (!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      if (depot) depot.classList.remove('survol');
+      lirePhoto(e.dataTransfer.files[0]).catch(signaler);
+    });
+    // collage d'une capture d'écran (le collage de texte dans la saisie reste normal)
+    document.addEventListener('paste', (e) => {
+      const items = e.clipboardData ? [...e.clipboardData.items] : [];
+      const img = items.find((it) => it.kind === 'file' && /^image\//.test(it.type));
+      if (!img) return;
+      e.preventDefault();
+      lirePhoto(img.getAsFile()).catch(signaler);
+    });
+  }
+
+  /* ---------- Démarrage ---------- */
+  function demarrer() {
+    const racine = document.getElementById('vf-racine');
+    if (!racine) return;
+    if (D.etat === 'modele') {
+      u.poser(racine, vueModele());
+      document.title = 'Outil de vérification (modèle sans données) · AKWA SCHOOL';
+    } else if (D.etat !== 'ok') {
+      u.poser(racine, vueIllisible());
+      document.title = 'Outil de vérification inutilisable · AKWA SCHOOL';
+    } else {
+      u.poser(racine, vuePrincipale());
+      document.title = `Vérification des documents · ${ecoleNom()}`;
+      clesControlees.then(() => {
+        const zc = $('#vf-cles'), za = $('#vf-alertes');
+        if (zc) u.poser(zc, bandeauCles());
+        if (za) u.poser(za, alertesGenerales());
+        const apropos = $('.vf-liste-cles');
+        if (apropos) u.poser(apropos, D.cles.map(itemCle));
+        document.documentElement.dataset.pret = '1';
+      });
+    }
+    brancher();
+    if (D.etat !== 'ok') document.documentElement.dataset.pret = '1';
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', demarrer);
+  else demarrer();
+
+  /* Accès pour les tests automatisés et le diagnostic (lecture seule). */
+  AK.verificateur = { etat: () => D.etat, verifierTexte, arreterCamera, cameraActive: () => !!camera };
+})(window.AK);
+
+//# sourceURL=akwa/verifier/verifier.js
+</script>
+</body>
+</html>

@@ -110,7 +110,8 @@
       if (AK.hote.type === 'bureau') etat.securite = S().securite; // comptes gérés par l'application Windows
       etat.meta.restaureLe = new Date().toISOString();
       AK.store.installer(etat);
-      AK.store.journaliser(`${motif} (${analyse.infos && analyse.infos.creeLe ? 'fichier du ' + u.fmtHorodatage(analyse.infos.creeLe) : 'fichier 1.x'})`);
+      const source = analyse.type === 'copie' ? 'copie de sécurité locale' + (analyse.infos && analyse.infos.creeLe ? ' du ' + u.fmtHorodatage(analyse.infos.creeLe) : '') : analyse.infos && analyse.infos.creeLe ? 'fichier du ' + u.fmtHorodatage(analyse.infos.creeLe) : 'fichier 1.x';
+      AK.store.journaliser(`${motif} (${source})`, 'donnees');
       await AK.store.maintenant();
       AK.cles.oublier();
       return true;
@@ -118,9 +119,11 @@
     /** Copies de sécurité locales (navigateur) */
     copies: () => (AK.stockage.actif ? AK.stockage.actif.listeCopies() : Promise.resolve([])),
     async analyserCopie(id) {
+      if (!AK.stockage.actif || !AK.stockage.copiesDisponibles()) throw E('Copies de sécurité indisponibles sur cet appareil.');
       const etat = await AK.stockage.actif.lireCopie(id);
+      const meta = (await AK.stockage.actif.listeCopies()).find((c) => c.id === id);
       const r = AK.schema.migrer(etat);
-      return { type: 'copie', valide: true, integrite: 'locale', infos: { contenu: resume(r.etat), ecole: { nom: r.etat.school.name, annee: r.etat.school.year } }, etat: r.etat, notes: r.notes, problemes: [] };
+      return { type: 'copie', valide: true, integrite: 'locale', infos: { creeLe: meta ? new Date(meta.t).toISOString() : null, contenu: resume(r.etat), ecole: { nom: r.etat.school.name, annee: r.etat.school.year } }, etat: r.etat, notes: r.notes, problemes: [] };
     },
     /** Export au format AKWA SCHOOL 1.x (sans secret ni rubrique nouvelle) pour les applications existantes. */
     async exporter1x() {
@@ -129,15 +132,18 @@
       ['meta', 'securite', 'docs', 'modeles', 'cles', 'corbeille'].forEach((k) => delete d[k]);
       d.v = 5;
       const nom = `akwa-school-format-1x-${u.aujourdhui()}.json`;
-      await AK.hote.fichier(nom, new Blob([JSON.stringify(d)], { type: 'application/json' }), 'application/json');
-      AK.store.journaliser('Export au format AKWA SCHOOL 1.x');
+      const ou = await AK.hote.fichier(nom, new Blob([JSON.stringify(d)], { type: 'application/json' }), 'application/json');
+      if (ou === '' || ou == null) return null; // enregistrement annulé par l'utilisateur
+      AK.store.journaliser('Export au format AKWA SCHOOL 1.x', 'donnees');
       return nom;
     },
     /* ---------- Exports CSV (Excel) ---------- */
     async csv(nom, lignes, libelle) {
       AK.perm.exiger('donnees.exporter');
-      await AK.hote.fichier(nom, u.csv(lignes), 'text/csv');
-      if (libelle) AK.store.journaliser('Export : ' + libelle);
+      const ou = await AK.hote.fichier(nom, u.csv(lignes), 'text/csv');
+      if (ou === '' || ou == null) return null; // enregistrement annulé
+      if (libelle) AK.store.journaliser('Export : ' + libelle, 'donnees');
+      return nom;
     },
     lignesEleves() {
       const sc = S().school, x = X();
