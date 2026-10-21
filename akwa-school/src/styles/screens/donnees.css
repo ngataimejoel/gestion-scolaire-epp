@@ -1,0 +1,71 @@
+/* =====================================================================================
+   Données & sauvegarde : plan de sauvegarde (liste d'états avec icône et texte), étapes,
+   conseils, détail du contrôle d'intégrité, cartes d'export, textes longs (noms de fichiers,
+   opérations du journal) et boutons qui passent à la ligne sur téléphone.
+   Uniquement les variables de 00-tokens.css : le thème sombre s'applique de lui-même.
+   ===================================================================================== */
+
+/* ---------- Textes longs (noms de fichiers, libellés saisis) ---------- */
+.donnees-texte { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+.tab td.texte .donnees-texte { display: inline-block; max-width: 70ch; }
+
+/* ---------- Colonnes de l'écran Sauvegarde : cartes à leur hauteur naturelle ---------- */
+.donnees-col { align-content: start; }
+/* Une grille dont la colonne peut rétrécir : un tableau large défile dans son cadre au lieu d'élargir la carte. */
+.donnees-pile { grid-template-columns: minmax(0, 1fr); }
+.donnees-carte-copies .carte-tete { flex-wrap: wrap; }
+/* Indicateurs : deux par ligne sur téléphone, quatre sur grand écran. */
+.donnees-kpis { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+@media (max-width: 560px) { .donnees-kpis { gap: 10px; } .donnees-kpis .kpi { padding: 12px; } .donnees-kpis .kpi-v { font-size: 22px; } }
+
+/* ---------- Plan de sauvegarde ---------- */
+.donnees-plan { list-style: none; margin: 0; padding: 0; display: grid; }
+.donnees-plan li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+.donnees-plan li:last-child { border-bottom: 0; }
+.donnees-plan li > .i { width: 20px; height: 20px; margin-top: 1px; }
+.donnees-plan li.ok > .i { color: var(--ok); }
+.donnees-plan li.avert > .i { color: var(--warn); }
+.donnees-plan li.mauvais > .i { color: var(--bad); }
+.donnees-plan li.neutre > .i { color: var(--info); }
+.donnees-plan li > span { display: grid; gap: 3px; min-width: 0; }
+.donnees-plan b { font-size: 13px; color: var(--ink); }
+.donnees-plan small { font-size: 12.5px; color: var(--mut); line-height: 1.45; overflow-wrap: anywhere; }
+.donnees-action-point { margin-top: 4px; }
+
+/* ---------- Étapes et conseils ---------- */
+.donnees-etapes { margin: 0; padding-left: 20px; display: grid; gap: 6px; font-size: 13px; line-height: 1.5; }
+.donnees-conseils { margin: 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px; line-height: 1.5; }
+.donnees-liste { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.donnees-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- Contrôle d'intégrité ---------- */
+.donnees-details summary { cursor: pointer; font-weight: 650; font-size: 13px; color: var(--pri); padding: 4px 0; }
+.donnees-details summary:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; border-radius: var(--r-xs); }
+.donnees-problemes { list-style: none; margin: 6px 0 0; padding: 0; display: grid; max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: var(--r); }
+.donnees-problemes li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.donnees-problemes li:last-child { border-bottom: 0; }
+
+/* ---------- Aperçu d'une sauvegarde : tableau de comparaison lisible sans défilement sur téléphone ---------- */
+.tab.donnees-comparaison td.donnees-texte { white-space: normal; }
+@media (max-width: 560px) { .tab.donnees-comparaison th, .tab.donnees-comparaison td { padding: 8px 7px; } .tab.donnees-comparaison th { letter-spacing: 0.02em; } }
+
+/* ---------- Confirmation de restauration ---------- */
+.donnees-confirmation { border-top: 1px solid var(--line); padding-top: 12px; }
+
+/* ---------- Exports ---------- */
+.donnees-export { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+.donnees-export-carte { display: flex; flex-direction: column; gap: 12px; }
+.donnees-export-tete { display: flex; gap: 12px; align-items: flex-start; }
+.donnees-export-tete > .i { flex: none; width: 34px; height: 34px; padding: 8px; border-radius: 10px; background: var(--pri-soft); color: var(--pri); }
+.donnees-export-tete h2 { font-size: 15px; margin: 0 0 3px; }
+.donnees-export-form { display: grid; gap: 10px; margin-top: auto; }
+.donnees-export-form .form-grille { grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); }
+.donnees-export-form p { display: flex; align-items: center; gap: 6px; color: var(--ink-2); }
+.donnees-radios legend { font-size: 12.5px; font-weight: 650; color: var(--ink-2); margin-bottom: 6px; padding: 0; }
+.donnees-radios { border: 0; padding: 0; margin: 0; }
+
+/* ---------- Téléphone ---------- */
+@media (max-width: 560px) {
+  .donnees-actions .btn, .donnees-export-form .btn { flex: 1 1 100%; width: 100%; justify-content: center; white-space: normal; text-align: center; }
+  .donnees-problemes li .btn { margin-left: auto; }
+}
