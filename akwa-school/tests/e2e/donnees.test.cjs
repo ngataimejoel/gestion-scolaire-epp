@@ -170,7 +170,7 @@ const oublierMdp = (page) => P(page, () => AK.auth.oublierConfirmation());
   await page.waitForSelector('.ep-profil', { timeout: 15000 });
   await connecter(page, 'Demo2026');
   ok('Copie restaurée : nom d’origine rétabli', (await P(page, () => AK.store.etat.school.name)) === 'EPP OUANINOU 2 (DÉMONSTRATION)');
-  ok('Copie restaurée : journal explicite (date de la copie)', await P(page, () => AK.store.etat.pro.journal.some((e) => /^Copie de sécurité locale restaurée \(fichier du /.test(e.m))));
+  ok('Copie restaurée : journal explicite (date de la copie)', await P(page, () => AK.store.etat.pro.journal.some((e) => /^Copie de sécurité locale restaurée \(copie du /.test(e.m))));
 
   /* ======================= Contrôle d'intégrité ======================= */
   const anomalie = await P(page, () => {

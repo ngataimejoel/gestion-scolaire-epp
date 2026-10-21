@@ -110,7 +110,7 @@
       if (AK.hote.type === 'bureau') etat.securite = S().securite; // comptes gérés par l'application Windows
       etat.meta.restaureLe = new Date().toISOString();
       AK.store.installer(etat);
-      const source = analyse.type === 'copie' ? 'copie de sécurité locale' + (analyse.infos && analyse.infos.creeLe ? ' du ' + u.fmtHorodatage(analyse.infos.creeLe) : '') : analyse.infos && analyse.infos.creeLe ? 'fichier du ' + u.fmtHorodatage(analyse.infos.creeLe) : 'fichier 1.x';
+      const source = analyse.type === 'copie' ? 'copie' + (analyse.infos && analyse.infos.creeLe ? ' du ' + u.fmtHorodatage(analyse.infos.creeLe) : ' locale') : analyse.infos && analyse.infos.creeLe ? 'fichier du ' + u.fmtHorodatage(analyse.infos.creeLe) : 'fichier 1.x';
       AK.store.journaliser(`${motif} (${source})`, 'donnees');
       await AK.store.maintenant();
       AK.cles.oublier();

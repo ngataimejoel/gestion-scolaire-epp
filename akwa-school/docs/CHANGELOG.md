@@ -39,6 +39,21 @@ audit (`AUDIT.md`). Les données 1.x sont reprises sans perte (voir « Migration
 | Type des notifications deviné sur le texte | types explicites (succès, avertissement, erreur, attente) |
 | Validation hétérogène | module unique de validation (noms, téléphones de Côte d’Ivoire, dates, années, notes à 2 décimales, matricules, références) |
 
+Défauts trouvés par les tests automatisés pendant la refonte, puis corrigés :
+
+- arrondi au centième inexact (hérité de la 1.7.0 : 10,075 donnait 10,07 ; moyenne de 10,01 et 10 donnait 10,00) ;
+- note à une décimale refusée (8,7 / 10) par un contrôle des décimales en calcul binaire ;
+- montant arrondi à zéro affiché « -0 F » ; DRENAET saisie « DE » seule mal interprétée ;
+- niveau suivant d’un niveau inconnu égal à CP1 (risque au passage d’année) ;
+- fichier de données abîmé (entrée vide dans une liste) empêchant l’ouverture : entrée ignorée et signalée ;
+- entrée de journal seule (export, mot de passe refusé) non enregistrée avant la modification suivante ;
+- export annulé par l’utilisateur inscrit au journal comme effectué ;
+- conflit de nom entre « total des dépenses » et « enregistrer une dépense » (journal de caisse en erreur) ;
+- filigrane SPÉCIMEN tronqué hors de la feuille ; planche de cartes à 8 au lieu de 10 ; zone d’impression
+  vidée trop tôt après une impression ; bouton « copie » proposé avant l’émission de l’original ;
+- fiche d’un élève d’une classe fermée inaccessible au directeur ; suggestions de sous-préfectures
+  affichées « code,nom ».
+
 ### Amélioré
 
 - Interface entièrement redessinée : structure bleu nuit, surfaces blanc cassé, accent cuivré, thème
