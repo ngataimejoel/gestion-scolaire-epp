@@ -12,6 +12,16 @@
 
   /* ---------- Notifications ---------- */
   let zoneToasts = null;
+  /**
+   * Focus initial différé d'un écran ou d'une fenêtre : ne vole jamais le focus si l'utilisateur a déjà
+   * commencé à saisir ailleurs dans le même cadre (sur un poste lent, sa frappe irait dans le premier champ).
+   */
+  ui.focusInitial = (el, cadre) => {
+    const a = document.activeElement;
+    if (!el || !el.isConnected) return;
+    if (a && a !== document.body && a !== el && cadre && cadre.contains(a) && /INPUT|TEXTAREA|SELECT|BUTTON/.test(a.tagName)) return;
+    el.focus();
+  };
   ui.toast = function (message, o = {}) {
     if (!zoneToasts) {
       zoneToasts = document.createElement('div');
@@ -203,7 +213,7 @@
     dlg.showModal();
     if (o.apres) o.apres(dlg, fenetre);
     const premier = $('[autofocus]', dlg) || $('.dlg-corps input:not([type=hidden]):not([disabled]), .dlg-corps select, .dlg-corps textarea', dlg);
-    if (premier) setTimeout(() => premier.focus(), 30);
+    if (premier) setTimeout(() => ui.focusInitial(premier, dlg), 30);
     return fenetre;
   };
 

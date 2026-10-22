@@ -65,7 +65,7 @@
         ui.erreur(err);
       }
     };
-    setTimeout(() => (el.querySelector('.ep-option') || {}).focus && el.querySelector('.ep-option').focus(), 50);
+    setTimeout(() => AK.ui.focusInitial(el.querySelector('.ep-option'), el), 50);
   }
 
   function apercuSauvegarde(a) {
@@ -162,7 +162,7 @@
         if (e2) return ui.erreurChamp(f, /Contact/.test(e2) ? 'dirTel' : 'director', e2);
         etape2();
       };
-      setTimeout(() => f.querySelector('[name=name]').focus(), 50);
+      setTimeout(() => AK.ui.focusInitial(f.querySelector('[name=name]'), f), 50);
     };
     const etape2 = () => {
       const an = new Date().getMonth() < 7 ? new Date().getFullYear() - 1 : new Date().getFullYear();
@@ -235,7 +235,7 @@
           ui.erreur(er);
         }
       };
-      setTimeout(() => f.querySelector('[name=mdp]').focus(), 50);
+      setTimeout(() => AK.ui.focusInitial(f.querySelector('[name=mdp]'), f), 50);
     };
     etape1();
   }
@@ -332,7 +332,7 @@
         } else ui.erreur(err);
       }
     };
-    setTimeout(() => f.mdp.focus(), 60);
+    setTimeout(() => AK.ui.focusInitial(f.mdp, f), 60);
   }
 
   function sessionBureau() {
@@ -386,7 +386,7 @@
         await u.attendre(600);
       }
     };
-    setTimeout(() => f.mdp.focus(), 60);
+    setTimeout(() => AK.ui.focusInitial(f.mdp, f), 60);
   }
   async function deconnecter() {
     await AK.store.maintenant();

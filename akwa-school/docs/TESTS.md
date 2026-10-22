@@ -26,9 +26,9 @@ Node.js 22), le 21 octobre 2026. Rien n’est déclaré testé sur la seule lect
 | `tests/e2e/verificateur.test.cjs` | outil de vérification autonome produit par l’application et ouvert seul | **63 / 63** |
 | `tests/e2e/services-parametres.test.cjs` | bibliothèque, CEPE, parents, paramètres de l’école, calendrier, apparence, diagnostic | **28 / 28** |
 | `tests/e2e/finances-rapports.test.cjs` | versements et reçus, annulation, dépenses, cantine, rapports, générateur, transmission IEPP | **20 / 20** |
-| `tests/e2e/revue.test.cjs` | non-régression des défauts trouvés par la relecture contradictoire (droits sur les documents, import, validation, passage d’année, appel, clavier) | **38 / 38** |
+| `tests/e2e/revue.test.cjs` | non-régression des défauts trouvés par la relecture contradictoire (droits sur les documents, import, validation, passage d’année, appel, clavier, focus) | **39 / 39** |
 
-**Total : 227 tests unitaires et 691 vérifications de bout en bout réussis, 0 échec.**
+**Total : 227 tests unitaires et 692 vérifications de bout en bout réussis, 0 échec.**
 
 Défauts trouvés **par les tests** puis corrigés (voir `CHANGELOG.md`) : note 8,7 / 10 refusée (contrôle
 binaire des décimales), arrondi au centième inexact, « -0 F », niveau suivant d’un niveau inconnu,
@@ -47,7 +47,9 @@ pour limiter la consommation) : 6 défauts supplémentaires trouvés et corrigé
 effaçant les absences justifiées, « remplacer » un document sans droit, duplicata d’un document à
 référence unique, bouton inactif de l’accueil…). Contre-épreuve : sur la version précédente, `revue.test.cjs` échoue
 à 22 des 25 premières vérifications puis s’arrête (case « Absent » sans identifiant) ; sur la version
-actuelle, 38 / 38.
+actuelle, 39 / 39. La CI GitHub (`.github/workflows/akwa-school-2.yml`) relance l’ensemble à chaque envoi ;
+elle a révélé un défaut que l’environnement local ne montrait pas : sur une machine lente, la mise au point
+automatique différée d’un formulaire volait le focus d’un champ déjà choisi (texte saisi dans le mauvais champ).
 
 ## 2. Matrice de tests (A à W)
 

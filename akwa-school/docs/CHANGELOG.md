@@ -84,7 +84,9 @@ Défauts trouvés par la relecture contradictoire des écrans Élèves, Notes, A
   une décision ou une absence ; case refusée gardant la valeur refusée ; compteur de notes ignorant les notes
   en attente ; bouton « Inscrire un élève » de l’accueil sans effet ; bouton « Excel (CSV) » proposé à
   l’enseignant puis refusé ; actions de sélection silencieuses après suppression d’un élève ; n° et date
-  d’acte marqués obligatoires mais non exigés.
+  d’acte marqués obligatoires mais non exigés ; sur un poste lent, la mise au point automatique d’un
+  formulaire (création de l’école, connexion, fenêtres) volait le focus d’un champ déjà choisi, et la
+  frappe allait dans le premier champ (trouvé par la CI GitHub).
 
 ### Amélioré
 

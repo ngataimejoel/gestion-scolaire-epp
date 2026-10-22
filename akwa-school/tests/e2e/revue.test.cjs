@@ -84,6 +84,22 @@ async function enseignant(page) {
     await navigateur.close();
   }
 
+  /* ===================== Focus initial différé (poste lent) ===================== */
+  {
+    const { navigateur, page } = await ouvrir();
+    await page.goto(URL);
+    await page.waitForSelector('[data-ep="creer"]');
+    const vol = await page.evaluate(() => new Promise((ok) => {
+      document.querySelector('[data-ep="creer"]').click();
+      // l'utilisateur va dans « IEPP » avant la mise au point automatique (50 ms) : elle ne doit pas lui voler le focus
+      const iepp = document.querySelector('[name=iepp]');
+      iepp.focus();
+      setTimeout(() => ok(document.activeElement && document.activeElement.name), 150);
+    }));
+    ok('création de l’école : la mise au point différée ne vole pas le focus d’un champ déjà choisi', vol === 'iepp', String(vol));
+    await navigateur.close();
+  }
+
   /* ===================== Directeur ===================== */
   const { navigateur, page, erreurs } = await ouvrir();
   page.setDefaultTimeout(10000);

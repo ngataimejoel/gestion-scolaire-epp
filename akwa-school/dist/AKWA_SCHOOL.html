@@ -7321,6 +7321,16 @@ return {matrix:matrix,
 
   /* ---------- Notifications ---------- */
   let zoneToasts = null;
+  /**
+   * Focus initial différé d'un écran ou d'une fenêtre : ne vole jamais le focus si l'utilisateur a déjà
+   * commencé à saisir ailleurs dans le même cadre (sur un poste lent, sa frappe irait dans le premier champ).
+   */
+  ui.focusInitial = (el, cadre) => {
+    const a = document.activeElement;
+    if (!el || !el.isConnected) return;
+    if (a && a !== document.body && a !== el && cadre && cadre.contains(a) && /INPUT|TEXTAREA|SELECT|BUTTON/.test(a.tagName)) return;
+    el.focus();
+  };
   ui.toast = function (message, o = {}) {
     if (!zoneToasts) {
       zoneToasts = document.createElement('div');
@@ -7512,7 +7522,7 @@ return {matrix:matrix,
     dlg.showModal();
     if (o.apres) o.apres(dlg, fenetre);
     const premier = $('[autofocus]', dlg) || $('.dlg-corps input:not([type=hidden]):not([disabled]), .dlg-corps select, .dlg-corps textarea', dlg);
-    if (premier) setTimeout(() => premier.focus(), 30);
+    if (premier) setTimeout(() => ui.focusInitial(premier, dlg), 30);
     return fenetre;
   };
 
@@ -18329,7 +18339,7 @@ return {matrix:matrix,
         ui.erreur(err);
       }
     };
-    setTimeout(() => (el.querySelector('.ep-option') || {}).focus && el.querySelector('.ep-option').focus(), 50);
+    setTimeout(() => AK.ui.focusInitial(el.querySelector('.ep-option'), el), 50);
   }
 
   function apercuSauvegarde(a) {
@@ -18426,7 +18436,7 @@ return {matrix:matrix,
         if (e2) return ui.erreurChamp(f, /Contact/.test(e2) ? 'dirTel' : 'director', e2);
         etape2();
       };
-      setTimeout(() => f.querySelector('[name=name]').focus(), 50);
+      setTimeout(() => AK.ui.focusInitial(f.querySelector('[name=name]'), f), 50);
     };
     const etape2 = () => {
       const an = new Date().getMonth() < 7 ? new Date().getFullYear() - 1 : new Date().getFullYear();
@@ -18499,7 +18509,7 @@ return {matrix:matrix,
           ui.erreur(er);
         }
       };
-      setTimeout(() => f.querySelector('[name=mdp]').focus(), 50);
+      setTimeout(() => AK.ui.focusInitial(f.querySelector('[name=mdp]'), f), 50);
     };
     etape1();
   }
@@ -18596,7 +18606,7 @@ return {matrix:matrix,
         } else ui.erreur(err);
       }
     };
-    setTimeout(() => f.mdp.focus(), 60);
+    setTimeout(() => AK.ui.focusInitial(f.mdp, f), 60);
   }
 
   function sessionBureau() {
@@ -18650,7 +18660,7 @@ return {matrix:matrix,
         await u.attendre(600);
       }
     };
-    setTimeout(() => f.mdp.focus(), 60);
+    setTimeout(() => AK.ui.focusInitial(f.mdp, f), 60);
   }
   async function deconnecter() {
     await AK.store.maintenant();
