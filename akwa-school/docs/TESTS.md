@@ -19,7 +19,7 @@ Node.js 22), le 21 octobre 2026. Rien n’est déclaré testé sur la seule lect
 | `tests/e2e/qr.test.cjs` | lecteur QR hors ligne : 6 contenus × 9 déformations, correction Reed-Solomon | **54 / 54** + RS 4 / 4 |
 | `tests/e2e/documents.test.cjs` | inscription, doublon, brouillon, émission signée, vérification, falsification, annulation, carte, duplicata | **26 / 26** |
 | `tests/e2e/droits.test.cjs` | enseignant : périmètre, 12 actions réservées refusées par le métier, correction de note, appel | **25 / 25** |
-| `tests/e2e/hotes.test.cjs` | Android (pont `AkwaNative` simulé), emballage `AkwaNatif`, Windows PySide6 (pont simulé) | **26 / 26** |
+| `tests/e2e/hotes.test.cjs` | Android (pont `AkwaNative` simulé), emballage `AkwaNatif`, Windows PySide6 (pont simulé) | **27 / 27** |
 | `tests/e2e/donnees.test.cjs` | sauvegarde, restauration, copies locales, intégrité, rattachement, 9 exports CSV, journal, corbeille | **98 / 98** |
 | `tests/e2e/parametres-modeles-securite.test.cjs` | éditeur de modèles, aperçu en direct, refus du HTML, clés de signature, verrouillage | **105 / 105** |
 | `tests/e2e/vie.test.cjs` | emploi du temps, cahier, discipline, infirmerie, calendrier, droits enseignant, 390 px | **98 / 98** |
@@ -28,7 +28,7 @@ Node.js 22), le 21 octobre 2026. Rien n’est déclaré testé sur la seule lect
 | `tests/e2e/finances-rapports.test.cjs` | versements et reçus, annulation, dépenses, cantine, rapports, générateur, transmission IEPP | **20 / 20** |
 | `tests/e2e/revue.test.cjs` | non-régression des défauts trouvés par la relecture contradictoire (droits sur les documents, import, validation, passage d’année, appel, clavier, focus) | **39 / 39** |
 
-**Total : 227 tests unitaires et 692 vérifications de bout en bout réussis, 0 échec.**
+**Total : 227 tests unitaires et 693 vérifications de bout en bout réussis, 0 échec.**
 
 Défauts trouvés **par les tests** puis corrigés (voir `CHANGELOG.md`) : note 8,7 / 10 refusée (contrôle
 binaire des décimales), arrondi au centième inexact, « -0 F », niveau suivant d’un niveau inconnu,

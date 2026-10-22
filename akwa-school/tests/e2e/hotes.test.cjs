@@ -78,7 +78,9 @@ async function android(navigateur) {
   await page.click('dialog[open] [data-imprimer]');
   await page.waitForTimeout(500);
   ok('Android : impression confiée à imprimerPage (paysage)', (await page.evaluate(() => window.__impressions)).join() === 'true');
-  // rechargement : données retrouvées, connexion
+  // rechargement : données retrouvées, connexion. On attend la fin de l'enregistrement : avec une écriture
+  // en cours, l'application retient volontairement la fermeture de la page (beforeunload).
+  ok('Android : enregistrement terminé avant le redémarrage', await page.evaluate(() => AK.store.maintenant()));
   await page.reload();
   await page.waitForSelector('#ep-mdp');
   await page.fill('#ep-mdp', 'Telephone2026');
